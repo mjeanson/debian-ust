@@ -1,0 +1,11 @@
+usr/lib/libustfork.so.0.0.0
+usr/lib/libustfork.so.0
+usr/lib/libustfork.la
+usr/lib/libustinstr-malloc.so.0.0.0
+usr/lib/libustinstr-malloc.so.0
+usr/lib/libustinstr-malloc.la
+usr/lib/libust.so.0.0.0
+usr/lib/libust.so.0
+usr/lib/libust.la
+usr/lib/libustcomm.la
+usr/lib/libustsnprintf.la

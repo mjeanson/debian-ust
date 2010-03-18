@@ -1,0 +1,5 @@
+ust (0.4-1) unstable; urgency=low
+
+  * Initial release (Closes: #573361)
+
+ -- Jon Bernard <jbernard@debian.org>  Thu, 18 Mar 2010 16:18:28 -0400

@@ -1,0 +1,47 @@
+Source: ust
+Priority: extra
+Maintainer: Jon Bernard <jbernard@debian.org>
+Build-Depends: debhelper (>= 7), autotools-dev, liburcu-dev
+Standards-Version: 3.8.4
+Section: libs
+Vcs-Git: git://git.debian.org/git/collab-maint/ust.git
+Vcs-Browser: http://git.debian.org/?p=collab-maint/ust.git;a=summary
+Homepage: http://lttng.org/
+
+Package: libust0
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: LTTng Userspace Tracer (runtime)
+ The userspace tracer is designed to provide detailed information about
+ userspace activity. Like the kernel tracer, performance is the main goal.
+ Tracing does not require system calls or traps. UST instrumentation points may
+ be added in any userspace code including signal handlers and libraries.
+ .
+ This package contains the UST runtime libraries needed to execute applications
+ linked against libust.
+
+Package: libust-dev
+Section: libdevel
+Architecture: any
+Depends: ${misc:Depends}, libust0 (= ${binary:Version})
+Description: LTTng Userspace Tracer (development)
+ The userspace tracer is designed to provide detailed information about
+ userspace activity. Like the kernel tracer, performance is the main goal.
+ Tracing does not require system calls or traps. UST instrumentation points may
+ be added in any userspace code including signal handlers and libraries.
+ .
+ This package contains the UST library development files necessary to compile
+ and link applications against libust.
+
+Package: ust-bin
+Section: utils
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: LTTng Userspace Tracer (utilities)
+ The userspace tracer is designed to provide detailed information about
+ userspace activity. Like the kernel tracer, performance is the main goal.
+ Tracing does not require system calls or traps. UST instrumentation points may
+ be added in any userspace code including signal handlers and libraries.
+ .
+ This package contains the UST utility applications necessary to record and
+ analyze trace data.

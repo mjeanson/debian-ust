@@ -1,0 +1,10 @@
+usr/include
+usr/lib/libustfork.so
+usr/lib/libustfork.a
+usr/lib/libustinstr-malloc.so
+usr/lib/libustinstr-malloc.a
+usr/lib/libust-initializer.o
+usr/lib/libust.a
+usr/lib/libust.so
+usr/lib/libustcomm.a
+usr/lib/libustsnprintf.a

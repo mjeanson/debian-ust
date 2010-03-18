@@ -1,0 +1,113 @@
+This work was packaged for Debian by:
+
+    Jon Bernard <jbernard@debian.org> on Thu, 18 Mar 2010 16:18:28 -0400
+
+It was downloaded from:
+
+    http://lttng.org/files/ust/releases/
+
+Upstream Authors:
+
+    Pierre-Marc Fournier <pierre-marc.fournier@polymtl.ca>
+    Mathieu Desnoyers <mathieu.desnoyers@polymtl.ca>
+    David S. Miller <davem@redhat.com>
+    Bob Jenkins <bob_jenkins@burtleburtle.net>
+
+Copyright:
+
+    Copyright (C) 2009,2010 Pierre-Marc Fournier
+    Copyright (C) 2009 Novell Inc.
+    Copyright (C) 2005-2008 Mathieu Desnoyers
+    Copyright (C) 2003 David S. Miller
+    Copyright (C) 2001 Citrus Project
+    Copyright (C) 1996 Bob Jenkins
+
+License:
+
+    This package is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2 of the License, or (at your option) any later version.
+
+    This package is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+On Debian systems, the complete text of the GNU Lesser General
+Public License can be found in "/usr/share/common-licenses/LGPL-2".
+
+`include/ust/kcompat/jhash.h' is licensed under the Public Domain license.
+
+License:
+
+    jhash.h: Jenkins hash support.
+
+    Copyright (C) 1996 Bob Jenkins (bob_jenkins@burtleburtle.net)
+
+    http://burtleburtle.net/bob/hash/
+
+    These are the credits from Bob's sources:
+
+    lookup2.c, by Bob Jenkins, December 1996, Public Domain.
+    hash(), hash2(), hash3, and mix() are externally useful functions.
+    Routines to test the hash are included if SELF_TEST is defined.
+    You can use this free for any purpose.  It has no warranty.
+
+    Copyright (C) 2003 David S. Miller (davem@redhat.com)
+
+    I've modified Bob's hash to be useful in the Linux kernel, and
+    any bugs present are surely my fault.  -DaveM
+
+The following files are licensed under the BSD 3-clause license:
+
+    `snprintf/snprintf.c'
+    `snprintf/fvwrite.c'
+    `snprintf/floatio.h'
+    `snprintf/wsetup.c'
+    `snprintf/fflush.c'
+    `snprintf/fileext.h'
+    `snprintf/mbrtowc_sb.c'
+    `snprintf/fvwrite.h'
+    `snprintf/various.h'
+    `snprintf/local.h'
+    `snprintf/vfprintf.c'
+
+See "/usr/share/common-licenses/BSD".
+
+`snprintf/wcio.h' is licensed under the BSD 2-clause license.
+
+License:
+
+    Copyright (c)2001 Citrus Project, All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+    1. Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+
+    THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+    ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+    FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+    DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+    OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+    LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+    OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+    SUCH DAMAGE.
+
+The Debian packaging is:
+
+    Copyright (C) 2010 Jon Bernard <jbernard@debian.org>
+
+and is licensed under the GPL version 3, see
+"/usr/share/common-licenses/GPL-3".
