@@ -1,3 +1,9 @@
+ust (0.4-2) unstable; urgency=low
+
+  * Restrict architecture list to that of liburcu
+
+ -- Jon Bernard <jbernard@debian.org>  Wed, 24 Mar 2010 09:50:02 -0400
+
 ust (0.4-1) unstable; urgency=low
 
   * Initial release (Closes: #573361)
