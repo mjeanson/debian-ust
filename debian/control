@@ -9,7 +9,7 @@ Vcs-Browser: http://git.debian.org/?p=collab-maint/ust.git;a=summary
 Homepage: http://lttng.org/
 
 Package: libust0
-Architecture: any
+Architecture: i386 amd64 powerpc ppc64 s390 s390x sparc alpha
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: LTTng Userspace Tracer (runtime)
  The userspace tracer is designed to provide detailed information about
@@ -22,7 +22,7 @@ Description: LTTng Userspace Tracer (runtime)
 
 Package: libust-dev
 Section: libdevel
-Architecture: any
+Architecture: i386 amd64 powerpc ppc64 s390 s390x sparc alpha
 Depends: ${misc:Depends}, libust0 (= ${binary:Version})
 Description: LTTng Userspace Tracer (development)
  The userspace tracer is designed to provide detailed information about
@@ -35,7 +35,7 @@ Description: LTTng Userspace Tracer (development)
 
 Package: ust-bin
 Section: utils
-Architecture: any
+Architecture: i386 amd64 powerpc ppc64 s390 s390x sparc alpha
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: LTTng Userspace Tracer (utilities)
  The userspace tracer is designed to provide detailed information about
