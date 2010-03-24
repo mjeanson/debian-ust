@@ -1,0 +1,688 @@
+<html lang="en">
+<head>
+<title>LTTng Userspace Tracer (UST) Manual</title>
+<meta http-equiv="Content-Type" content="text/html">
+<meta name="description" content="LTTng Userspace Tracer (UST) Manual">
+<meta name="generator" content="makeinfo 4.13">
+<link title="Top" rel="top" href="#Top">
+<link href="http://www.gnu.org/software/texinfo/" rel="generator-home" title="Texinfo Homepage">
+<!--
+This manual is for program, version version.
+
+Copyright (C)  copyright-owner.
+
+     Permission is granted to ...
+   -->
+<meta http-equiv="Content-Style-Type" content="text/css">
+<style type="text/css"><!--
+  pre.display { font-family:inherit }
+  pre.format  { font-family:inherit }
+  pre.smalldisplay { font-family:inherit; font-size:smaller }
+  pre.smallformat  { font-family:inherit; font-size:smaller }
+  pre.smallexample { font-size:smaller }
+  pre.smalllisp    { font-size:smaller }
+  span.sc    { font-variant:small-caps }
+  span.roman { font-family:serif; font-weight:normal; } 
+  span.sansserif { font-family:sans-serif; font-weight:normal; } 
+--></style>
+</head>
+<body>
+<h1 class="settitle">LTTng Userspace Tracer (UST) Manual</h1>
+   <div class="contents">
+<h2>Table of Contents</h2>
+<ul>
+<li><a name="toc_Top" href="#Top">LTTng Userspace Tracer</a>
+<li><a name="toc_Overview" href="#Overview">1 Overview</a>
+<ul>
+<li><a href="#What-is-UST_003f">1.1 What is UST?</a>
+<li><a href="#License">1.2 License</a>
+<li><a href="#Supported-platforms">1.3 Supported platforms</a>
+</li></ul>
+<li><a name="toc_Installation" href="#Installation">2 Installation</a>
+<li><a name="toc_Quick-start" href="#Quick-start">3 Quick start</a>
+<li><a name="toc_Instrumenting-an-application" href="#Instrumenting-an-application">4 Instrumenting an application</a>
+<ul>
+<li><a href="#Markers">4.1 Markers</a>
+<li><a href="#Tracepoints">4.2 Tracepoints</a>
+</li></ul>
+<li><a name="toc_Recording-a-trace" href="#Recording-a-trace">5 Recording a trace</a>
+<ul>
+<li><a href="#Using-_003csamp_003e_003cspan-class_003d_0022command_0022_003eusttrace_003c_002fspan_003e_003c_002fsamp_003e">5.1 Using <samp><span class="command">usttrace</span></samp></a>
+<li><a href="#Setting-up-the-recording-manually">5.2 Setting up the recording manually</a>
+<li><a href="#Using-early-tracing">5.3 Using early tracing</a>
+<li><a href="#Crash-recovery">5.4 Crash recovery</a>
+<li><a href="#Tracing-across-_003ccode_003efork_0028_0029_003c_002fcode_003e-and-_003ccode_003eclone_0028_0029_003c_002fcode_003e">5.5 Tracing across <code>fork()</code> and <code>clone()</code></a>
+<li><a href="#Tracing-programs-and-libraries-that-were-not-linked-to-libust">5.6 Tracing programs and libraries that were not linked to libust</a>
+</li></ul>
+<li><a name="toc_Performance" href="#Performance">6 Performance</a>
+<li><a name="toc_Viewing-traces" href="#Viewing-traces">7 Viewing traces</a>
+<ul>
+<li><a href="#Viewing-multiple-traces">7.1 Viewing multiple traces</a>
+<li><a href="#Combined-kernel_002duserspace-tracing">7.2 Combined kernel-userspace tracing</a>
+</li></ul>
+</li></ul>
+</div>
+
+
+
+<div class="node">
+<a name="Top"></a>
+<p><hr>
+Next:&nbsp;<a rel="next" accesskey="n" href="#Overview">Overview</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#dir">(dir)</a>
+
+</div>
+
+<h2 class="unnumbered">LTTng Userspace Tracer</h2>
+
+<p>This manual is for UST 0.1.
+
+<ul class="menu">
+<li><a accesskey="1" href="#Overview">Overview</a>
+<li><a accesskey="2" href="#Installation">Installation</a>
+<li><a accesskey="3" href="#Quick-start">Quick start</a>
+<li><a accesskey="4" href="#Instrumenting-an-application">Instrumenting an application</a>
+<li><a accesskey="5" href="#Recording-a-trace">Recording a trace</a>
+<li><a accesskey="6" href="#Viewing-traces">Viewing traces</a>
+<li><a accesskey="7" href="#Performance">Performance</a>
+<!-- * Copying::          Your rights and freedoms. -->
+</ul>
+
+<div class="node">
+<a name="Overview"></a>
+<p><hr>
+Next:&nbsp;<a rel="next" accesskey="n" href="#Installation">Installation</a>,
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#Top">Top</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
+
+</div>
+
+<h2 class="chapter">1 Overview</h2>
+
+<ul class="menu">
+<li><a accesskey="1" href="#What-is-UST_003f">What is UST?</a>
+<li><a accesskey="2" href="#License">License</a>
+<li><a accesskey="3" href="#Supported-platforms">Supported platforms</a>
+</ul>
+
+<div class="node">
+<a name="What-is-UST%3f"></a>
+<a name="What-is-UST_003f"></a>
+<p><hr>
+Next:&nbsp;<a rel="next" accesskey="n" href="#License">License</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Overview">Overview</a>
+
+</div>
+
+<h3 class="section">1.1 What is UST?</h3>
+
+<p>The LTTng Userspace Tracer (UST) is a library accompanied by a set of tools to
+trace userspace code.
+
+   <p>Code may be instrumented with either markers or tracepoints. A highly efficient
+lockless tracer records these events to a trace buffers. These buffers are reaped
+by a deamon which writes trace data to disk.
+
+   <p>High performance is achieved by the use of lockless buffering algorithms, RCU and
+per-cpu buffers. In addition, special care is taken to minize cache impact.
+
+<div class="node">
+<a name="License"></a>
+<p><hr>
+Next:&nbsp;<a rel="next" accesskey="n" href="#Supported-platforms">Supported platforms</a>,
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#What-is-UST_003f">What is UST?</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Overview">Overview</a>
+
+</div>
+
+<h3 class="section">1.2 License</h3>
+
+<p>The LTTng Userspace Tracer is intended to be linkable to open source software
+as well as to proprietary applications. This was accomplished by licensing
+the code that needs to be linked to the traced program as <acronym>LGPL</acronym>.
+
+   <p>Components licensed as LGPL v2.1:
+     <ul>
+<li>libust
+<li>libinterfork
+<li>libustcomm
+</ul>
+
+   <p>Components licensed as GPL v2:
+     <ul>
+<li>ustctl
+<li>libustcmd
+<li>ustd
+</ul>
+
+<div class="node">
+<a name="Supported-platforms"></a>
+<p><hr>
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#License">License</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Overview">Overview</a>
+
+</div>
+
+<h3 class="section">1.3 Supported platforms</h3>
+
+<p>UST can currently trace applications running on Linux, on the x86-32 and x86-64 architectures.
+
+<div class="node">
+<a name="Installation"></a>
+<p><hr>
+Next:&nbsp;<a rel="next" accesskey="n" href="#Quick-start">Quick start</a>,
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#Overview">Overview</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
+
+</div>
+
+<h2 class="chapter">2 Installation</h2>
+
+<p>The LTTng userspace tracer is a library and a set of userspace tools.
+
+   <p>The following packages are required:
+
+     <ul>
+<li>ust
+
+     <p>This contains the tracing library, the ustd daemon, trace control tools
+and other helper tools.
+
+     <p>Repository: http://git.dorsal.polymtl.ca
+
+     <li>libkcompat
+
+     <p>This is a library that contains a userspace port of some kernel APIs.
+
+     <p>Repository: http://git.dorsal.polymtl.ca
+
+     <li>liburcu
+
+     <p>This is the userspace read-copy update library by Mathieu Desnoyers.
+
+     <p>Available in Debian as package liburcu-dev.
+
+     <p>Home page: http://lttng.org/?q=node/18
+
+     <li>LTTV
+
+     <p>LTTV is a graphical (and text) viewer for LTTng traces.
+
+     <p>Home page: http://lttng.org
+
+   </ul>
+
+   <p>Libkcompat and liburcu should be installed first. UST may then be compiled
+and installed. LTTV has no dependency on the other packages; it may therefore
+be installed on a system which does not have UST installed.
+
+   <p>Refer to the README in each of these packages for installation instructions.
+
+<!-- @menu -->
+<!-- @end menu -->
+<div class="node">
+<a name="Quick-start"></a>
+<p><hr>
+Next:&nbsp;<a rel="next" accesskey="n" href="#Instrumenting-an-application">Instrumenting an application</a>,
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#Installation">Installation</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
+
+</div>
+
+<h2 class="chapter">3 Quick start</h2>
+
+<p>First, instrument a program with a marker.
+
+<pre class="example"><pre class="verbatim">     
+     #include &lt;ust/marker.h>
+     
+     int main(int argc, char **argv)
+     {
+     	int v;
+     	char *st;
+     
+     	/* ... set values of v and st ... */
+     
+     	/* a marker: */
+     	trace_mark(ust, myevent, "firstarg %d secondarg %s", v, st);
+     
+     	/* a marker without arguments: */
+     	trace_mark(ust, myotherevent, MARK_NOARGS);
+     
+     	return 0;
+     }
+     
+</pre>
+</pre>
+   <p>Then compile it in the regular way, linking it with libust. For example:
+
+<pre class="example">     gcc -o foo -lust foo.c
+</pre>
+   <p>Run the program with <samp><span class="command">usttrace</span></samp>. The <samp><span class="command">usttrace</span></samp> output says where the trace
+was written.
+
+<pre class="example">     usttrace ./foo
+</pre>
+   <p>Finally, open the trace in LTTV.
+
+<pre class="example">     lttv-gui -t /path/to/trace
+</pre>
+   <p>The trace can also be dumped as text in the console:
+
+<pre class="example">     lttv -m textDump -t /path/to/trace
+</pre>
+   <div class="node">
+<a name="Instrumenting-an-application"></a>
+<p><hr>
+Next:&nbsp;<a rel="next" accesskey="n" href="#Recording-a-trace">Recording a trace</a>,
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#Quick-start">Quick start</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
+
+</div>
+
+<h2 class="chapter">4 Instrumenting an application</h2>
+
+<p>In order to record a trace of events occurring in a application, the
+application must be instrumented. Instrumentation points resemble function
+calls. When the program reaches an instrumentation point, an event is
+generated.
+
+   <p>There are no limitations on the type of code that may be instrumented. 
+Multi-threaded programs may be instrumented without problem. Signal handlers
+may be instrumented as well.
+
+   <p>There are two APIs to instrument programs: markers and tracepoints. Markers are
+quick to add and are usually used for temporary instrumentation. Tracepoints
+provide a way to instrument code more cleanly and are suited for permanent
+instrumentation.
+
+   <p>In addition to executable programs, shared libraries may also be instrumented
+with the methods described in this chapter.
+
+<ul class="menu">
+<li><a accesskey="1" href="#Markers">Markers</a>
+<li><a accesskey="2" href="#Tracepoints">Tracepoints</a>
+</ul>
+
+<div class="node">
+<a name="Markers"></a>
+<p><hr>
+Next:&nbsp;<a rel="next" accesskey="n" href="#Tracepoints">Tracepoints</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Instrumenting-an-application">Instrumenting an application</a>
+
+</div>
+
+<h3 class="section">4.1 Markers</h3>
+
+<p>Adding a marker is simply a matter of inserting one line in the program.
+
+<pre class="example"><pre class="verbatim">     #include &lt;ust/marker.h>
+     
+     int main(int argc, char **argv)
+     {
+     	int v;
+     	char *st;
+     
+     	/* ... set values of v and st ... */
+     
+     	/* a marker: */
+     	trace_mark(main, myevent, "firstarg %d secondarg %s", v, st);
+     
+     	/* another marker without arguments: */
+     	trace_mark(main, myotherevent, MARK_NOARGS);
+     
+     	return 0;
+     }
+</pre>
+</pre>
+   <p>The invocation of the trace_mark() macro requires at least 3 arguments. The
+first, here "main", is the name of the event category. It is also the name of
+the channel the event will go in. The second, here "myevent" is the name of the
+event. The third is a format string that announces the names and the types of
+the event arguments. Its format resembles that of a printf() format string; it
+is described thoroughly in Appendix x.
+
+   <p>A given Marker may appear more than once in the same program. Other Markers may
+have the same name and a different format string, although this might induce
+some confusion at analysis time.
+
+<div class="node">
+<a name="Tracepoints"></a>
+<p><hr>
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#Markers">Markers</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Instrumenting-an-application">Instrumenting an application</a>
+
+</div>
+
+<h3 class="section">4.2 Tracepoints</h3>
+
+<p>The Tracepoints API uses the Markers, but provides a higher-level abstraction. 
+Whereas the markers API provides limited type checking, the Tracepoints API
+provides more thorough type checking and discharges from the need to insert
+format strings directly in the code and to have format strings appear more than
+once if a given marker is reused.
+
+   <blockquote>
+<b>Note Although this example uses </b><em>mychannel</em><b> as the channel, the:</b> only channel name currently supported with early tracing is <strong>ust</strong>. The
+<samp><span class="command">usttrace</span></samp> tool always uses the early tracing mode. When using manual
+mode without early tracing, any channel name may be used.</blockquote>
+
+   <p>A function instrumented with a tracepoint looks like this:
+
+<pre class="example"><pre class="verbatim">     #include "tp.h"
+     
+     void function()
+     {
+     	int v;
+     	char *st;
+     
+     	/* ... set values of v and st ... */
+     
+     	/* a tracepoint: */
+     	trace_mychannel_myevent(v, st);
+     }
+</pre>
+</pre>
+   <p>Another file, here tp.h, contains declarations for the tracepoint.
+
+<pre class="example"><pre class="verbatim">     #include &lt;ust/tracepoint.h>
+     
+     DECLARE_TRACE(mychannel_myevent, TPPROTO(int v, char *st),
+     	      TPARGS(v, st));
+</pre>
+</pre>
+   <p>A third file, here tp.c, contains definitions for the tracepoint.
+
+<pre class="example"><pre class="verbatim">     #include &lt;ust/marker.h>
+     #include "tp.h"
+     
+     DEFINE_TRACE(mychannel_myevent);
+     
+     void mychannel_myevent_probe(int v, char *st)
+     {
+     	trace_mark(mychannel, myevent, "v %d st %s", v, st);
+     }
+     
+     static void __attribute__((constructor)) init()
+     {
+     	register_trace_mychannel_myevent(mychannel_myevent_probe);
+     }
+</pre>
+</pre>
+   <p>Here, tp.h and tp.c could contain declarations and definitions for other
+tracepoints. The constructor would contain other register_* calls.
+
+<div class="node">
+<a name="Recording-a-trace"></a>
+<p><hr>
+Next:&nbsp;<a rel="next" accesskey="n" href="#Viewing-traces">Viewing traces</a>,
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#Instrumenting-an-application">Instrumenting an application</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
+
+</div>
+
+<h2 class="chapter">5 Recording a trace</h2>
+
+<ul class="menu">
+<li><a accesskey="1" href="#Using-_003csamp_003e_003cspan-class_003d_0022command_0022_003eusttrace_003c_002fspan_003e_003c_002fsamp_003e">Using <samp><span class="command">usttrace</span></samp></a>
+<li><a accesskey="2" href="#Setting-up-the-recording-manually">Setting up the recording manually</a>
+<li><a accesskey="3" href="#Using-early-tracing">Using early tracing</a>
+<li><a accesskey="4" href="#Crash-recovery">Crash recovery</a>
+<li><a accesskey="5" href="#Tracing-across-_003ccode_003efork_0028_0029_003c_002fcode_003e-and-_003ccode_003eclone_0028_0029_003c_002fcode_003e">Tracing across <code>fork()</code> and <code>clone()</code></a>
+<li><a accesskey="6" href="#Tracing-programs-and-libraries-that-were-not-linked-to-libust">Tracing programs and libraries that were not linked to libust</a>
+</ul>
+
+<div class="node">
+<a name="Using-%3csamp%3e%3cspan-class%3d%22command%22%3eusttrace%3c%2fspan%3e%3c%2fsamp%3e"></a>
+<a name="Using-_003csamp_003e_003cspan-class_003d_0022command_0022_003eusttrace_003c_002fspan_003e_003c_002fsamp_003e"></a>
+<p><hr>
+Next:&nbsp;<a rel="next" accesskey="n" href="#Setting-up-the-recording-manually">Setting up the recording manually</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Recording-a-trace">Recording a trace</a>
+
+</div>
+
+<h3 class="section">5.1 Using <samp><span class="command">usttrace</span></samp></h3>
+
+<p>The simplest way to record a trace is to use the <samp><span class="command">usttrace</span></samp> script. An
+example is given in the quickstart above.
+
+   <p>The <samp><span class="command">usttrace</span></samp> script automatically:
+     <ul>
+<li>creates a daemon
+<li>enables all markers
+<li>runs the command specified on the command line
+<li>after the command ends, prints the location where the trace was saved
+</ul>
+
+   <p>Each subdirectory of the save location contains the trace of one process that
+was generated by the command. The name of a subdirectory consists in the the PID
+of the process, followed by the timestamp of its creation.
+
+   <p>The save location also contains logs of the tracing.
+
+   <p>When using <samp><span class="command">usttrace</span></samp>, the early tracing is always active, which means
+that the tracing is guaranteed to be started by the time the process enters its
+main() function.
+
+   <p>Several <samp><span class="command">usttrace</span></samp>'s may be run simultaneously without risk of
+conflict. This facilitates the use of the tracer by idependent users on a
+system. Each instance of <samp><span class="command">usttrace</span></samp> starts its own daemon which
+collects the events of the processes it creates.
+
+<div class="node">
+<a name="Setting-up-the-recording-manually"></a>
+<p><hr>
+Next:&nbsp;<a rel="next" accesskey="n" href="#Using-early-tracing">Using early tracing</a>,
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#Using-_003csamp_003e_003cspan-class_003d_0022command_0022_003eusttrace_003c_002fspan_003e_003c_002fsamp_003e">Using &lt;samp&gt;&lt;span class=&quot;command&quot;&gt;usttrace&lt;/span&gt;&lt;/samp&gt;</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Recording-a-trace">Recording a trace</a>
+
+</div>
+
+<h3 class="section">5.2 Setting up the recording manually</h3>
+
+<p>Instead of using <samp><span class="command">usttrace</span></samp>, a trace may be recorded on an already
+running process.
+
+   <p>First the daemon must be started.
+
+<pre class="example"><pre class="verbatim">     # Make sure the directory for the communication sockets exists.
+     $ mkdir /tmp/ustsocks
+     
+     # Make sure the directory where ustd will write the trace exists.
+     $ mkdir /tmp/trace
+     
+     # Start the daemon
+     $ ustd
+     
+     # We assume the program we want to trace is already running and that
+     # it has pid 1234.
+     
+     # List the available markers
+     $ ustctl --list-markers 1234
+     # A column indicates 0 for an inactive marker and 1 for an active marker.
+     
+     # Enable a marker
+     $ ustctl --enable-marker ust/mymark 1234
+     
+     # Create a trace
+     $ ustctl --create-trace 1234
+     
+     # Start tracing
+     $ ustctl --start-trace 1234
+     
+     # Do things...
+     
+     # Stop tracing
+     $ ustctl --stop-trace 1234
+     
+     # Destroy the trace
+     $ ustctl --destroy-trace 1234
+</pre>
+</pre>
+   <div class="node">
+<a name="Using-early-tracing"></a>
+<p><hr>
+Next:&nbsp;<a rel="next" accesskey="n" href="#Crash-recovery">Crash recovery</a>,
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#Setting-up-the-recording-manually">Setting up the recording manually</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Recording-a-trace">Recording a trace</a>
+
+</div>
+
+<h3 class="section">5.3 Using early tracing</h3>
+
+<p>Early tracing consists in starting the tracing as early as possible in the
+program, so no events are lost between program start and the point where the
+command to start the tracing is given. When using early tracing, it is
+guaranteed that by the time the traced program enters its <code>main()</code>
+function, the tracing will be started.
+
+   <p>When using <samp><span class="command">usttrace</span></samp>, the early tracing is always active.
+
+   <p>When using the manual mode (<samp><span class="command">ustctl</span></samp>), early tracing is enabled using
+environment variables. Setting <samp><span class="env">UST_TRACE</span></samp> to <code>1</code>, enables early
+tracing, while setting <samp><span class="env">UST_AUTOPROBE</span></samp> to <code>1</code> enables all markers
+automatically.
+
+<div class="node">
+<a name="Crash-recovery"></a>
+<p><hr>
+Next:&nbsp;<a rel="next" accesskey="n" href="#Tracing-across-_003ccode_003efork_0028_0029_003c_002fcode_003e-and-_003ccode_003eclone_0028_0029_003c_002fcode_003e">Tracing across &lt;code&gt;fork()&lt;/code&gt; and &lt;code&gt;clone()&lt;/code&gt;</a>,
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#Using-early-tracing">Using early tracing</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Recording-a-trace">Recording a trace</a>
+
+</div>
+
+<h3 class="section">5.4 Crash recovery</h3>
+
+<p>When a process being traced crashes, the daemon is able to recover all the
+events in its buffers that were successfully commited. This is possible because
+the buffers are in a shared memory segment which remains available to the
+daemon even after the termination of the traced process.
+
+<div class="node">
+<a name="Tracing-across-%3ccode%3efork()%3c%2fcode%3e-and-%3ccode%3eclone()%3c%2fcode%3e"></a>
+<a name="Tracing-across-_003ccode_003efork_0028_0029_003c_002fcode_003e-and-_003ccode_003eclone_0028_0029_003c_002fcode_003e"></a>
+<p><hr>
+Next:&nbsp;<a rel="next" accesskey="n" href="#Tracing-programs-and-libraries-that-were-not-linked-to-libust">Tracing programs and libraries that were not linked to libust</a>,
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#Crash-recovery">Crash recovery</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Recording-a-trace">Recording a trace</a>
+
+</div>
+
+<h3 class="section">5.5 Tracing across <code>fork()</code> and <code>clone()</code></h3>
+
+<p>Tracing across <code>clone()</code> when the <code>CLONE_VM</code> flag is specified is
+supported without any particular action.
+
+   <p>When <code>clone()</code> is called without <code>CLONE_VM</code> or <code>fork()</code> is
+called, a new address space is created and the tracer must be notified to
+create new buffers for it.
+
+   <p>This can be done automatically, by <samp><span class="env">LD_PRELOAD</span></samp>'ing <samp><span class="file">libinterfork.so</span></samp>. 
+This library intercepts calls to <code>fork()</code> and informs the tracer it is
+being called. When using <samp><span class="command">usttrace</span></samp>, this is accomplied by specifying
+the <samp><span class="option">-f</span></samp> command line argument.
+
+   <p>Alternatively, the program can call <code>ust_before_fork()</code> before calling
+<code>fork()</code> or <code>clone()</code> with <code>CLONE_VM</code>. After the call,
+<code>ust_after_fork_parent()</code> must be called in the parent process and
+<code>ust_after_fork_child()</code> must be called in the child process.
+
+<div class="node">
+<a name="Tracing-programs-and-libraries-that-were-not-linked-to-libust"></a>
+<p><hr>
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#Tracing-across-_003ccode_003efork_0028_0029_003c_002fcode_003e-and-_003ccode_003eclone_0028_0029_003c_002fcode_003e">Tracing across &lt;code&gt;fork()&lt;/code&gt; and &lt;code&gt;clone()&lt;/code&gt;</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Recording-a-trace">Recording a trace</a>
+
+</div>
+
+<h3 class="section">5.6 Tracing programs and libraries that were not linked to libust</h3>
+
+<p>Some programs need to be traced even though they were not linked to libust
+either because they were not instrumented or because it was not practical.
+
+   <p>An executable that is not instrumented can still yield interesting traces when
+at least one of its dynamic libraries is instrumented. It is also possible to
+trace certain function calls by intercepting them with a specially crafted
+library that is linked with <samp><span class="env">LD_PRELOAD</span></samp> at program start.
+
+   <p>In any case, a program that was not linked to libust at compile time must be
+linked to it at run time with <samp><span class="env">LD_PRELOAD</span></samp>. This can be accomplished with
+<samp><span class="command">usttrace</span></samp>'s <samp><span class="option">-l</span></samp> option. It can also be done by setting the
+<samp><span class="env">LD_PRELOAD</span></samp> environment variable on the command line. For example:
+
+<pre class="example"><pre class="verbatim">     # Run ls with usttrace, LD_PRELOAD'ing libust
+     # (assuming one of the libraries used by ls is instrumented).
+     $ usttrace -l ls
+     
+     # Run ls, manually adding the LD_PRELOAD.
+     $ LD_PRELOAD=/usr/local/lib/libust.so.0 ls
+</pre>
+</pre>
+   <div class="node">
+<a name="Performance"></a>
+<p><hr>
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#Viewing-traces">Viewing traces</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
+
+</div>
+
+<h2 class="chapter">6 Performance</h2>
+
+<p>Todo.
+
+<div class="node">
+<a name="Viewing-traces"></a>
+<p><hr>
+Next:&nbsp;<a rel="next" accesskey="n" href="#Performance">Performance</a>,
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#Recording-a-trace">Recording a trace</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
+
+</div>
+
+<h2 class="chapter">7 Viewing traces</h2>
+
+<p>Traces may be viewed with LTTV. An example of command for launching LTTV is
+given in the quickstart.
+
+<ul class="menu">
+<li><a accesskey="1" href="#Viewing-multiple-traces">Viewing multiple traces</a>
+<li><a accesskey="2" href="#Combined-kernel_002duserspace-tracing">Combined kernel-userspace tracing</a>
+</ul>
+
+<div class="node">
+<a name="Viewing-multiple-traces"></a>
+<p><hr>
+Next:&nbsp;<a rel="next" accesskey="n" href="#Combined-kernel_002duserspace-tracing">Combined kernel-userspace tracing</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Viewing-traces">Viewing traces</a>
+
+</div>
+
+<h3 class="section">7.1 Viewing multiple traces</h3>
+
+<p>When tracing multi-process applications or several applications simultaneously,
+more than one trace will be obtained. LTTV can open and display all these
+traces simultaneously.
+
+<div class="node">
+<a name="Combined-kernel-userspace-tracing"></a>
+<a name="Combined-kernel_002duserspace-tracing"></a>
+<p><hr>
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#Viewing-multiple-traces">Viewing multiple traces</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Viewing-traces">Viewing traces</a>
+
+</div>
+
+<h3 class="section">7.2 Combined kernel-userspace tracing</h3>
+
+<p>In addition to multiple userspace traces, LTTV can open a kernel trace recorded
+with the LTTng kernel tracer. This provides events that enable the rendering of
+the Control Flow View and the Resource View.
+
+   <p>When doing so, it is necessary to use the same time source for the kernel
+tracer as well as the userspace tracer. Currently, the recommended method is to
+use the timestamp counter for both. The TSC can however only be used on architectures
+where it is synchronized across cores.
+
+</body></html>
+

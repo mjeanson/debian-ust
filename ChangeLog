@@ -1,0 +1,18 @@
+Changes in 0.3 since 0.2
+* fix several issues, stabilizing tracing of large applications
+* add --set-subbuf-size / --set-subbuf-num options to ustctl
+* add a signal safe implementation of snprintf
+
+Changes in 0.2 since 0.1
+* conversion of the buffering system to per-cpu
+* update to the liburcu 0.4 API
+* upgrade to trace format 2.6; the latest lttv may now be used
+* add support for clone() interception in libinterfork
+* port refactorings from the kernel tracer up to 0.173
+* enhancements/refactor of libustcomm
+* add sections in the manual about trace viewing and about tracing apps not linked to libust
+* debugging output is now enabled by adding -DUST_DEBUG to the CFLAGS
+* usttrace: change ustd socket name to ustd-sock-PID
+* change app socket directory name for something more descriptive (/tmp/ust-app-socks)
+* code cleanups
+* various bug fixes

@@ -1,0 +1,115 @@
+#!/bin/bash
+
+function NOFAIL() {
+	"$@"
+	if [ "$?" -ne "0" ]; then
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!"
+		echo "$0: Stopping because of error"
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!"
+		exit 1;
+	fi
+}
+
+function starttest() {
+	echo "------------------------------------"
+	echo "Starting test: $1"
+	echo "------------------------------------"
+}
+
+function check_trace_logs() {
+	TRACE=$1
+
+	for f in $(ls $1/*.log); do
+		NLINES=$(egrep "Warning|Error" $f | wc -l)
+		if [ "$NLINES" -ne "0" ]; then
+			echo "Errors/warnings found in $f"
+			return 1;
+		fi
+	done
+	return 0;
+}
+
+TESTDIR=$(dirname $0)
+MATCHES="$TESTDIR/trace_matches"
+
+starttest "Test-nevents"
+NOFAIL usttrace $TESTDIR/test-nevents/prog
+trace_loc=$(usttrace -W)
+NOFAIL $MATCHES -N "an_event (100000)" -n 100000 "^ust.an_event:" $trace_loc
+NOFAIL $MATCHES -N "another_event (100000)" -n 100000 "^ust.another_event:" $trace_loc
+NOFAIL check_trace_logs "$trace_loc"
+
+starttest "fork()/exec() test"
+NOFAIL usttrace -f $TESTDIR/fork/.libs/fork $TESTDIR/fork/.libs/fork2
+trace_loc=$(usttrace -W)
+NOFAIL $MATCHES -N "fork - before_fork" "^ust.before_fork:" $trace_loc
+NOFAIL $MATCHES -N "fork - after_fork_parent" "^ust.after_fork_parent:" $trace_loc
+NOFAIL $MATCHES -N "fork - after_fork_child" "^ust.after_fork_child:" $trace_loc
+NOFAIL $MATCHES -N "fork - before_exec" "^ust.before_exec:" $trace_loc
+NOFAIL $MATCHES -N "fork - potential_exec" "^ust.potential_exec:" $trace_loc
+NOFAIL $MATCHES -N "fork - after_exec" "^ust.after_exec:" $trace_loc
+NOFAIL check_trace_logs "$trace_loc"
+
+starttest "libmallocwrap"
+NOFAIL usttrace -lm $TESTDIR/test-libmallocwrap/.libs/prog
+trace_loc=$(usttrace -W)
+NOFAIL $MATCHES -N "mallocwrap - malloc" -n 1000 "^ust.malloc:.*{ size = 1[0-9][0-9][0-9]," $trace_loc
+NOFAIL check_trace_logs "$trace_loc"
+
+### Manual mode test
+starttest "Manual mode tracing"
+TRACE_DIR="/tmp/ust-testsuite-manual-trace"
+rm -rf "$TRACE_DIR"
+mkdir "$TRACE_DIR"
+
+pidfilepath="/tmp/ust-testsuite-$USER-$(date +%Y%m%d%H%M%S%N)-ustd-pid"
+mkfifo -m 0600 "$pidfilepath"
+# It's not useful to run ustd in NOFAIL because it's running in the background
+ustd --pidfile "$pidfilepath" -o "$TRACE_DIR" >/dev/null 2>&1 &
+USTD_PID="$(<$pidfilepath)"
+
+LD_PRELOAD=/usr/local/lib/libust.so.0.0.0:/usr/local/lib/libmallocwrap.so find / >/dev/null 2>&1 &
+PID=$!
+sleep 0.1
+NOFAIL ustctl --list-markers "$PID" >/dev/null
+NOFAIL ustctl --enable-marker ust/malloc $PID
+NOFAIL ustctl --enable-marker ust/free $PID
+NOFAIL ustctl --create-trace $PID
+NOFAIL ustctl --alloc-trace $PID
+NOFAIL ustctl --start-trace $PID
+sleep 0.5
+
+NOFAIL ustctl --stop-trace $PID
+NOFAIL ustctl --destroy-trace $PID
+kill $PID
+kill -SIGTERM $USTD_PID
+wait $USTD_PID
+
+NOFAIL $MATCHES -N "manual - find - ust.malloc" "^ust.malloc:" "$TRACE_DIR"
+
+### Valgrind ustd ###
+starttest "ustd valgrind check"
+TRACE_DIR="/tmp/ust-testsuite-ustdvalgrind-trace"
+rm -rf "$TRACE_DIR"
+mkdir "$TRACE_DIR"
+
+pidfilepath="/tmp/ust-testsuite-$USER-$(date +%Y%m%d%H%M%S%N)-ustd-pid"
+mkfifo -m 0600 "$pidfilepath"
+# It's not useful to run ustd in NOFAIL because it's running in the background
+VALG_OUT=/tmp/ust-testsuite-valg.txt
+valgrind -q ustd --pidfile "$pidfilepath" -o "$TRACE_DIR" >/dev/null 2>"$VALG_OUT" &
+VALG_PID=$!
+USTD_PID="$(<$pidfilepath)"
+
+usttrace -s $TESTDIR/basic/.libs/basic
+
+kill -SIGTERM $USTD_PID
+wait $!
+
+echo "Valgrind output is in $VALG_OUT"
+NOFAIL [ -z "$(<$VALG_OUT)" ]
+
+echo "************************************"
+echo "$0: All passed"
+echo "************************************"
+exit 0
