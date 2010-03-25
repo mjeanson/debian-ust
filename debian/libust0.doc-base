@@ -1,4 +1,4 @@
-Document: liburcu0
+Document: libust0
 Title: LTTng Userspace Tracer (UST) Manual
 Author: Pierre-Marc Fournier
 Abstract: The userspace tracer is designed to provide detailed information
