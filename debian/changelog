@@ -1,3 +1,9 @@
+ust (0.4-3) unstable; urgency=low
+
+  * Fix typo in libust0.doc-base
+
+ -- Jon Bernard <jbernard@debian.org>  Sat, 29 May 2010 10:20:21 -0400
+
 ust (0.4-2) unstable; urgency=low
 
   * Restrict architecture list to that of liburcu
