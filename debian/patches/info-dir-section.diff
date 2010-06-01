@@ -1,0 +1,17 @@
+# Description: Include dir section in info document so install-info will be
+#  able to determine the section into which this info page should be put.
+# Author: Jon Bernard <jbernard@debian.org>
+
+--- a/doc/manual/ust.info
++++ b/doc/manual/ust.info
+@@ -1,5 +1,10 @@
+ This is ust.info, produced by makeinfo version 4.13 from manual.texinfo.
+ 
++INFO-DIR-SECTION Development
++START-INFO-DIR-ENTRY
++* ust: (ust).         LTTng Userspace Tracer.
++END-INFO-DIR-ENTRY
++
+ This manual is for program, version version.
+ 
+    Copyright (C)  copyright-owner.
