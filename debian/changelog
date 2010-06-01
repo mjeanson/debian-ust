@@ -1,3 +1,11 @@
+ust (0.4-4) unstable; urgency=low
+
+  * [9a6b0e] Include info document in libust0
+  * [4fec9e] Reference info document in doc-base file
+  * [a90722] Patch info document to include dir section
+
+ -- Jon Bernard <jbernard@debian.org>  Tue, 01 Jun 2010 12:39:30 -0400
+
 ust (0.4-3) unstable; urgency=low
 
   * Fix typo in libust0.doc-base
