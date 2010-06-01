@@ -7,6 +7,10 @@ Abstract: The userspace tracer is designed to provide detailed information
  be added in any userspace code including signal handlers and libraries.
 Section: Programming
 
+Format: Info
+Index: /usr/share/info/ust.info.gz
+Files: /usr/share/info/ust.info.gz
+
 Format: HTML
 Index: /usr/share/doc/libust0/ust.html
 Files: /usr/share/doc/libust0/ust.html
