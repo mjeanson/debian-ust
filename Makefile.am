@@ -1,13 +1,13 @@
-ACLOCAL_AMFLAGS = -I m4
+ACLOCAL_AMFLAGS = -I config
 
 # The order here is tricky. SUBDIRS applies both to compilation and
 # installation. Programs depending on the libs must be built after
 # libust and '.' (that contains the linker script). However, '.'
 # must be installed after libust so it can overwrite libust.so with
 # the linker script.
-SUBDIRS = snprintf libustcomm libust . tests libustinstr-malloc ustd ustctl libustfork include
+SUBDIRS = snprintf libustcomm libust . tests libustinstr-malloc ustd ustctl libustfork include doc
 
-EXTRA_DIST = doc libust.ldscript.in libust-initializer.c
+EXTRA_DIST = libust.ldscript.in libust-initializer.c
 dist_bin_SCRIPTS = usttrace
 
 ldscriptsdir = $(libdir)
@@ -21,4 +21,4 @@ libust.so: libust.ldscript.in
 # It is very important to compile the initializer with PIC otherwise we
 # may get obscure errors when linking to shared libraries.
 libust-initializer.o: libust-initializer.c
-	$(CC) $(CFLAGS) -fPIC -c -I$(top_srcdir)/include -o $@ $<
+	$(CC) $(CFLAGS) -fno-strict-aliasing -fPIC -c -I$(top_srcdir)/include -o $@ $<

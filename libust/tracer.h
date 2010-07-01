@@ -26,12 +26,12 @@
 
 #include <sys/types.h>
 #include <stdarg.h>
-#include <ust/kernelcompat.h>
+#include <ust/marker.h>
+#include <ust/probe.h>
+#include <ust/core.h>
 #include "channels.h"
 #include "tracercore.h"
 #include "tracerconst.h"
-#include <ust/marker.h>
-#include <ust/probe.h>
 #include "buffers.h"
 
 /* Number of bytes to log with a read/write event */
@@ -84,6 +84,12 @@ struct ltt_probe_private_data {
 enum ltt_channels {
 	LTT_CHANNEL_METADATA,
 	LTT_CHANNEL_UST,
+};
+
+struct chan_info_struct {
+	const char *name;
+	unsigned int def_subbufsize;
+	unsigned int def_subbufcount;
 };
 
 struct ltt_active_marker {
@@ -241,8 +247,7 @@ static __inline__ size_t ltt_subbuffer_header_size(void)
 	return offsetof(struct ltt_subbuffer_header, header_end);
 }
 
-extern size_t ltt_write_event_header_slow(struct ust_trace *trace,
-               struct ust_channel *channel,
+extern size_t ltt_write_event_header_slow(struct ust_channel *channel,
                struct ust_buffer *buf, long buf_offset,
                u16 eID, u32 event_size,
                u64 tsc, unsigned int rflags);
@@ -264,8 +269,7 @@ extern size_t ltt_write_event_header_slow(struct ust_trace *trace,
  *
  * returns : offset where the event data must be written.
  */
-static __inline__ size_t ltt_write_event_header(struct ust_trace *trace,
-		struct ust_channel *chan,
+static __inline__ size_t ltt_write_event_header(struct ust_channel *chan,
 		struct ust_buffer *buf, long buf_offset,
 		u16 eID, u32 event_size,
 		u64 tsc, unsigned int rflags)
@@ -283,7 +287,7 @@ static __inline__ size_t ltt_write_event_header(struct ust_trace *trace,
 	return buf_offset;
 
 slow_path:
-	return ltt_write_event_header_slow(trace, chan, buf, buf_offset,
+	return ltt_write_event_header_slow(chan, buf, buf_offset,
 				eID, event_size, tsc, rflags);
 }
 
@@ -336,6 +340,21 @@ static __inline__ void ltt_write_trace_header(struct ust_trace *trace,
 	header->start_time_usec = trace->start_time.tv_usec;
 	header->start_freq = trace->start_freq;
 	header->freq_scale = trace->freq_scale;
+}
+
+static __inline__ int ust_get_cpu(void)
+{
+#ifndef UST_VALGRIND
+	return sched_getcpu();
+#else
+	/* Valgrind does not support the sched_getcpu() vsyscall.
+	 * It causes it to detect a segfault in the program and stop it.
+	 * So if we want to check libust with valgrind, we have to refrain
+	 * from using this call. TODO: it would probably be better to return
+	 * other values too, to better test it.
+	 */
+	return 0;
+#endif
 }
 
 

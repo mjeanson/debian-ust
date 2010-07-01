@@ -25,17 +25,14 @@
 #define _UST_MARKER_H
 
 #include <stdarg.h>
-//ust// #include <linux/types.h>
 #include <ust/immediate.h>
-//ust// #include <linux/ltt-channels.h>
-#include <ust/kernelcompat.h>
+#include <ust/core.h>
 #include <urcu/list.h>
 #include <ust/processor.h>
+#include <ust/kcompat/kcompat.h>
 
 #include <bits/wordsize.h>
 
-//ust// struct module;
-//ust// struct task_struct;
 struct marker;
 
 /* To stringify the expansion of a define */
@@ -100,6 +97,7 @@ struct marker {
 		      * is not unusual as it can be the result of function inlining.		\
 		      */									\
 		     ".ifndef __mstrtab_" XSTR(channel) "_" XSTR(name) "_channel_" XSTR(unique) "\n\t"	\
+		     /*".section __markers_strings\n\t"*/					\
 		     ".section __markers_strings,\"aw\",@progbits\n\t"				\
 		     "__mstrtab_" XSTR(channel) "_" XSTR(name) "_channel_" XSTR(unique) ":\n\t"	\
 		     ".string \"" XSTR(channel) "\"\n\t"					\
@@ -111,8 +109,9 @@ struct marker {
 		     ".endif\n\t"								\
 		);										\
 		asm volatile (									\
+		     /*".section __markers\n\t"*/ \
 		     ".section __markers,\"aw\",@progbits\n\t"					\
-		     ".align 8\n\t"								\
+		     ".balign 8\n\t" 								\
 		     "2:\n\t" \
 		     _ASM_PTR "(__mstrtab_" XSTR(channel) "_" XSTR(name) "_channel_" XSTR(unique) ")\n\t" /* channel string */ \
 		     _ASM_PTR "(__mstrtab_" XSTR(channel) "_" XSTR(name) "_name_" XSTR(unique) ")\n\t" /* name string */ \
@@ -121,7 +120,7 @@ struct marker {
 		     ".byte 0\n\t" /* ptype */							\
 		     ".word 0\n\t" /* channel_id */						\
 		     ".word 0\n\t" /* event_id */						\
-		     ".align " XSTR(__WORDSIZE) " / 8\n\t" /* alignment */			\
+		     ".balign " XSTR(__WORDSIZE) " / 8\n\t" /* alignment */			\
 		     _ASM_PTR "(marker_probe_cb)\n\t" /* call */				\
 		     _ASM_PTR "(__mark_empty_function)\n\t" /* marker_probe_closure single.field1 */ \
 		     _ASM_PTR "0\n\t" /* marker_probe_closure single.field2 */			\
@@ -131,7 +130,7 @@ struct marker {
 		     _ASM_PTR "(1f)\n\t" /* location */						\
 		     ".previous\n\t"								\
 		     "1:\n\t"									\
-		     ARCH_COPY_ADDR("2b", "%[outptr]") "\n\t"					\
+		     ARCH_COPY_ADDR("%[outptr]")						\
 		: [outptr] "=r" (m) );								\
 												\
 		save_registers(&regs)
@@ -140,8 +139,22 @@ struct marker {
 #define DEFINE_MARKER(channel, name, format, unique, m)				\
 		_DEFINE_MARKER(channel, name, NULL, NULL, format, unique, m)
 
-#define DEFINE_MARKER_TP(channel, name, tp_name, tp_cb, format, unique, m)		\
-		_DEFINE_MARKER(channel, name, #tp_name, tp_cb, format, unique, m)
+#define DEFINE_MARKER_TP(channel, name, tp_name, tp_cb, format)		\
+		_DEFINE_MARKER_TP(channel, name, #tp_name, tp_cb, format)
+
+#define _DEFINE_MARKER_TP(channel, name, tp_name_str, tp_cb, format) \
+		static const char __mstrtab_##channel##_##name[]	\
+		__attribute__((section("__markers_strings")))		\
+		= #channel "\0" #name "\0" format;			\
+		static struct marker __mark_##channel##_##name		\
+		__attribute__((section("__markers"), aligned(8))) =	\
+		{ __mstrtab_##channel##_##name,				\
+		  &__mstrtab_##channel##_##name[sizeof(#channel)],	\
+		  &__mstrtab_##channel##_##name[sizeof(#channel) +	\
+						sizeof(#name)],		\
+		  0, 0, 0, 0, marker_probe_cb,				\
+		  { __mark_empty_function, NULL},			\
+		  NULL, tp_name_str, tp_cb }
 
 /*
  * Make sure the alignment of the structure in the __markers section will
@@ -347,6 +360,7 @@ struct lib {
 };
 
 extern int marker_register_lib(struct marker *markers_start, int markers_count);
+extern int marker_unregister_lib(struct marker *markers_start);
 
 #define MARKER_LIB							\
 	extern struct marker __start___markers[] __attribute__((weak, visibility("hidden"))); \
@@ -355,6 +369,11 @@ extern int marker_register_lib(struct marker *markers_start, int markers_count);
 	static void __attribute__((constructor)) __markers__init(void)	\
 	{								\
 		marker_register_lib(__start___markers, (((long)__stop___markers)-((long)__start___markers))/sizeof(struct marker)); \
+	} \
+	\
+	static void __attribute__((destructor)) __markers__destroy(void)	\
+	{								\
+		marker_unregister_lib(__start___markers); \
 	}
 
 extern void marker_set_new_marker_cb(void (*cb)(struct marker *));

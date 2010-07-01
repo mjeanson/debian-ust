@@ -24,7 +24,6 @@
  */
 
 #include <stdlib.h>
-#include <ust/kernelcompat.h>
 #include <ust/marker.h>
 #include "channels.h"
 #include "usterr.h"
@@ -44,6 +43,9 @@ static LIST_HEAD(ltt_channels);
  */
 static unsigned int free_index;
 static struct kref index_kref;	/* Keeps track of allocated trace channels */
+
+int ust_channels_overwrite_by_default = 0;
+int ust_channels_request_collection_by_default = 1;
 
 static struct ltt_channel_setting *lookup_channel(const char *name)
 {
@@ -107,7 +109,7 @@ int ltt_channels_register(const char *name)
 	struct ltt_channel_setting *setting;
 	int ret = 0;
 
-	mutex_lock(&ltt_channel_mutex);
+	pthread_mutex_lock(&ltt_channel_mutex);
 	setting = lookup_channel(name);
 	if (setting) {
 		if (uatomic_read(&setting->kref.refcount) == 0)
@@ -128,7 +130,7 @@ int ltt_channels_register(const char *name)
 init_kref:
 	kref_init(&setting->kref);
 end:
-	mutex_unlock(&ltt_channel_mutex);
+	pthread_mutex_unlock(&ltt_channel_mutex);
 	return ret;
 }
 //ust// EXPORT_SYMBOL_GPL(ltt_channels_register);
@@ -144,7 +146,7 @@ int ltt_channels_unregister(const char *name)
 	struct ltt_channel_setting *setting;
 	int ret = 0;
 
-	mutex_lock(&ltt_channel_mutex);
+	pthread_mutex_lock(&ltt_channel_mutex);
 	setting = lookup_channel(name);
 	if (!setting || uatomic_read(&setting->kref.refcount) == 0) {
 		ret = -ENOENT;
@@ -152,7 +154,7 @@ int ltt_channels_unregister(const char *name)
 	}
 	kref_put(&setting->kref, release_channel_setting);
 end:
-	mutex_unlock(&ltt_channel_mutex);
+	pthread_mutex_unlock(&ltt_channel_mutex);
 	return ret;
 }
 //ust// EXPORT_SYMBOL_GPL(ltt_channels_unregister);
@@ -170,7 +172,7 @@ int ltt_channels_set_default(const char *name,
 	struct ltt_channel_setting *setting;
 	int ret = 0;
 
-	mutex_lock(&ltt_channel_mutex);
+	pthread_mutex_lock(&ltt_channel_mutex);
 	setting = lookup_channel(name);
 	if (!setting || uatomic_read(&setting->kref.refcount) == 0) {
 		ret = -ENOENT;
@@ -179,7 +181,7 @@ int ltt_channels_set_default(const char *name,
 	setting->subbuf_size = subbuf_size;
 	setting->subbuf_cnt = subbuf_cnt;
 end:
-	mutex_unlock(&ltt_channel_mutex);
+	pthread_mutex_unlock(&ltt_channel_mutex);
 	return ret;
 }
 //ust// EXPORT_SYMBOL_GPL(ltt_channels_set_default);
@@ -246,12 +248,13 @@ int ltt_channels_get_index_from_name(const char *name)
  */
 struct ust_channel *ltt_channels_trace_alloc(unsigned int *nr_channels,
 						    int overwrite,
+						    int request_collection,
 						    int active)
 {
 	struct ust_channel *channel = NULL;
 	struct ltt_channel_setting *iter;
 
-	mutex_lock(&ltt_channel_mutex);
+	pthread_mutex_lock(&ltt_channel_mutex);
 	if (!free_index) {
 		WARN("ltt_channels_trace_alloc: no free_index; are there any probes connected?");
 		goto end;
@@ -272,11 +275,12 @@ struct ust_channel *ltt_channels_trace_alloc(unsigned int *nr_channels,
 		channel[iter->index].subbuf_size = iter->subbuf_size;
 		channel[iter->index].subbuf_cnt = iter->subbuf_cnt;
 		channel[iter->index].overwrite = overwrite;
+		channel[iter->index].request_collection = request_collection;
 		channel[iter->index].active = active;
 		channel[iter->index].channel_name = iter->name;
 	}
 end:
-	mutex_unlock(&ltt_channel_mutex);
+	pthread_mutex_unlock(&ltt_channel_mutex);
 	return channel;
 }
 //ust// EXPORT_SYMBOL_GPL(ltt_channels_trace_alloc);
@@ -291,10 +295,10 @@ end:
 void ltt_channels_trace_free(struct ust_channel *channels)
 {
 	lock_markers();
-	mutex_lock(&ltt_channel_mutex);
+	pthread_mutex_lock(&ltt_channel_mutex);
 	free(channels);
 	kref_put(&index_kref, release_trace_channel);
-	mutex_unlock(&ltt_channel_mutex);
+	pthread_mutex_unlock(&ltt_channel_mutex);
 	unlock_markers();
 }
 //ust// EXPORT_SYMBOL_GPL(ltt_channels_trace_free);
@@ -348,9 +352,9 @@ int ltt_channels_get_event_id(const char *channel, const char *name)
 {
 	int ret;
 
-	mutex_lock(&ltt_channel_mutex);
+	pthread_mutex_lock(&ltt_channel_mutex);
 	ret = _ltt_channels_get_event_id(channel, name);
-	mutex_unlock(&ltt_channel_mutex);
+	pthread_mutex_unlock(&ltt_channel_mutex);
 	return ret;
 }
 

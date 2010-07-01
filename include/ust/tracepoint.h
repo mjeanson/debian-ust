@@ -24,15 +24,10 @@
  * Ported to userspace by Pierre-Marc Fournier.
  */
 
-//#include <linux/immediate.h>
-//#include <linux/types.h>
-//#include <linux/rcupdate.h>
-
 #define _LGPL_SOURCE
 #include <urcu-bp.h>
-
 #include <ust/immediate.h>
-#include <ust/kernelcompat.h>
+#include <ust/core.h>
 
 struct module;
 struct tracepoint;
@@ -48,8 +43,8 @@ struct tracepoint {
 					 * Keep in sync with vmlinux.lds.h.
 					 */
 
-#define TPPROTO(args...)	args
-#define TPARGS(args...)		args
+#define TP_PROTO(args...)	args
+#define TP_ARGS(args...)	args
 
 #define CONFIG_TRACEPOINTS
 #ifdef CONFIG_TRACEPOINTS
@@ -77,11 +72,11 @@ struct tracepoint {
 		if (!generic) {						\
 			if (unlikely(imv_read(__tracepoint_##name.state))) \
 				__DO_TRACE(&__tracepoint_##name,	\
-					TPPROTO(proto), TPARGS(args));	\
+					TP_PROTO(proto), TP_ARGS(args));	\
 		} else {						\
 			if (unlikely(_imv_read(__tracepoint_##name.state))) \
 				__DO_TRACE(&__tracepoint_##name,	\
-					TPPROTO(proto), TPARGS(args));	\
+					TP_PROTO(proto), TP_ARGS(args));	\
 		}							\
 	} while (0)
 
@@ -99,11 +94,11 @@ struct tracepoint {
 	extern struct tracepoint __tracepoint_##name;			\
 	static inline void trace_##name(proto)				\
 	{								\
-		__CHECK_TRACE(name, 0, TPPROTO(proto), TPARGS(args));	\
+		__CHECK_TRACE(name, 0, TP_PROTO(proto), TP_ARGS(args));	\
 	}								\
 	static inline void _trace_##name(proto)				\
 	{								\
-		__CHECK_TRACE(name, 1, TPPROTO(proto), TPARGS(args));	\
+		__CHECK_TRACE(name, 1, TP_PROTO(proto), TP_ARGS(args));	\
 	}								\
 	static inline int register_trace_##name(void (*probe)(proto))	\
 	{								\
@@ -120,11 +115,6 @@ struct tracepoint {
 	struct tracepoint __tracepoint_##name				\
 	__attribute__((section("__tracepoints"), aligned(32))) =	\
 		{ __tpstrtab_##name, 0, NULL }
-
-#define EXPORT_TRACEPOINT_SYMBOL_GPL(name)				\
-	EXPORT_SYMBOL_GPL(__tracepoint_##name)
-#define EXPORT_TRACEPOINT_SYMBOL(name)					\
-	EXPORT_SYMBOL(__tracepoint_##name)
 
 extern void tracepoint_update_probe_range(struct tracepoint *begin,
 	struct tracepoint *end);
@@ -200,6 +190,7 @@ struct tracepoint_lib {
 
 extern int tracepoint_register_lib(struct tracepoint *tracepoints_start,
 				   int tracepoints_count);
+extern int tracepoint_unregister_lib(struct tracepoint *tracepoints_start);
 
 #define TRACEPOINT_LIB							\
 	extern struct tracepoint __start___tracepoints[] __attribute__((weak, visibility("hidden"))); \
@@ -208,6 +199,11 @@ extern int tracepoint_register_lib(struct tracepoint *tracepoints_start,
 	{								\
 		tracepoint_register_lib(__start___tracepoints,		\
 					(((long)__stop___tracepoints)-((long)__start___tracepoints))/sizeof(struct tracepoint)); \
+	} \
+	\
+	static void __attribute__((destructor)) __tracepoints__destroy(void) \
+	{								\
+		tracepoint_unregister_lib(__start___tracepoints); \
 	}
 
 #endif /* _UST_TRACEPOINT_H */

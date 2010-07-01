@@ -32,14 +32,14 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include <ust/kernelcompat.h>
 #define _LGPL_SOURCE
 #include <urcu-bp.h>
 #include <urcu/rculist.h>
 
+#include <ust/core.h>
+#include <ust/clock.h>
 #include "buffers.h"
 #include "tracer.h"
-//#include "list.h"
 #include "usterr.h"
 #include "ust_snprintf.h"
 
@@ -49,11 +49,6 @@ enum ltt_type {
 	LTT_TYPE_STRING,
 	LTT_TYPE_NONE,
 };
-
-static int ust_get_cpu(void)
-{
-	return sched_getcpu();
-}
 
 #define LTT_ATTRIBUTE_NETWORK_BYTE_ORDER (1<<1)
 
@@ -689,10 +684,9 @@ notrace void ltt_vtrace(const struct marker *mdata, void *probe_data,
 		}
 
 		/* reserve space : header and data */
-		ret = ltt_reserve_slot(trace, channel, &transport_data,
-					data_size, &slot_size, &buf_offset,
-					&tsc, &rflags,
-					largest_align, cpu);
+		ret = ltt_reserve_slot(channel, trace, data_size, largest_align,
+					cpu, &buf, &slot_size, &buf_offset,
+					&tsc, &rflags);
 		if (unlikely(ret < 0))
 			continue; /* buffer full */
 
@@ -701,8 +695,7 @@ notrace void ltt_vtrace(const struct marker *mdata, void *probe_data,
 //ust//		buf = ((struct rchan *)channel->trans_channel_data)->buf[cpu];
 		buf = channel->buf[cpu];
 		/* Out-of-order write : header and data */
-		buf_offset = ltt_write_event_header(trace,
-					channel, buf, buf_offset,
+		buf_offset = ltt_write_event_header(channel, buf, buf_offset,
 					eID, data_size, tsc, rflags);
 		ltt_write_event_data(buf, buf_offset, &closure,
 					serialize_private,

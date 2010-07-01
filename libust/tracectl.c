@@ -15,10 +15,16 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
+/* This file contains the implementation of the UST listener thread, which
+ * receives trace control commands. It also coordinates the initialization of
+ * libust.
+ */
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <pthread.h>
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -43,12 +49,12 @@
 #define MSG_NOTIF 1
 #define MSG_REGISTER_NOTIF 2
 
-char consumer_stack[10000];
-
 /* This should only be accessed by the constructor, before the creation
  * of the listener, and then only by the listener.
  */
 s64 pidunique = -1LL;
+
+extern struct chan_info_struct chan_infos[];
 
 struct list_head blocked_consumers = LIST_HEAD_INIT(blocked_consumers);
 
@@ -60,7 +66,7 @@ struct tracecmd { /* no padding */
 };
 
 /* volatile because shared between the listener and the main thread */
-volatile sig_atomic_t buffers_to_export = 0;
+int buffers_to_export = 0;
 
 struct trctl_msg {
 	/* size: the size of all the fields except size itself */
@@ -146,17 +152,19 @@ static void inform_consumer_daemon(const char *trace_name)
 	}
 
 	for(i=0; i < trace->nr_channels; i++) {
-		/* iterate on all cpus */
-		for(j=0; j<trace->channels[i].n_cpus; j++) {
-			char *buf;
-			asprintf(&buf, "%s_%d", trace->channels[i].channel_name, j);
-			result = ustcomm_request_consumer(pid, buf);
-			if(result == -1) {
-				WARN("Failed to request collection for channel %s. Is the daemon available?", trace->channels[i].channel_name);
-				/* continue even if fail */
+		if(trace->channels[i].request_collection) {
+			/* iterate on all cpus */
+			for(j=0; j<trace->channels[i].n_cpus; j++) {
+				char *buf;
+				asprintf(&buf, "%s_%d", trace->channels[i].channel_name, j);
+				result = ustcomm_request_consumer(pid, buf);
+				if(result == -1) {
+					WARN("Failed to request collection for channel %s. Is the daemon available?", trace->channels[i].channel_name);
+					/* continue even if fail */
+				}
+				free(buf);
+				STORE_SHARED(buffers_to_export, LOAD_SHARED(buffers_to_export)+1);
 			}
-			free(buf);
-			buffers_to_export++;
 		}
 	}
 
@@ -456,18 +464,18 @@ static int do_cmd_get_subbuf_size(const char *recvbuf, struct ustcomm_source *sr
 	return retval;
 }
 
-static unsigned int poweroftwo(unsigned int x)
+/* Return the power of two which is equal or higher to v */
+
+static unsigned int pow2_higher_or_eq(unsigned int v)
 {
-    unsigned int power2 = 1;
-    unsigned int hardcoded = 2147483648; /* FIX max 2^31 */
+	int hb = fls(v);
+	int hbm1 = hb-1;
+	int retval = 1<<(hb-1);
 
-    if (x < 2)
-        return 2;
-
-    while (power2 < x && power2 < hardcoded)
-        power2 *= 2;
-
-    return power2;
+	if(v-retval == 0)
+		return retval;
+	else
+		return retval<<1;
 }
 
 static int do_cmd_set_subbuf_size(const char *recvbuf, struct ustcomm_source *src)
@@ -491,9 +499,10 @@ static int do_cmd_set_subbuf_size(const char *recvbuf, struct ustcomm_source *sr
 		goto end;
 	}
 
-	power = poweroftwo(size);
+	power = pow2_higher_or_eq(size);
+	power = max_t(unsigned int, 2u, power);
 	if (power != size)
-		WARN("using the next 2^n = %u\n", power);
+		WARN("using the next power of two for buffer size = %u\n", power);
 
 	ltt_lock_traces();
 	trace = _ltt_trace_find_setup(trace_name);
@@ -647,7 +656,7 @@ static int do_cmd_get_subbuffer(const char *recvbuf, struct ustcomm_source *src)
 			 */
 			if(uatomic_read(&buf->consumed) == 0) {
 				DBG("decrementing buffers_to_export");
-				buffers_to_export--;
+				STORE_SHARED(buffers_to_export, LOAD_SHARED(buffers_to_export)-1);
 			}
 
 			break;
@@ -1030,15 +1039,36 @@ static pthread_t listener_thread;
 void create_listener(void)
 {
 	int result;
+	sigset_t sig_all_blocked;
+	sigset_t orig_parent_mask;
 
 	if(have_listener) {
 		WARN("not creating listener because we already had one");
 		return;
 	}
 
+	/* A new thread created by pthread_create inherits the signal mask
+	 * from the parent. To avoid any signal being received by the
+	 * listener thread, we block all signals temporarily in the parent,
+	 * while we create the listener thread.
+	 */
+
+	sigfillset(&sig_all_blocked);
+
+	result = pthread_sigmask(SIG_SETMASK, &sig_all_blocked, &orig_parent_mask);
+	if(result) {
+		PERROR("pthread_sigmask: %s", strerror(result));
+	}
+
 	result = pthread_create(&listener_thread, NULL, listener_main, NULL);
 	if(result == -1) {
 		PERROR("pthread_create");
+	}
+
+	/* Restore original signal mask in parent */
+	result = pthread_sigmask(SIG_SETMASK, &orig_parent_mask, NULL);
+	if(result) {
+		PERROR("pthread_sigmask: %s", strerror(result));
 	}
 
 	have_listener = 1;
@@ -1091,6 +1121,11 @@ static void __attribute__((constructor)) init()
 {
 	int result;
 	char* autoprobe_val = NULL;
+	char* subbuffer_size_val = NULL;
+	char* subbuffer_count_val = NULL;
+	unsigned int subbuffer_size;
+	unsigned int subbuffer_count;
+	unsigned int power;
 
 	/* Assign the pidunique, to be able to differentiate the processes with same
 	 * pid, (before and after an exec).
@@ -1152,6 +1187,43 @@ static void __attribute__((constructor)) init()
 			auto_probe_connect(iter.marker);
 			marker_iter_next(&iter);
 		}
+	}
+
+	if(getenv("UST_OVERWRITE")) {
+		int val = atoi(getenv("UST_OVERWRITE"));
+		if(val == 0 || val == 1) {
+			STORE_SHARED(ust_channels_overwrite_by_default, val);
+		}
+		else {
+			WARN("invalid value for UST_OVERWRITE");
+		}
+	}
+
+	if(getenv("UST_AUTOCOLLECT")) {
+		int val = atoi(getenv("UST_AUTOCOLLECT"));
+		if(val == 0 || val == 1) {
+			STORE_SHARED(ust_channels_request_collection_by_default, val);
+		}
+		else {
+			WARN("invalid value for UST_AUTOCOLLECT");
+		}
+	}
+
+	subbuffer_size_val = getenv("UST_SUBBUF_SIZE");
+	if(subbuffer_size_val) {
+		sscanf(subbuffer_size_val, "%u", &subbuffer_size);
+		power = pow2_higher_or_eq(subbuffer_size);
+		if(power != subbuffer_size)
+			WARN("using the next power of two for buffer size = %u\n", power);
+		chan_infos[LTT_CHANNEL_UST].def_subbufsize = power;
+	}
+
+	subbuffer_count_val = getenv("UST_SUBBUF_NUM");
+	if(subbuffer_count_val) {
+		sscanf(subbuffer_count_val, "%u", &subbuffer_count);
+		if(subbuffer_count < 2)
+			subbuffer_count = 2;
+		chan_infos[LTT_CHANNEL_UST].def_subbufcount = subbuffer_count;
 	}
 
 	if(getenv("UST_TRACE")) {
@@ -1219,7 +1291,6 @@ static void __attribute__((constructor)) init()
 		 * if the trace fails to start. */
 		inform_consumer_daemon(trace_name);
 	}
-
 
 	return;
 
@@ -1303,12 +1374,12 @@ static void stop_listener()
 	int result;
 
 	result = pthread_cancel(listener_thread);
-	if(result == -1) {
-		PERROR("pthread_cancel");
+	if(result != 0) {
+		ERR("pthread_cancel: %s", strerror(result));
 	}
 	result = pthread_join(listener_thread, NULL);
-	if(result == -1) {
-		PERROR("pthread_join");
+	if(result != 0) {
+		ERR("pthread_join: %s", strerror(result));
 	}
 }
 
@@ -1324,10 +1395,10 @@ static void stop_listener()
 
 static void __attribute__((destructor)) keepalive()
 {
-	if(trace_recording() && buffers_to_export) {
+	if(trace_recording() && LOAD_SHARED(buffers_to_export)) {
 		int total = 0;
 		DBG("Keeping process alive for consumer daemon...");
-		while(buffers_to_export) {
+		while(LOAD_SHARED(buffers_to_export)) {
 			const int interv = 200000;
 			restarting_usleep(interv);
 			total += interv;
@@ -1396,7 +1467,7 @@ static void ust_fork(void)
 	/* free app, keeping socket file */
 	ustcomm_fini_app(&ustcomm_app, 1);
 
-	buffers_to_export = 0;
+	STORE_SHARED(buffers_to_export, 0);
 	have_listener = 0;
 	init_socket();
 	create_listener();

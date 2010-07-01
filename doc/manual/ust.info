@@ -12,7 +12,7 @@ File: ust.info,  Node: Top,  Next: Overview,  Up: (dir)
 LTTng Userspace Tracer
 **********************
 
-This manual is for UST 0.1.
+This manual is for UST 0.5.
 
 * Menu:
 
@@ -23,6 +23,9 @@ This manual is for UST 0.1.
 * Recording a trace::
 * Viewing traces::
 * Performance::
+* Resource Usage::
+* List of environment variables detected by libust::
+* GDB integration::
 
 
 File: ust.info,  Node: Overview,  Next: Installation,  Prev: Top,  Up: Top
@@ -32,13 +35,32 @@ File: ust.info,  Node: Overview,  Next: Installation,  Prev: Top,  Up: Top
 
 * Menu:
 
+* What is UST?::
 * License::
 * Supported platforms::
 
 
-File: ust.info,  Node: License,  Next: Supported platforms,  Up: Overview
+File: ust.info,  Node: What is UST?,  Next: License,  Up: Overview
 
-1.1 License
+1.1 What is UST?
+================
+
+The LTTng Userspace Tracer (UST) is a library accompanied by a set of
+tools to trace userspace code.
+
+   Code may be instrumented with either markers or tracepoints. A
+highly efficient lockless tracer records these events to a trace
+buffers. These buffers are reaped by a deamon which writes trace data
+to disk.
+
+   High performance is achieved by the use of lockless buffering
+algorithms, RCU and per-cpu buffers. In addition, special care is taken
+to minize cache impact.
+
+
+File: ust.info,  Node: License,  Next: Supported platforms,  Prev: What is UST?,  Up: Overview
+
+1.2 License
 ===========
 
 The LTTng Userspace Tracer is intended to be linkable to open source
@@ -63,11 +85,11 @@ LGPL.
 
 File: ust.info,  Node: Supported platforms,  Prev: License,  Up: Overview
 
-1.2 Supported platforms
+1.3 Supported platforms
 =======================
 
-UST can currently trace applications running on Linux, on the x86-32
-and x86-64 architectures.
+UST can currently trace applications running on Linux, on the x86-32,
+x86-64 and PowerPC 32 architectures.
 
 
 File: ust.info,  Node: Installation,  Next: Quick start,  Prev: Overview,  Up: Top
@@ -84,14 +106,7 @@ The LTTng userspace tracer is a library and a set of userspace tools.
      This contains the tracing library, the ustd daemon, trace control
      tools and other helper tools.
 
-     Repository: http://git.dorsal.polymtl.ca
-
-   * libkcompat
-
-     This is a library that contains a userspace port of some kernel
-     APIs.
-
-     Repository: http://git.dorsal.polymtl.ca
+     Repository: `http://git.dorsal.polymtl.ca'
 
    * liburcu
 
@@ -100,19 +115,18 @@ The LTTng userspace tracer is a library and a set of userspace tools.
 
      Available in Debian as package liburcu-dev.
 
-     Home page: http://lttng.org/?q=node/18
+     Home page: `http://lttng.org/urcu'
 
    * LTTV
 
      LTTV is a graphical (and text) viewer for LTTng traces.
 
-     Home page: http://lttng.org
+     Home page: `http://lttng.org'
 
 
-   Libkcompat and liburcu should be installed first. UST may then be
-compiled and installed. LTTV has no dependency on the other packages;
-it may therefore be installed on a system which does not have UST
-installed.
+   Liburcu should be installed first. UST may then be compiled and
+installed. LTTV has no dependency on the other packages; it may
+therefore be installed on a system which does not have UST installed.
 
    Refer to the README in each of these packages for installation
 instructions.
@@ -196,7 +210,7 @@ File: ust.info,  Node: Markers,  Next: Tracepoints,  Up: Instrumenting an applic
 4.1 Markers
 ===========
 
-Adding a marker is simply a matter of insert one line in the program.
+Adding a marker is simply a matter of inserting one line in the program.
 
      #include <ust/marker.h>
 
@@ -210,7 +224,7 @@ Adding a marker is simply a matter of insert one line in the program.
      	/* a marker: */
      	trace_mark(main, myevent, "firstarg %d secondarg %s", v, st);
 
-     	/* a marker without arguments: */
+     	/* another marker without arguments: */
      	trace_mark(main, myotherevent, MARK_NOARGS);
 
      	return 0;
@@ -240,7 +254,7 @@ the Tracepoints API provides more thorough type checking and discharges
 from the need to insert format strings directly in the code and to have
 format strings appear more than once if a given marker is reused.
 
-     Note Although this example uses _mychannel_ as the channel, the:
+     Note: Although this example uses _mychannel_ as the channel, the
      only channel name currently supported with early tracing is *ust*.
      The `usttrace' tool always uses the early tracing mode. When using
      manual mode without early tracing, any channel name may be used.
@@ -264,8 +278,8 @@ format strings appear more than once if a given marker is reused.
 
      #include <ust/tracepoint.h>
 
-     DECLARE_TRACE(mychannel_myevent, TPPROTO(int v, char *st),
-     	      TPARGS(v, st));
+     DECLARE_TRACE(mychannel_myevent, TP_PROTO(int v, char *st),
+     	      TP_ARGS(v, st));
 
    A third file, here tp.c, contains definitions for the tracepoint.
 
@@ -330,7 +344,7 @@ its creation.
 
    When using `usttrace', the early tracing is always active, which
 means that the tracing is guaranteed to be started by the time the
-process enters its main() function.
+process enters its `main()' function.
 
    Several `usttrace''s may be run simultaneously without risk of
 conflict. This facilitates the use of the tracer by idependent users on
@@ -381,6 +395,9 @@ running process.
      # Destroy the trace
      $ ustctl --destroy-trace 1234
 
+   For more information about the manual mode, see the ustctl(1) man
+page.
+
 
 File: ust.info,  Node: Using early tracing,  Next: Crash recovery,  Prev: Setting up the recording manually,  Up: Recording a trace
 
@@ -418,18 +435,22 @@ File: ust.info,  Node: Tracing across `fork()' and `clone()',  Next: Tracing pro
 5.5 Tracing across `fork()' and `clone()'
 =========================================
 
-Tracing across `clone()' when `CLONE_VM' is specified is supported
-without any particular action.
+Tracing across `clone()' when the `CLONE_VM' flag is specified is
+supported without any particular action.
 
    When `clone()' is called without `CLONE_VM' or `fork()' is called, a
 new address space is created and the tracer must be notified to create
-new buffers for it. *TODO: specify how to do it.*
+new buffers for it.
 
-   This can be done automatically (for `fork()' only for now), by
-`LD_PRELOAD''ing `libinterfork.so'. This library intercepts calls to
-`fork()' and informs the tracer it is being called. When using
-`usttrace', this is accomplied by specifying the `-f' command line
-argument.
+   This can be done automatically, by `LD_PRELOAD''ing
+`libinterfork.so'.  This library intercepts calls to `fork()' and
+informs the tracer it is being called. When using `usttrace', this is
+accomplied by specifying the `-f' command line argument.
+
+   Alternatively, the program can call `ust_before_fork()' before
+calling `fork()' or `clone()' with `CLONE_VM'. After the call,
+`ust_after_fork_parent()' must be called in the parent process and
+`ust_after_fork_child()' must be called in the child process.
 
 
 File: ust.info,  Node: Tracing programs and libraries that were not linked to libust,  Prev: Tracing across `fork()' and `clone()',  Up: Recording a trace
@@ -437,10 +458,31 @@ File: ust.info,  Node: Tracing programs and libraries that were not linked to li
 5.6 Tracing programs and libraries that were not linked to libust
 =================================================================
 
-Todo.
+Some programs need to be traced even though they were not linked to
+libust either because they were not instrumented or because it was not
+practical.
+
+   An executable that is not instrumented can still yield interesting
+traces when at least one of its dynamic libraries is instrumented. It
+is also possible to trace certain function calls by intercepting them
+with a specially crafted library that is linked with `LD_PRELOAD' at
+program start.
+
+   In any case, a program that was not linked to libust at compile time
+must be linked to it at run time with `LD_PRELOAD'. This can be
+accomplished with `usttrace''s `-l' option. It can also be done by
+setting the `LD_PRELOAD' environment variable on the command line. For
+example:
+
+     # Run ls with usttrace, LD_PRELOAD'ing libust
+     # (assuming one of the libraries used by ls is instrumented).
+     $ usttrace -l ls
+
+     # Run ls, manually adding the LD_PRELOAD.
+     $ LD_PRELOAD=/usr/local/lib/libust.so.0 ls
 
 
-File: ust.info,  Node: Performance,  Prev: Viewing traces,  Up: Top
+File: ust.info,  Node: Performance,  Next: Resource Usage,  Prev: Viewing traces,  Up: Top
 
 6 Performance
 *************
@@ -453,26 +495,171 @@ File: ust.info,  Node: Viewing traces,  Next: Performance,  Prev: Recording a tr
 7 Viewing traces
 ****************
 
+Traces may be viewed with LTTV. An example of command for launching
+LTTV is given in the quickstart.
+
+* Menu:
+
+* Viewing multiple traces::
+* Combined kernel-userspace tracing::
+
+
+File: ust.info,  Node: Viewing multiple traces,  Next: Combined kernel-userspace tracing,  Up: Viewing traces
+
+7.1 Viewing multiple traces
+===========================
+
+When tracing multi-process applications or several applications
+simultaneously, more than one trace will be obtained. LTTV can open and
+display all these traces simultaneously.
+
+
+File: ust.info,  Node: Combined kernel-userspace tracing,  Prev: Viewing multiple traces,  Up: Viewing traces
+
+7.2 Combined kernel-userspace tracing
+=====================================
+
+In addition to multiple userspace traces, LTTV can open a kernel trace
+recorded with the LTTng kernel tracer. This provides events that enable
+the rendering of the Control Flow View and the Resource View.
+
+   When doing so, it is necessary to use the same time source for the
+kernel tracer as well as the userspace tracer. Currently, the
+recommended method is to use the timestamp counter for both. The TSC
+can however only be used on architectures where it is synchronized
+across cores.
+
+
+File: ust.info,  Node: Resource Usage,  Next: List of environment variables detected by libust,  Prev: Performance,  Up: Top
+
+8 Resource Usage
+****************
+
+The purpose of this section is to give an overview of the resource
+usage of libust. For a developer, knowing this can be important:
+because libust is linked with applications, it needs to share some
+resources with it. Some applications may make some assumptions that are
+in conflict with libust's usage of resources.
+
+   In practice however, libust is designed to be transparent and is
+compatible with the vast majority of applications. This means no
+changes are required in the application (or library) being linked to
+libust.
+
+   Libust is initialized by a constructor, which by definition runs
+before the `main()' function of the application starts. This
+constructor creates a thread called the _listener thread_.  The
+listener thread initializes a named socket and waits for connections
+for ustd or ustctl.
+
+   Libust-specific code may:
+   * use `malloc()' and `free()'
+
+   * map shared memory segment in the process adress space
+
+   * intercept some library calls, specifically `fork()' and `clone()'
+
+   * do interprocess communication with the daemon or ustctl
+
+   * create and open named sockets
+
+
+   It will not:
+   * handle any signal (all signals are blocked in the listener thread)
+
+   * change any process-wide setting that could confuse the application
+
+
+File: ust.info,  Node: List of environment variables detected by libust,  Next: GDB integration,  Prev: Resource Usage,  Up: Top
+
+Appendix A List of environment variables detected by libust
+***********************************************************
+
+The behavior of tracing can be influenced by setting special environment
+variables in the environment of the traced application. This section
+describes these variables.
+
+   * `UST_TRACE'
+
+     If set to 1, start tracing as soon as the program starts. Tracing
+     is guaranteed to be started by the time the `main()' function
+     starts.
+
+   * `UST_AUTOPROBE'
+
+     If set to `1', enable all markers by the time the `main()'
+     function starts.
+
+   * `UST_AUTOCOLLECT'
+
+     If set to `0', disable notification of daemon on trace start.
+     Useful for performance tests.
+
+   * `UST_OVERWRITE'
+
+     If set to `1', enable overwriting of buffers on overrun.
+
+   * `UST_SUBBUF_NUM'
+
+     If set, defines the default number of subbuffers per buffer.
+
+   * `UST_SUBBUF_SIZE'
+
+     If set, defines the default size of subbuffers, in bytes.
+
+
+
+File: ust.info,  Node: GDB integration,  Prev: List of environment variables detected by libust,  Up: Top
+
+Appendix B GDB integration
+**************************
+
+GDB, the GNU Debugger, can use UST markers as GDB tracepoints (note GDB
+has its own concept of tracepoint). This feature is called GDB Static
+Tracepoints. When a GDB tracepoint is hit, GDB collects the marker
+arguments, as well as the state of the registers.
+
+   In UST, support for GDB integration is not compiled in by default
+because of the cost of saving registers when a marker is hit. To enable
+it, run the `./configure' script with the
+`-DCONFIG_UST_GDB_INTEGRATION' flag in the `CFLAGS' environment
+variable. For example:
+
+
+     CFLAGS=-DCONFIG_UST_GDB_INTEGRATION ./configure
+
+   As of this writing, GDB Static Tracepoints have been submitted
+(`http://sourceware.org/ml/gdb-patches/2010-06/msg00592.html') to the
+GDB mailing list.
+
+   GDB integration is currently only supported on x86-32 and x86-64.
+
 
 
 Tag Table:
 Node: Top191
-Node: Overview472
-Node: License619
-Node: Supported platforms1099
-Node: Installation1321
-Node: Quick start2454
-Node: Instrumenting an application3375
-Node: Markers4374
-Node: Tracepoints5542
-Node: Recording a trace7315
-Node: Using `usttrace'7690
-Node: Setting up the recording manually8884
-Node: Using early tracing10015
-Node: Crash recovery10812
-Node: Tracing across `fork()' and `clone()'11277
-Node: Tracing programs and libraries that were not linked to libust12112
-Node: Performance12410
-Node: Viewing traces12517
+Node: Overview564
+Node: What is UST?728
+Node: License1308
+Node: Supported platforms1809
+Node: Installation2043
+Node: Quick start3016
+Node: Instrumenting an application3937
+Node: Markers4936
+Node: Tracepoints6113
+Node: Recording a trace7888
+Node: Using `usttrace'8263
+Node: Setting up the recording manually9459
+Node: Using early tracing10666
+Node: Crash recovery11463
+Node: Tracing across `fork()' and `clone()'11928
+Node: Tracing programs and libraries that were not linked to libust12974
+Node: Performance14232
+Node: Viewing traces14362
+Node: Viewing multiple traces14672
+Node: Combined kernel-userspace tracing15020
+Node: Resource Usage15699
+Node: List of environment variables detected by libust17130
+Node: GDB integration18223
 
 End Tag Table

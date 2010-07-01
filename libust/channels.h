@@ -23,8 +23,9 @@
 
 #include <linux/limits.h>
 #include <errno.h>
-
-#include <ust/kernelcompat.h>
+#include <ust/kcompat/kcompat.h>
+#include <urcu/list.h>
+#include <ust/core.h>
 
 #define EVENTS_PER_CHANNEL	65536
 #define MAX_CPUS		32
@@ -39,6 +40,8 @@ struct ust_channel {
 	int *buf_struct_shmids;
 	struct ust_buffer **buf;
 	int overwrite:1;
+	/* whether collection is requested upon trace start */
+	int request_collection:1;
 	int active:1;
 	unsigned int n_subbufs_order;
 	unsigned long commit_count_mask;	/*
@@ -80,9 +83,13 @@ extern const char *ltt_channels_get_name_from_index(unsigned int index);
 extern int ltt_channels_get_index_from_name(const char *name);
 extern struct ust_channel *ltt_channels_trace_alloc(unsigned int *nr_channels,
 						    int overwrite,
+						    int request_collection,
 						    int active);
 extern void ltt_channels_trace_free(struct ust_channel *channels);
 extern int _ltt_channels_get_event_id(const char *channel, const char *name);
 extern int ltt_channels_get_event_id(const char *channel, const char *name);
+
+extern int ust_channels_overwrite_by_default;
+extern int ust_channels_request_collection_by_default;
 
 #endif /* UST_CHANNELS_H */
