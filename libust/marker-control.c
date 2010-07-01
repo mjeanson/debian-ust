@@ -15,13 +15,16 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
  *
- * LTT marker control module over /proc
+ */
+
+/* This file contains a high-level API for activating and deactivating markers,
+ * and making sure markers in a given library can be released when the library
+ * is unloaded.
  */
 
 #include <ctype.h>
 #include <stdlib.h>
 
-#include <ust/kernelcompat.h>
 #include "tracer.h"
 #include "usterr.h"
 
@@ -104,7 +107,7 @@ int ltt_probe_register(struct ltt_available_probe *pdata)
 	int comparison;
 	struct ltt_available_probe *iter;
 
-	mutex_lock(&probes_mutex);
+	pthread_mutex_lock(&probes_mutex);
 	list_for_each_entry_reverse(iter, &probes_registered_list, node) {
 		comparison = strcmp(pdata->name, iter->name);
 		if (!comparison) {
@@ -119,7 +122,7 @@ int ltt_probe_register(struct ltt_available_probe *pdata)
 	/* Should be added at the head of the list */
 	list_add(&pdata->node, &probes_registered_list);
 end:
-	mutex_unlock(&probes_mutex);
+	pthread_mutex_unlock(&probes_mutex);
 	return ret;
 }
 
@@ -131,7 +134,7 @@ int ltt_probe_unregister(struct ltt_available_probe *pdata)
 	int ret = 0;
 	struct ltt_active_marker *amark, *tmp;
 
-	mutex_lock(&probes_mutex);
+	pthread_mutex_lock(&probes_mutex);
 	list_for_each_entry_safe(amark, tmp, &markers_loaded_list, node) {
 		if (amark->probe == pdata) {
 			ret = marker_probe_unregister_private_data(
@@ -144,7 +147,7 @@ int ltt_probe_unregister(struct ltt_available_probe *pdata)
 	}
 	list_del(&pdata->node);
 end:
-	mutex_unlock(&probes_mutex);
+	pthread_mutex_unlock(&probes_mutex);
 	return ret;
 }
 
@@ -161,7 +164,7 @@ int ltt_marker_connect(const char *channel, const char *mname,
 	struct ltt_available_probe *probe;
 
 	ltt_lock_traces();
-	mutex_lock(&probes_mutex);
+	pthread_mutex_lock(&probes_mutex);
 	probe = get_probe_from_name(pname);
 	if (!probe) {
 		ret = -ENOENT;
@@ -188,7 +191,7 @@ int ltt_marker_connect(const char *channel, const char *mname,
 	else
 		list_add(&pdata->node, &markers_loaded_list);
 end:
-	mutex_unlock(&probes_mutex);
+	pthread_mutex_unlock(&probes_mutex);
 	ltt_unlock_traces();
 	return ret;
 }
@@ -203,7 +206,7 @@ int ltt_marker_disconnect(const char *channel, const char *mname,
 	struct ltt_available_probe *probe;
 	int ret = 0;
 
-	mutex_lock(&probes_mutex);
+	pthread_mutex_lock(&probes_mutex);
 	probe = get_probe_from_name(pname);
 	if (!probe) {
 		ret = -ENOENT;
@@ -228,7 +231,7 @@ int ltt_marker_disconnect(const char *channel, const char *mname,
 		free(pdata);
 	}
 end:
-	mutex_unlock(&probes_mutex);
+	pthread_mutex_unlock(&probes_mutex);
 	return ret;
 }
 

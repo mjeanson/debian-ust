@@ -25,8 +25,10 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <fcntl.h>
-#include <ust/kernelcompat.h>
 #include <stdlib.h>
+
+#include <ust/clock.h>
+
 #include "buffers.h"
 #include "channels.h"
 #include "tracer.h"
@@ -240,14 +242,14 @@ int ust_buffers_channel_open(struct ust_channel *chan, size_t subbuf_size, size_
 
 	kref_init(&chan->kref);
 
-	mutex_lock(&ust_buffers_channels_mutex);
+	pthread_mutex_lock(&ust_buffers_channels_mutex);
 	for(i=0; i<chan->n_cpus; i++) {
 		result = ust_buffers_open_buf(chan, i);
 		if (result == -1)
 			goto error;
 	}
 	list_add(&chan->list, &ust_buffers_channels);
-	mutex_unlock(&ust_buffers_channels_mutex);
+	pthread_mutex_unlock(&ust_buffers_channels_mutex);
 
 	return 0;
 
@@ -260,7 +262,7 @@ error:
 	}
 
 	kref_put(&chan->kref, ust_buffers_destroy_channel);
-	mutex_unlock(&ust_buffers_channels_mutex);
+	pthread_mutex_unlock(&ust_buffers_channels_mutex);
 	return -1;
 }
 
@@ -270,7 +272,7 @@ void ust_buffers_channel_close(struct ust_channel *chan)
 	if(!chan)
 		return;
 
-	mutex_lock(&ust_buffers_channels_mutex);
+	pthread_mutex_lock(&ust_buffers_channels_mutex);
 	for(i=0; i<chan->n_cpus; i++) {
 	/* FIXME: if we make it here, then all buffers were necessarily allocated. Moreover, we don't
 	 * initialize to NULL so we cannot use this check. Should we? */
@@ -280,7 +282,7 @@ void ust_buffers_channel_close(struct ust_channel *chan)
 
 	list_del(&chan->list);
 	kref_put(&chan->kref, ust_buffers_destroy_channel);
-	mutex_unlock(&ust_buffers_channels_mutex);
+	pthread_mutex_unlock(&ust_buffers_channels_mutex);
 }
 
 /*
@@ -1213,12 +1215,14 @@ static int ltt_relay_try_reserve_slow(struct ust_channel *chan, struct ust_buffe
  * Return : -ENOSPC if not enough space, else returns 0.
  * It will take care of sub-buffer switching.
  */
-int ltt_reserve_slot_lockless_slow(struct ust_trace *trace,
-		struct ust_channel *chan, void **transport_data,
-		size_t data_size, size_t *slot_size, long *buf_offset, u64 *tsc,
-		unsigned int *rflags, int largest_align, int cpu)
+int ltt_reserve_slot_lockless_slow(struct ust_channel *chan,
+		struct ust_trace *trace, size_t data_size,
+		int largest_align, int cpu,
+		struct ust_buffer **ret_buf,
+		size_t *slot_size, long *buf_offset,
+		u64 *tsc, unsigned int *rflags)
 {
-	struct ust_buffer *buf = chan->buf[cpu];
+	struct ust_buffer *buf = *ret_buf = chan->buf[cpu];
 	struct ltt_reserve_switch_offsets offsets;
 
 	offsets.size = 0;
@@ -1296,8 +1300,7 @@ static void __attribute__((destructor)) ust_buffers_exit(void)
 	ltt_transport_unregister(&ust_relay_transport);
 }
 
-size_t ltt_write_event_header_slow(struct ust_trace *trace,
-		struct ust_channel *channel,
+size_t ltt_write_event_header_slow(struct ust_channel *channel,
 		struct ust_buffer *buf, long buf_offset,
 		u16 eID, u32 event_size,
 		u64 tsc, unsigned int rflags)

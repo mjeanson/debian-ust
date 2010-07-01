@@ -11,13 +11,12 @@ Updated versions of this package may be found at:
   * Git:      git://git.dorsal.polymtl.ca/git/ust.git
 
 
-
 PREREQUISITES:
 
   - liburcu
     Userspace RCU library, by Mathieu Desnoyers and Paul E. McKenney
 
-    -> This release was tested with liburcu v0.4.3
+    -> This release was tested with liburcu v0.4.6
 
       * Debian/Ubuntu package: liburcu-dev
       * Website:  http://lttng.org/urcu
@@ -35,6 +34,8 @@ INSTALLATION INSTRUCTIONS:
   - Run ldconfig.
   - See the manual for usage instructions.
 
+  If compiling from the git repository, run ./bootstrap before running
+  the configure script, to generate it.
 
 
 TRACE VIEWER:
@@ -42,7 +43,7 @@ TRACE VIEWER:
   LTTV is used for viewing UST traces. LTTV may be obtained at
   http://lttng.org in the Downloads section.
 
-  This release has been tested with LTTV 0.12.30.
+  This release has been tested with LTTV 0.12.32.
 
 
 PACKAGE CONTENTS:
@@ -57,14 +58,17 @@ PACKAGE CONTENTS:
     A program to control the tracing of userspace applications. It can list
     markers, start the tracing, stop the tracing, enable/disable markers, etc.
 
+  - include
+    The public header files that will be installed on the system.
+
   - ustd
     The daemon that collects trace data and writes it to the disk.
 
   - doc
     The documentation.
 
-  - hello
-    An example application that uses the userspace tracer.
+  - tests
+    Various test programs
 
   - libustinstr-malloc
     An example library that can be LD_PRELOAD'ed to instrument calls to malloc()
@@ -72,4 +76,18 @@ PACKAGE CONTENTS:
 
   - libustfork
     A library that is LD_PRELOAD'ed, and that hijacks calls to several system
-    calls in order to trace across these calls.
+    calls in order to trace across these calls. It _has_ to be LD_PRELOAD'ed
+    in order to hijack calls. In contrast, libust may be linked at build time.
+
+  - libustcmd
+    A library to control tracing in other processes. Used by ustctl.
+
+  - libustcomm
+    A static library shared between libust, ustd and libustcmd, that provides
+    functions that allow these components to communicate together.
+
+  - snprintf
+    An asynchronous signal-safe version of snprintf.
+
+  - java
+    A simple library that uses JNI to allow tracing in java programs.

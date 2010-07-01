@@ -19,10 +19,11 @@
 #define UST_H
 
 #include <ust/immediate.h>
-#include <ust/kernelcompat.h>
 #include <ust/marker.h>
 #include <ust/processor.h>
 #include <ust/tracepoint.h>
 #include <ust/probe.h>
+#include <ust/type-serializer.h>
+#include <ust/core.h>
 
 #endif /* UST_H */

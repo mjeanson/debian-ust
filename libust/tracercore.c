@@ -18,7 +18,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
-#include <ust/kernelcompat.h>
 #include "tracercore.h"
 
 /* Traces structures */
@@ -32,12 +31,12 @@ static DEFINE_MUTEX(ltt_traces_mutex);
 
 void ltt_lock_traces(void)
 {
-	mutex_lock(&ltt_traces_mutex);
+	pthread_mutex_lock(&ltt_traces_mutex);
 }
 
 void ltt_unlock_traces(void)
 {
-	mutex_unlock(&ltt_traces_mutex);
+	pthread_mutex_unlock(&ltt_traces_mutex);
 }
 
 //ust// DEFINE_PER_CPU(unsigned int, ltt_nesting);

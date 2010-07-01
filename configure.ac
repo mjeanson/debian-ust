@@ -2,12 +2,13 @@
 # Process this file with autoconf to produce a configure script.
 
 #AC_PREREQ([2.63])
-AC_INIT([ust], [0.4], [pierre-marc dot fournier at polymtl dot ca])
+AC_INIT([ust], [0.5], [pierre-marc dot fournier at polymtl dot ca])
 AC_CONFIG_AUX_DIR([config])
 AC_CANONICAL_TARGET
 AC_CANONICAL_HOST
-AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_MACRO_DIR([config])
 AM_INIT_AUTOMAKE([foreign])
+m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AC_CONFIG_SRCDIR([ustctl/ustctl.c])
 AC_CONFIG_HEADERS([config.h])
 
@@ -94,17 +95,18 @@ changequote([,])dnl
 	  fi
 	  ;;
 	x86_64) LIBFORMAT="elf64-x86-64" ;;
-	ppc) LIBFORMAT="elf32-powerpc" ;;
+	powerpc) LIBFORMAT="elf32-powerpc" ;;
 	ppc64) LIBFORMAT="elf64-powerpc" ;;
 	s390) LIBFORMAT="elf32-s390" ;;
 	s390x) LIBFORMAT="elf64-s390" ;;
-	*) AC_MSG_ERROR([unable to detect library format (unsupported architecture?)]) ;;
+	*) AC_MSG_ERROR([unable to detect library format (unsupported architecture ($host_cpu)?)]) ;;
 esac
 AC_SUBST(LIBFORMAT)
 AC_MSG_RESULT($LIBFORMAT)
 
 AC_CONFIG_FILES([
 	Makefile
+	doc/Makefile
 	include/Makefile
 	libust/Makefile
 	tests/Makefile
@@ -116,7 +118,9 @@ AC_CONFIG_FILES([
 	tests/simple_include/Makefile
 	tests/snprintf/Makefile
 	tests/test-nevents/Makefile
-	tests/test-libmallocwrap/Makefile
+	tests/test-libustinstr-malloc/Makefile
+	tests/dlopen/Makefile
+	tests/same_line_marker/Makefile
 	libustinstr-malloc/Makefile
 	libustfork/Makefile
 	ustd/Makefile

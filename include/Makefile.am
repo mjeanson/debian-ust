@@ -1,12 +1,14 @@
 nobase_include_HEADERS = \
 	ust/immediate.h \
-	ust/kernelcompat.h \
 	ust/marker.h \
 	ust/tracepoint.h \
 	ust/processor.h \
 	ust/probe.h \
 	ust/ust.h \
 	ust/tracectl.h \
+	ust/core.h \
+	ust/clock.h \
+	ust/type-serializer.h \
 	ust/kcompat/kcompat.h \
 	ust/kcompat/compiler.h \
 	ust/kcompat/disable.h \
