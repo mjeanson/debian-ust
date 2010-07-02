@@ -1,3 +1,11 @@
+ust (0.5-1) unstable; urgency=low
+
+  * [79cd16] Imported Upstream version 0.5
+  * [18d8be] Include content of BSD license in copyright file
+  * [6799aa] Bump standards version to 3.9.0
+
+ -- Jon Bernard <jbernard@debian.org>  Fri, 02 Jul 2010 11:34:21 -0400
+
 ust (0.4-4) unstable; urgency=low
 
   * [9a6b0e] Include info document in libust0
