@@ -70,28 +70,68 @@ static int get_n_cpus(void)
 	return n_cpus;
 }
 
-/* _ust_buffers_write()
+/**
+ * _ust_buffers_strncpy_fixup - Fix an incomplete string in a ltt_relay buffer.
+ * @buf : buffer
+ * @offset : offset within the buffer
+ * @len : length to write
+ * @copied: string actually copied
+ * @terminated: does string end with \0
  *
- * @buf: destination buffer
- * @offset: offset in destination
- * @src: source buffer
- * @len: length of source
- * @cpy: already copied
+ * Fills string with "X" if incomplete.
  */
-
-void _ust_buffers_write(struct ust_buffer *buf, size_t offset,
-        const void *src, size_t len, ssize_t cpy)
+void _ust_buffers_strncpy_fixup(struct ust_buffer *buf, size_t offset,
+				size_t len, size_t copied, int terminated)
 {
-	do {
-		len -= cpy;
-		src += cpy;
-		offset += cpy;
+	size_t buf_offset, cpy;
 
-		WARN_ON(offset >= buf->buf_size);
+	if (copied == len) {
+		/*
+		 * Deal with non-terminated string.
+		 */
+		assert(!terminated);
+		offset += copied - 1;
+		buf_offset = BUFFER_OFFSET(offset, buf->chan);
+		/*
+		 * Underlying layer should never ask for writes across
+		 * subbuffers.
+		 */
+		assert(buf_offset
+		       < buf->chan->subbuf_size*buf->chan->subbuf_cnt);
+		ust_buffers_do_memset(buf->buf_data + buf_offset, '\0', 1);
+		return;
+	}
 
-		cpy = min_t(size_t, len, buf->buf_size - offset);
-		ust_buffers_do_copy(buf->buf_data + offset, src, cpy);
-	} while (unlikely(len != cpy));
+	/*
+	 * Deal with incomplete string.
+	 * Overwrite string's \0 with X too.
+	 */
+	cpy = copied - 1;
+	assert(terminated);
+	len -= cpy;
+	offset += cpy;
+	buf_offset = BUFFER_OFFSET(offset, buf->chan);
+
+	/*
+	 * Underlying layer should never ask for writes across subbuffers.
+	 */
+	assert(buf_offset
+	       < buf->chan->subbuf_size*buf->chan->subbuf_cnt);
+
+	ust_buffers_do_memset(buf->buf_data + buf_offset,
+			      'X', len);
+
+	/*
+	 * Overwrite last 'X' with '\0'.
+	 */
+	offset += len - 1;
+	buf_offset = BUFFER_OFFSET(offset, buf->chan);
+	/*
+	 * Underlying layer should never ask for writes across subbuffers.
+	 */
+	assert(buf_offset
+	       < buf->chan->subbuf_size*buf->chan->subbuf_cnt);
+	ust_buffers_do_memset(buf->buf_data + buf_offset, '\0', 1);
 }
 
 static int ust_buffers_init_buffer(struct ust_trace *trace,
@@ -771,26 +811,6 @@ error:
 	return -1;
 }
 
-/*
- * LTTng channel flush function.
- *
- * Must be called when no tracing is active in the channel, because of
- * accesses across CPUs.
- */
-static notrace void ltt_relay_buffer_flush(struct ust_buffer *buf)
-{
-	int result;
-
-//ust//	buf->finalized = 1;
-	ltt_force_switch(buf, FORCE_FLUSH);
-
-	result = write(buf->data_ready_fd_write, "1", 1);
-	if(result == -1) {
-		PERROR("write (in ltt_relay_buffer_flush)");
-		ERR("this should never happen!");
-	}
-}
-
 static void ltt_relay_async_wakeup_chan(struct ust_channel *ltt_channel)
 {
 //ust//	unsigned int i;
@@ -813,7 +833,7 @@ static void ltt_relay_finish_buffer(struct ust_channel *channel, unsigned int cp
 
 	if (channel->buf[cpu]) {
 		struct ust_buffer *buf = channel->buf[cpu];
-		ltt_relay_buffer_flush(buf);
+		ltt_force_switch(buf, FORCE_FLUSH);
 //ust//		ltt_relay_wake_writers(ltt_buf);
 		/* closing the pipe tells the consumer the buffer is finished */
 		
@@ -878,7 +898,7 @@ static void ltt_reserve_switch_old_subbuf(
 	 * This compiler barrier is upgraded into a smp_wmb() by the IPI
 	 * sent by get_subbuf() when it does its smp_rmb().
 	 */
-	barrier();
+	smp_wmb();
 	uatomic_add(&buf->commit_count[oldidx].cc, padding_size);
 	commit_count = uatomic_read(&buf->commit_count[oldidx].cc);
 	ltt_check_deliver(chan, buf, offsets->old - 1, commit_count, oldidx);
@@ -907,7 +927,7 @@ static void ltt_reserve_switch_new_subbuf(
 	 * This compiler barrier is upgraded into a smp_wmb() by the IPI
 	 * sent by get_subbuf() when it does its smp_rmb().
 	 */
-	barrier();
+	smp_wmb();
 	uatomic_add(&buf->commit_count[beginidx].cc, ltt_subbuffer_header_size());
 	commit_count = uatomic_read(&buf->commit_count[beginidx].cc);
 	/* Check if the written buffer has to be delivered */
@@ -952,7 +972,7 @@ static void ltt_reserve_end_switch_current(
 	 * This compiler barrier is upgraded into a smp_wmb() by the IPI
 	 * sent by get_subbuf() when it does its smp_rmb().
 	 */
-	barrier();
+	smp_wmb();
 	uatomic_add(&buf->commit_count[endidx].cc, padding_size);
 	commit_count = uatomic_read(&buf->commit_count[endidx].cc);
 	ltt_check_deliver(chan, buf,

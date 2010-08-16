@@ -788,6 +788,15 @@ static void listener_cleanup(void *ptr)
 	ustcomm_fini_app(&ustcomm_app, 0);
 }
 
+static void do_cmd_force_switch()
+{
+	struct blocked_consumer *bc;
+
+	list_for_each_entry(bc, &blocked_consumers, list) {
+		ltt_force_switch(bc->buf, FORCE_FLUSH);
+	}
+}
+
 int process_client_cmd(char *recvbuf, struct ustcomm_source *src)
 {
 	int result;
@@ -994,6 +1003,28 @@ int process_client_cmd(char *recvbuf, struct ustcomm_source *src)
 
 		free(reply);
 	}
+	else if(nth_token_is(recvbuf, "get_sock_path", 0) == 1) {
+		char *reply = getenv("UST_DAEMON_SOCKET");
+		if(!reply) {
+			asprintf(&reply, "%s/%s", SOCK_DIR, "ustd");
+			result = ustcomm_send_reply(&ustcomm_app.server, reply, src);
+			free(reply);
+		}
+		else {
+			result = ustcomm_send_reply(&ustcomm_app.server, reply, src);
+		}
+		if(result)
+			ERR("ustcomm_send_reply failed");
+	}
+	else if(nth_token_is(recvbuf, "set_sock_path", 0) == 1) {
+		char *sock_path = nth_token(recvbuf, 1);
+		result = setenv("UST_DAEMON_SOCKET", sock_path, 1);
+		if(result)
+			ERR("cannot set UST_DAEMON_SOCKET environment variable");
+	}
+	else if(nth_token_is(recvbuf, "force_switch", 0) == 1) {
+		do_cmd_force_switch();
+	}
 	else {
 		ERR("unable to parse message: %s", recvbuf);
 	}
@@ -1070,8 +1101,9 @@ void create_listener(void)
 	if(result) {
 		PERROR("pthread_sigmask: %s", strerror(result));
 	}
-
-	have_listener = 1;
+	else {
+		have_listener = 1;
+	}
 }
 
 static int init_socket(void)
@@ -1369,9 +1401,12 @@ int restarting_usleep(useconds_t usecs)
 	return result;
 }
 
-static void stop_listener()
+static void stop_listener(void)
 {
 	int result;
+
+	if(!have_listener)
+		return;
 
 	result = pthread_cancel(listener_thread);
 	if(result != 0) {
