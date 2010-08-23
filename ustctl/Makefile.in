@@ -52,10 +52,11 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_ustctl_OBJECTS = ustctl-ustctl.$(OBJEXT) ustctl-ustcmd.$(OBJEXT)
+am_ustctl_OBJECTS = ustctl-ustctl.$(OBJEXT)
 ustctl_OBJECTS = $(am_ustctl_OBJECTS)
 ustctl_DEPENDENCIES = $(top_builddir)/snprintf/libustsnprintf.la \
-	$(top_builddir)/libustcomm/libustcomm.la
+	$(top_builddir)/libustcomm/libustcomm.la \
+	$(top_builddir)/libustcmd/libustcmd.la
 AM_V_lt = $(am__v_lt_$(V))
 am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
 am__v_lt_0 = --silent
@@ -215,14 +216,13 @@ AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/libustcomm \
 
 AM_CFLAGS = -fno-strict-aliasing
 ustctl_SOURCES = \
-	ustctl.c \
-	$(top_srcdir)/libustcmd/ustcmd.c \
-	$(top_srcdir)/libustcmd/ustcmd.h
+	ustctl.c
 
 ustctl_CFLAGS = -DUST_COMPONENT=ustctl -fno-strict-aliasing
 ustctl_LDADD = \
 	$(top_builddir)/snprintf/libustsnprintf.la \
-	$(top_builddir)/libustcomm/libustcomm.la
+	$(top_builddir)/libustcomm/libustcomm.la \
+	$(top_builddir)/libustcmd/libustcmd.la
 
 all: all-am
 
@@ -311,7 +311,6 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ustctl-ustcmd.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ustctl-ustctl.Po@am__quote@
 
 .c.o:
@@ -353,22 +352,6 @@ ustctl-ustctl.obj: ustctl.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='ustctl.c' object='ustctl-ustctl.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -c -o ustctl-ustctl.obj `if test -f 'ustctl.c'; then $(CYGPATH_W) 'ustctl.c'; else $(CYGPATH_W) '$(srcdir)/ustctl.c'; fi`
-
-ustctl-ustcmd.o: $(top_srcdir)/libustcmd/ustcmd.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -MT ustctl-ustcmd.o -MD -MP -MF $(DEPDIR)/ustctl-ustcmd.Tpo -c -o ustctl-ustcmd.o `test -f '$(top_srcdir)/libustcmd/ustcmd.c' || echo '$(srcdir)/'`$(top_srcdir)/libustcmd/ustcmd.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ustctl-ustcmd.Tpo $(DEPDIR)/ustctl-ustcmd.Po
-@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='$(top_srcdir)/libustcmd/ustcmd.c' object='ustctl-ustcmd.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -c -o ustctl-ustcmd.o `test -f '$(top_srcdir)/libustcmd/ustcmd.c' || echo '$(srcdir)/'`$(top_srcdir)/libustcmd/ustcmd.c
-
-ustctl-ustcmd.obj: $(top_srcdir)/libustcmd/ustcmd.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -MT ustctl-ustcmd.obj -MD -MP -MF $(DEPDIR)/ustctl-ustcmd.Tpo -c -o ustctl-ustcmd.obj `if test -f '$(top_srcdir)/libustcmd/ustcmd.c'; then $(CYGPATH_W) '$(top_srcdir)/libustcmd/ustcmd.c'; else $(CYGPATH_W) '$(srcdir)/$(top_srcdir)/libustcmd/ustcmd.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ustctl-ustcmd.Tpo $(DEPDIR)/ustctl-ustcmd.Po
-@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='$(top_srcdir)/libustcmd/ustcmd.c' object='ustctl-ustcmd.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -c -o ustctl-ustcmd.obj `if test -f '$(top_srcdir)/libustcmd/ustcmd.c'; then $(CYGPATH_W) '$(top_srcdir)/libustcmd/ustcmd.c'; else $(CYGPATH_W) '$(srcdir)/$(top_srcdir)/libustcmd/ustcmd.c'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

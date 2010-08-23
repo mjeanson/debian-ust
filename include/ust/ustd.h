@@ -23,19 +23,22 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef LIBUSTD_H
-#define LIBUSTD_H
+#ifndef USTD_H
+#define USTD_H
 
 #include <pthread.h>
 #include <dirent.h>
-#include "ustcomm.h"
+#include <ust/kcompat/kcompat.h>
 
 #define USTD_DEFAULT_TRACE_PATH "/tmp/usttrace"
+
+struct ustcomm_connection;
+struct ustcomm_ustd;
 
 struct buffer_info {
 	const char *name;
 	pid_t pid;
-	struct ustcomm_connection conn;
+	struct ustcomm_connection *conn;
 
 	int shmid;
 	int bufstruct_shmid;
@@ -70,7 +73,7 @@ struct libustd_instance {
 	struct libustd_callbacks *callbacks;
 	int quit_program;
 	int is_init;
-	struct ustcomm_ustd comm;
+	struct ustcomm_ustd *comm;
 	char *sock_path;
 	pthread_mutex_t mutex;
 	int active_buffers;
@@ -272,8 +275,5 @@ int libustd_start_instance(struct libustd_instance *instance);
  */
 int libustd_stop_instance(struct libustd_instance *instance, int send_msg);
 
-void finish_consuming_dead_subbuffer(struct libustd_callbacks *callbacks, struct buffer_info *buf);
-size_t subbuffer_data_size(void *subbuf);
-
-#endif /* LIBUSTD_H */
+#endif /* USTD_H */
 
