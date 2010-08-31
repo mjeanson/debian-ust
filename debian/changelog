@@ -1,11 +1,10 @@
-ust (0.7-1~2.gbp0de6a7) UNRELEASED; urgency=low
-
-  ** SNAPSHOT build @0de6a7f194a50d24f778987efcea69537331580b **
+ust (0.7-1) unstable; urgency=low
 
   * [ed442a] Imported Upstream version 0.7
   * [0de6a7] Update installed libraries
+  * [dfd55b] Bump standards version to 3.9.1, no changes necessary
 
- -- Jon Bernard <jbernard@debian.org>  Mon, 30 Aug 2010 22:21:02 -0400
+ -- Jon Bernard <jbernard@debian.org>  Mon, 30 Aug 2010 22:27:57 -0400
 
 ust (0.5-1) unstable; urgency=low
 
