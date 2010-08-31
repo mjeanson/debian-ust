@@ -7,5 +7,9 @@ usr/lib/libustinstr-malloc.la
 usr/lib/libust.so.0.0.0
 usr/lib/libust.so.0
 usr/lib/libust.la
-usr/lib/libustcomm.la
-usr/lib/libustsnprintf.la
+usr/lib/libustcmd.so.0.0.0
+usr/lib/libustcmd.so.0
+usr/lib/libustcmd.la
+usr/lib/libustd.so.0.0.0
+usr/lib/libustd.so.0
+usr/lib/libustd.la

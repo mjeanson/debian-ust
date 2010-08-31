@@ -6,5 +6,7 @@ usr/lib/libustinstr-malloc.a
 usr/lib/libust-initializer.o
 usr/lib/libust.a
 usr/lib/libust.so
-usr/lib/libustcomm.a
-usr/lib/libustsnprintf.a
+usr/lib/libustcmd.so
+usr/lib/libustcmd.a
+usr/lib/libustd.so
+usr/lib/libustd.a
