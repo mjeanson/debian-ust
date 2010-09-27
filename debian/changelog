@@ -1,3 +1,13 @@
+ust (0.7-2) unstable; urgency=low
+
+  * [7d6a5c] Remove sparc and alpha from supported architectures
+  * [5603a1] Add build dependency on version 0.4.6 of liburcu-dev
+  * [5f3cf6] Recommend liburcu-dev for libust-dev - thanks to Alexandre
+    Montplaisir <alexandre.montplaisir@gmail.com>
+  * [06df73] Depends on version 0.4.6 of liburcu0 for libust0
+
+ -- Jon Bernard <jbernard@debian.org>  Mon, 27 Sep 2010 04:27:29 -0400
+
 ust (0.7-1) unstable; urgency=low
 
   * [ed442a] Imported Upstream version 0.7
