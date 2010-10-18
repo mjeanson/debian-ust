@@ -1,3 +1,13 @@
+ust (0.7-2.1) unstable; urgency=high
+
+  * Non-maintainer upload.
+  * debian/patches
+    - (CVE-2010-3386--bug598309): New. Fix LD_LIBRARY_PATH. Initial patch
+      idea thanks to Etienne Millon <etienne.millon@gmail.com> (grave,
+      security; Closes: #598309).
+
+ -- Jari Aalto <jari.aalto@cante.net>  Mon, 18 Oct 2010 18:55:42 +0300
+
 ust (0.7-2) unstable; urgency=low
 
   * [7d6a5c] Remove sparc and alpha from supported architectures
