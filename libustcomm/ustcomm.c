@@ -25,6 +25,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 #include <poll.h>
+#include <sys/epoll.h>
 #include <sys/stat.h>
 
 #include <stdio.h>
@@ -35,9 +36,6 @@
 #include "ustcomm.h"
 #include "usterr.h"
 #include "share.h"
-#include "multipoll.h"
-
-#define UNIX_PATH_MAX 108
 
 static int mkdir_p(const char *path, mode_t mode)
 {
@@ -91,392 +89,93 @@ static int mkdir_p(const char *path, mode_t mode)
 	return retval;
 }
 
-static int signal_process(pid_t pid)
+static struct sockaddr_un * create_sock_addr(const char *name,
+					     size_t *sock_addr_size)
 {
-	return 0;
-}
+	struct sockaddr_un * addr;
+	size_t alloc_size;
 
-void ustcomm_init_connection(struct ustcomm_connection *conn)
-{
-	conn->recv_buf = NULL;
-	conn->recv_buf_size = 0;
-	conn->recv_buf_alloc = 0;
-}
+	alloc_size = (size_t) (((struct sockaddr_un *) 0)->sun_path) +
+		strlen(name) + 1;
 
-int pid_is_online(pid_t pid) {
-	return 1;
-}
-
-/* Send a message
- *
- * @fd: file descriptor to send to
- * @msg: a null-terminated string containing the message to send
- *
- * Return value:
- * -1: error
- * 0: connection closed
- * 1: success
- */
-
-static int send_message_fd(int fd, const char *msg)
-{
-	int result;
-
-	/* Send including the final \0 */
-	result = patient_send(fd, msg, strlen(msg)+1, MSG_NOSIGNAL);
-	if(result == -1) {
-		if(errno != EPIPE)
-			PERROR("send");
-		return -1;
-	}
-	else if(result == 0) {
-		return 0;
+	addr = malloc(alloc_size);
+	if (addr < 0) {
+		ERR("allocating addr failed");
+		return NULL;
 	}
 
-	DBG("sent message \"%s\"", msg);
-	return 1;
+	addr->sun_family = AF_UNIX;
+	strcpy(addr->sun_path, name);
+
+	*sock_addr_size = alloc_size;
+
+	return addr;
 }
 
-/* Called by an app to ask the consumer daemon to connect to it. */
-
-int ustcomm_request_consumer(pid_t pid, const char *channel)
+struct ustcomm_sock * ustcomm_init_sock(int fd, int epoll_fd,
+					struct list_head *list)
 {
-	char path[UNIX_PATH_MAX];
-	int result;
-	char *msg=NULL;
-	int retval = 0;
-	struct ustcomm_connection conn;
-	char *explicit_daemon_socket_path;
+	struct epoll_event ev;
+	struct ustcomm_sock *sock;
 
-	explicit_daemon_socket_path = getenv("UST_DAEMON_SOCKET");
-	if(explicit_daemon_socket_path) {
-		/* user specified explicitly a socket path */
-		result = snprintf(path, UNIX_PATH_MAX, "%s", explicit_daemon_socket_path);
-	}
-	else {
-		/* just use the default path */
-		result = snprintf(path, UNIX_PATH_MAX, "%s/ustd", SOCK_DIR);
+	sock = malloc(sizeof(struct ustcomm_sock));
+	if (!sock) {
+		perror("malloc: couldn't allocate ustcomm_sock");
+		return NULL;
 	}
 
-	if(result >= UNIX_PATH_MAX) {
-		ERR("string overflow allocating socket name");
-		return -1;
+	ev.events = EPOLLIN;
+	ev.data.ptr = sock;
+	sock->fd = fd;
+
+	if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock->fd, &ev) == -1) {
+		perror("epoll_ctl: failed to add socket\n");
+		free(sock);
+		return NULL;
 	}
 
-	asprintf(&msg, "collect %d %s", pid, channel); 
-
-	/* don't signal it because it's the daemon */
-	result = ustcomm_connect_path(path, &conn, -1);
-	if(result == -1) {
-		WARN("ustcomm_connect_path failed");
-		retval = -1;
-		goto del_string;
+	sock->epoll_fd = epoll_fd;
+	if (list) {
+		list_add(&sock->list, list);
+	} else {
+		INIT_LIST_HEAD(&sock->list);
 	}
 
-	result = ustcomm_send_request(&conn, msg, NULL);
-	if(result == -1) {
-		WARN("ustcomm_send_request failed");
-		retval = -1;
-		goto disconnect;
-	}
-
-	disconnect:
-	ustcomm_disconnect(&conn);
-	del_string:
-	free(msg);
-
-	return retval;
+	return sock;
 }
 
-/* returns 1 to indicate a message was received
- * returns 0 to indicate no message was received (end of stream)
- * returns -1 to indicate an error
- */
-
-#define RECV_INCREMENT 1000
-#define RECV_INITIAL_BUF_SIZE 10
-
-static int recv_message_fd(int fd, char **recv_buf, int *recv_buf_size, int *recv_buf_alloc, char **msg)
+void ustcomm_del_sock(struct ustcomm_sock *sock, int keep_in_epoll)
 {
-	int result;
-
-	/* 1. Check if there is a message in the buf */
-	/* 2. If not, do:
-           2.1 receive chunk and put it in buffer
-	   2.2 process full message if there is one
-	   -- while no message arrived
-	*/
-
-	for(;;) {
-		int i;
-		int nulfound = 0;
-
-		/* Search for full message in buffer */
-		for(i=0; i<*recv_buf_size; i++) {
-			if((*recv_buf)[i] == '\0') {
-				nulfound = 1;
-				break;
-			}
-		}
-
-		/* Process found message */
-		if(nulfound == 1) {
-			char *newbuf;
-
-			if(i == 0) {
-				/* problem */
-				WARN("received empty message");
-			}
-			*msg = strndup(*recv_buf, i);
-
-			/* Remove processed message from buffer */
-			newbuf = (char *) malloc(*recv_buf_size - (i+1));
-			memcpy(newbuf, *recv_buf + (i+1), *recv_buf_size - (i+1));
-			free(*recv_buf);
-			*recv_buf = newbuf;
-			*recv_buf_size -= (i+1);
-			*recv_buf_alloc -= (i+1);
-
-			return 1;
-		}
-
-		/* Receive a chunk from the fd */
-		if(*recv_buf_alloc - *recv_buf_size < RECV_INCREMENT) {
-			*recv_buf_alloc += RECV_INCREMENT - (*recv_buf_alloc - *recv_buf_size);
-			*recv_buf = (char *) realloc(*recv_buf, *recv_buf_alloc);
-		}
-
-		result = recv(fd, *recv_buf+*recv_buf_size, RECV_INCREMENT, 0);
-		if(result == -1) {
-			if(errno == ECONNRESET) {
-				*recv_buf_size = 0;
-				return 0;
-			}
-			else if(errno == EINTR) {
-				return -1;
-			}
-			else {
-				PERROR("recv");
-				return -1;
-			}
-		}
-		if(result == 0) {
-			return 0;
-		}
-		*recv_buf_size += result;
-
-		/* Go back to the beginning to check if there is a full message in the buffer */
-	}
-
-	DBG("received message \"%s\"", *recv_buf);
-
-	return 1;
-
-}
-
-static int recv_message_conn(struct ustcomm_connection *conn, char **msg)
-{
-	return recv_message_fd(conn->fd, &conn->recv_buf, &conn->recv_buf_size, &conn->recv_buf_alloc, msg);
-}
-
-int ustcomm_send_reply(struct ustcomm_server *server, char *msg, struct ustcomm_source *src)
-{
-	int result;
-
-	result = send_message_fd(src->fd, msg);
-	if(result < 0) {
-		ERR("error in send_message_fd");
-		return -1;
-	}
-
-	return 0;
-} 
-
-/* Called after a fork. */
-
-int ustcomm_close_all_connections(struct ustcomm_server *server)
-{
-	struct ustcomm_connection *conn;
-	struct ustcomm_connection *deletable_conn = NULL;
-
-	list_for_each_entry(conn, &server->connections, list) {
-		free(deletable_conn);
-		deletable_conn = conn;
-		ustcomm_close_app(conn);
-		list_del(&conn->list);
-	}
-
-	return 0;
-}
-
-/* @timeout: max blocking time in milliseconds, -1 means infinity
- *
- * returns 1 to indicate a message was received
- * returns 0 to indicate no message was received
- * returns -1 to indicate an error
- */
-
-int ustcomm_recv_message(struct ustcomm_server *server, char **msg, struct ustcomm_source *src, int timeout)
-{
-	struct pollfd *fds;
-	struct ustcomm_connection **conn_table;
-	struct ustcomm_connection *conn;
-	int result;
-	int retval;
-
-	for(;;) {
-		int idx = 0;
-		int n_fds = 1;
-
-		list_for_each_entry(conn, &server->connections, list) {
-			n_fds++;
-		}
-
-		fds = (struct pollfd *) zmalloc(n_fds * sizeof(struct pollfd));
-		if(fds == NULL) {
-			ERR("zmalloc returned NULL");
-			return -1;
-		}
-
-		conn_table = (struct ustcomm_connection **) zmalloc(n_fds * sizeof(struct ustcomm_connection *));
-		if(conn_table == NULL) {
-			ERR("zmalloc returned NULL");
-			retval = -1;
-			goto free_fds_return;
-		}
-
-		/* special idx 0 is for listening socket */
-		fds[idx].fd = server->listen_fd;
-		fds[idx].events = POLLIN;
-		idx++;
-
-		list_for_each_entry(conn, &server->connections, list) {
-			fds[idx].fd = conn->fd;
-			fds[idx].events = POLLIN;
-			conn_table[idx] = conn;
-			idx++;
-		}
-
-		result = poll(fds, n_fds, timeout);
-		if(result == -1 && errno == EINTR) {
-			/* That's ok. ustd receives signals to notify it must shutdown. */
-			retval = -1;
-			goto free_conn_table_return;
-		}
-		else if(result == -1) {
-			PERROR("poll");
-			retval = -1;
-			goto free_conn_table_return;
-		}
-		else if(result == 0) {
-			retval = 0;
-			goto free_conn_table_return;
-		}
-
-		if(fds[0].revents) {
-			struct ustcomm_connection *newconn;
-			int newfd;
-
-			result = newfd = accept(server->listen_fd, NULL, NULL);
-			if(result == -1) {
-				PERROR("accept");
-				retval = -1;
-				goto free_conn_table_return;
-			}
-
-			newconn = (struct ustcomm_connection *) zmalloc(sizeof(struct ustcomm_connection));
-			if(newconn == NULL) {
-				ERR("zmalloc returned NULL");
-				return -1;
-			}
-
-			ustcomm_init_connection(newconn);
-			newconn->fd = newfd;
-
-			list_add(&newconn->list, &server->connections);
-		}
-
-		for(idx=1; idx<n_fds; idx++) {
-			if(fds[idx].revents) {
-				retval = recv_message_conn(conn_table[idx], msg);
-				if(src)
-					src->fd = fds[idx].fd;
-
-				if(retval == 0) {
-					/* connection finished */
-					list_for_each_entry(conn, &server->connections, list) {
-						if(conn->fd == fds[idx].fd) {
-							ustcomm_close_app(conn);
-							list_del(&conn->list);
-							free(conn);
-							break;
-						}
-					}
-				}
-				else {
-					goto free_conn_table_return;
-				}
-			}
-		}
-
-		free(fds);
-		free(conn_table);
-	}
-
-free_conn_table_return:
-	free(conn_table);
-free_fds_return:
-	free(fds);
-	return retval;
-}
-
-int ustcomm_ustd_recv_message(struct ustcomm_ustd *ustd, char **msg, struct ustcomm_source *src, int timeout)
-{
-	return ustcomm_recv_message(&ustd->server, msg, src, timeout);
-}
-
-int ustcomm_app_recv_message(struct ustcomm_app *app, char **msg, struct ustcomm_source *src, int timeout)
-{
-	return ustcomm_recv_message(&app->server, msg, src, timeout);
-}
-
-/* This removes src from the list of active connections of app.
- */
-
-int ustcomm_app_detach_client(struct ustcomm_app *app, struct ustcomm_source *src)
-{
-	struct ustcomm_server *server = (struct ustcomm_server *)app;
-	struct ustcomm_connection *conn;
-
-	list_for_each_entry(conn, &server->connections, list) {
-		if(conn->fd == src->fd) {
-			list_del(&conn->list);
-			goto found;
+	list_del(&sock->list);
+	if (!keep_in_epoll) {
+		if (epoll_ctl(sock->epoll_fd, EPOLL_CTL_DEL, sock->fd, NULL) == -1) {
+			PERROR("epoll_ctl: failed to delete socket");
 		}
 	}
-
-	return -1;
-found:
-	return src->fd;
+	close(sock->fd);
+	free(sock);
 }
 
-static int init_named_socket(const char *name, char **path_out)
+struct ustcomm_sock * ustcomm_init_named_socket(const char *name,
+						int epoll_fd)
 {
 	int result;
 	int fd;
+	size_t sock_addr_size;
+	struct sockaddr_un * addr;
+	struct ustcomm_sock *sock;
 
-	struct sockaddr_un addr;
-	
-	result = fd = socket(PF_UNIX, SOCK_STREAM, 0);
-	if(result == -1) {
+	fd = socket(PF_UNIX, SOCK_STREAM, 0);
+	if(fd == -1) {
 		PERROR("socket");
-		return -1;
+		return NULL;
 	}
 
-	addr.sun_family = AF_UNIX;
-
-	strncpy(addr.sun_path, name, UNIX_PATH_MAX);
-	addr.sun_path[UNIX_PATH_MAX-1] = '\0';
+	addr = create_sock_addr(name, &sock_addr_size);
+	if (addr == NULL) {
+		ERR("allocating addr, UST thread bailing");
+		goto close_sock;
+	}
 
 	result = access(name, F_OK);
 	if(result == 0) {
@@ -484,66 +183,311 @@ static int init_named_socket(const char *name, char **path_out)
 		result = unlink(name);
 		if(result == -1) {
 			PERROR("unlink of socket file");
-			goto close_sock;
+			goto free_addr;
 		}
 		DBG("socket already exists; overwriting");
 	}
 
-	result = bind(fd, (struct sockaddr *)&addr, sizeof(addr));
+	result = bind(fd, (struct sockaddr *)addr, sock_addr_size);
 	if(result == -1) {
 		PERROR("bind");
-		goto close_sock;
+		goto free_addr;
 	}
 
 	result = listen(fd, 1);
 	if(result == -1) {
 		PERROR("listen");
-		goto close_sock;
+		goto free_addr;
 	}
 
-	if(path_out) {
-		*path_out = strdup(addr.sun_path);
+	sock = ustcomm_init_sock(fd, epoll_fd,
+				 NULL);
+	if (!sock) {
+		ERR("failed to create ustcomm_sock");
+		goto free_addr;
 	}
 
-	return fd;
+	free(addr);
 
-	close_sock:
+	return sock;
+
+free_addr:
+	free(addr);
+close_sock:
 	close(fd);
 
-	return -1;
+	return NULL;
 }
 
-/*
- * Return value:
- *   0: Success, but no reply because recv() returned 0
- *   1: Success
- *   -1: Error
- *
- * On error, the error message is printed, except on
- * ECONNRESET, which is normal when the application dies.
- */
+void ustcomm_del_named_sock(struct ustcomm_sock *sock,
+			    int keep_socket_file)
+{
+	int result, fd;
+	struct stat st;
+	struct sockaddr dummy;
+	struct sockaddr_un *sockaddr = NULL;
+	int alloc_size;
 
-int ustcomm_send_request(struct ustcomm_connection *conn, const char *req, char **reply)
+	fd = sock->fd;
+
+	if(!keep_socket_file) {
+
+		/* Get the socket name */
+		alloc_size = sizeof(dummy);
+		if (getsockname(fd, &dummy, (socklen_t *)&alloc_size) < 0) {
+			PERROR("getsockname failed");
+			goto del_sock;
+		}
+
+		sockaddr = zmalloc(alloc_size);
+		if (!sockaddr) {
+			ERR("failed to allocate sockaddr");
+			goto del_sock;
+		}
+
+		if (getsockname(fd, sockaddr, (socklen_t *)&alloc_size) < 0) {
+			PERROR("getsockname failed");
+			goto free_sockaddr;
+		}
+
+		/* Destroy socket */
+		result = stat(sockaddr->sun_path, &st);
+		if(result < 0) {
+			PERROR("stat (%s)", sockaddr->sun_path);
+			goto free_sockaddr;
+		}
+
+		/* Paranoid check before deleting. */
+		result = S_ISSOCK(st.st_mode);
+		if(!result) {
+			ERR("The socket we are about to delete is not a socket.");
+			goto free_sockaddr;
+		}
+
+		result = unlink(sockaddr->sun_path);
+		if(result < 0) {
+			PERROR("unlink");
+		}
+	}
+
+free_sockaddr:
+	free(sockaddr);
+
+del_sock:
+	ustcomm_del_sock(sock, keep_socket_file);
+}
+
+int ustcomm_recv_alloc(int sock,
+		       struct ustcomm_header *header,
+		       char **data) {
+	int result;
+	struct ustcomm_header peek_header;
+	struct iovec iov[2];
+	struct msghdr msg;
+
+	/* Just to make the caller fail hard */
+	*data = NULL;
+
+	result = recv(sock, &peek_header, sizeof(peek_header),
+		      MSG_PEEK | MSG_WAITALL);
+	if (result <= 0) {
+		if(errno == ECONNRESET) {
+			return 0;
+		} else if (errno == EINTR) {
+			return -1;
+		} else if (result < 0) {
+			PERROR("recv");
+			return -1;
+		}
+		return 0;
+	}
+
+	memset(&msg, 0, sizeof(msg));
+
+	iov[0].iov_base = (char *)header;
+	iov[0].iov_len = sizeof(struct ustcomm_header);
+
+	msg.msg_iov = iov;
+	msg.msg_iovlen = 1;
+
+	if (peek_header.size) {
+		*data = zmalloc(peek_header.size);
+		if (!*data) {
+			return -ENOMEM;
+		}
+
+		iov[1].iov_base = *data;
+		iov[1].iov_len = peek_header.size;
+
+		msg.msg_iovlen++;
+	}
+
+	result = recvmsg(sock, &msg, MSG_WAITALL);
+	if (result < 0) {
+		free(*data);
+		PERROR("recvmsg failed");
+	}
+
+	return result;
+}
+
+/* returns 1 to indicate a message was received
+ * returns 0 to indicate no message was received (end of stream)
+ * returns -1 to indicate an error
+ */
+int ustcomm_recv_fd(int sock,
+		    struct ustcomm_header *header,
+		    char *data, int *fd)
+{
+	int result;
+	struct ustcomm_header peek_header;
+	struct iovec iov[2];
+	struct msghdr msg;
+	struct cmsghdr *cmsg;
+	char buf[CMSG_SPACE(sizeof(int))];
+
+	result = recv(sock, &peek_header, sizeof(peek_header),
+		      MSG_PEEK | MSG_WAITALL);
+	if (result <= 0) {
+		if(errno == ECONNRESET) {
+			return 0;
+		} else if (errno == EINTR) {
+			return -1;
+		} else if (result < 0) {
+			PERROR("recv");
+			return -1;
+		}
+		return 0;
+	}
+
+	memset(&msg, 0, sizeof(msg));
+
+	iov[0].iov_base = (char *)header;
+	iov[0].iov_len = sizeof(struct ustcomm_header);
+
+	msg.msg_iov = iov;
+	msg.msg_iovlen = 1;
+
+	if (peek_header.size && data) {
+		if (peek_header.size < 0 ||
+		    peek_header.size > USTCOMM_DATA_SIZE) {
+			ERR("big peek header! %d", peek_header.size);
+			return 0;
+		}
+
+		iov[1].iov_base = data;
+		iov[1].iov_len = peek_header.size;
+
+		msg.msg_iovlen++;
+	}
+
+	if (fd && peek_header.fd_included) {
+		msg.msg_control = buf;
+		msg.msg_controllen = sizeof(buf);
+	}
+
+	result = recvmsg(sock, &msg, MSG_WAITALL);
+	if (result <= 0) {
+		if (result < 0) {
+			PERROR("recvmsg failed");
+		}
+		return result;
+	}
+
+	if (fd && peek_header.fd_included) {
+		cmsg = CMSG_FIRSTHDR(&msg);
+		result = 0;
+		while (cmsg != NULL) {
+			if (cmsg->cmsg_level == SOL_SOCKET
+			    && cmsg->cmsg_type  == SCM_RIGHTS) {
+				*fd = *(int *) CMSG_DATA(cmsg);
+				result = 1;
+				break;
+			}
+			cmsg = CMSG_NXTHDR(&msg, cmsg);
+		}
+		if (!result) {
+			ERR("Failed to receive file descriptor\n");
+		}
+	}
+
+	return 1;
+}
+
+int ustcomm_recv(int sock,
+		 struct ustcomm_header *header,
+		 char *data)
+{
+	return ustcomm_recv_fd(sock, header, data, NULL);
+}
+
+
+int ustcomm_send_fd(int sock,
+		    const struct ustcomm_header *header,
+		    const char *data,
+		    int *fd)
+{
+	struct iovec iov[2];
+	struct msghdr msg;
+	int result;
+	struct cmsghdr *cmsg;
+	char buf[CMSG_SPACE(sizeof(int))];
+
+	memset(&msg, 0, sizeof(msg));
+
+	iov[0].iov_base = (char *)header;
+	iov[0].iov_len = sizeof(struct ustcomm_header);
+
+	msg.msg_iov = iov;
+	msg.msg_iovlen = 1;
+
+	if (header->size && data) {
+		iov[1].iov_base = (char *)data;
+		iov[1].iov_len = header->size;
+
+		msg.msg_iovlen++;
+
+	}
+
+	if (fd && header->fd_included) {
+		msg.msg_control = buf;
+		msg.msg_controllen = sizeof(buf);
+		cmsg = CMSG_FIRSTHDR(&msg);
+		cmsg->cmsg_level = SOL_SOCKET;
+		cmsg->cmsg_type = SCM_RIGHTS;
+		cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+		*(int *) CMSG_DATA(cmsg) = *fd;
+		msg.msg_controllen = cmsg->cmsg_len;
+	}
+
+	result = sendmsg(sock, &msg, MSG_NOSIGNAL);
+	if (result < 0 && errno != EPIPE) {
+		PERROR("sendmsg failed");
+	}
+	return result;
+}
+
+int ustcomm_send(int sock,
+		 const struct ustcomm_header *header,
+		 const char *data)
+{
+	return ustcomm_send_fd(sock, header, data, NULL);
+}
+
+int ustcomm_req(int sock,
+		const struct ustcomm_header *req_header,
+		const char *req_data,
+		struct ustcomm_header *res_header,
+		char *res_data)
 {
 	int result;
 
-	/* Send including the final \0 */
-	result = send_message_fd(conn->fd, req);
-	if(result != 1)
+	result = ustcomm_send(sock, req_header, req_data);
+	if ( result <= 0) {
 		return result;
-
-	if(!reply)
-		return 1;
-
-	result = recv_message_conn(conn, reply);
-	if(result == -1) {
-		return -1;
 	}
-	else if(result == 0) {
-		return 0;
-	}
-	
-	return 1;
+
+	return ustcomm_recv(sock, res_header, res_data);
 }
 
 /* Return value:
@@ -551,51 +495,44 @@ int ustcomm_send_request(struct ustcomm_connection *conn, const char *req, char 
  * -1: error
  */
 
-int ustcomm_connect_path(const char *path, struct ustcomm_connection *conn, pid_t signalpid)
+int ustcomm_connect_path(const char *name, int *connection_fd)
 {
-	int fd;
-	int result;
-	struct sockaddr_un addr;
+	int result, fd;
+	size_t sock_addr_size;
+	struct sockaddr_un *addr;
 
-	ustcomm_init_connection(conn);
-
-	result = fd = socket(PF_UNIX, SOCK_STREAM, 0);
-	if(result == -1) {
+	fd = socket(PF_UNIX, SOCK_STREAM, 0);
+	if(fd == -1) {
 		PERROR("socket");
 		return -1;
 	}
 
-	addr.sun_family = AF_UNIX;
-
-	result = snprintf(addr.sun_path, UNIX_PATH_MAX, "%s", path);
-	if(result >= UNIX_PATH_MAX) {
-		ERR("string overflow allocating socket name");
-		return -1;
+	addr = create_sock_addr(name, &sock_addr_size);
+	if (addr == NULL) {
+		ERR("allocating addr failed");
+		goto close_sock;
 	}
 
-	if(signalpid >= 0) {
-		result = signal_process(signalpid);
-		if(result == -1) {
-			ERR("could not signal process");
-			return -1;
-		}
-	}
-
-	result = connect(fd, (struct sockaddr *)&addr, sizeof(addr));
+	result = connect(fd, (struct sockaddr *)addr, sock_addr_size);
 	if(result == -1) {
-		PERROR("connect (path=%s)", path);
-		return -1;
+		PERROR("connect (path=%s)", name);
+		goto free_sock_addr;
 	}
 
-	conn->fd = fd;
+	*connection_fd = fd;
+
+	free(addr);
 
 	return 0;
+
+free_sock_addr:
+	free(addr);
+close_sock:
+	close(fd);
+
+	return -1;
 }
 
-int ustcomm_disconnect(struct ustcomm_connection *conn)
-{
-	return close(conn->fd);
-}
 
 /* Open a connection to a traceable app.
  *
@@ -604,35 +541,30 @@ int ustcomm_disconnect(struct ustcomm_connection *conn)
  * -1: error
  */
 
-int ustcomm_connect_app(pid_t pid, struct ustcomm_connection *conn)
+int ustcomm_connect_app(pid_t pid, int *app_fd)
 {
 	int result;
-	char path[UNIX_PATH_MAX];
+	int retval = 0;
+	char *name;
 
-
-	result = snprintf(path, UNIX_PATH_MAX, "%s/%d", SOCK_DIR, pid);
-	if(result >= UNIX_PATH_MAX) {
-		ERR("string overflow allocating socket name");
+	result = asprintf(&name, "%s/%d", SOCK_DIR, pid);
+	if (result < 0) {
+		ERR("failed to allocate socket name");
 		return -1;
 	}
 
-	return ustcomm_connect_path(path, conn, pid);
+	result = ustcomm_connect_path(name, app_fd);
+	if (result < 0) {
+		ERR("failed to connect to app");
+		retval = -1;
+	}
+
+	free(name);
+
+	return retval;
 }
 
-/* Close a connection to a traceable app. It frees the
- * resources. It however does not free the
- * ustcomm_connection itself.
- */
-
-int ustcomm_close_app(struct ustcomm_connection *conn)
-{
-	close(conn->fd);
-	free(conn->recv_buf);
-
-	return 0;
-}
-
-static int ensure_dir_exists(const char *dir)
+int ensure_dir_exists(const char *dir)
 {
 	struct stat st;
 	int result;
@@ -659,298 +591,236 @@ static int ensure_dir_exists(const char *dir)
 	return 0;
 }
 
-/* Called by an application to initialize its server so daemons can
- * connect to it.
- */
-
-int ustcomm_init_app(pid_t pid, struct ustcomm_app *handle)
+char * ustcomm_print_data(char *data_field, int field_size,
+			  int *offset, const char *format, ...)
 {
-	int result;
-	char *name;
+	va_list args;
+	int count, limit;
+	char *ptr = USTCOMM_POISON_PTR;
 
-	result = asprintf(&name, "%s/%d", SOCK_DIR, (int)pid);
-	if(result >= UNIX_PATH_MAX) {
-		ERR("string overflow allocating socket name");
-		return -1;
+	limit = field_size - *offset;
+	va_start(args, format);
+	count = vsnprintf(&data_field[*offset], limit, format, args);
+	va_end(args);
+
+	if (count < limit && count > -1) {
+		ptr = NULL + *offset;
+		*offset = *offset + count + 1;
 	}
 
-	result = ensure_dir_exists(SOCK_DIR);
-	if(result == -1) {
-		ERR("Unable to create socket directory %s", SOCK_DIR);
-		return -1;
-	}
-
-	handle->server.listen_fd = init_named_socket(name, &(handle->server.socketpath));
-	if(handle->server.listen_fd < 0) {
-		ERR("Error initializing named socket (%s). Check that directory exists and that it is writable.", name);
-		goto free_name;
-	}
-	free(name);
-
-	INIT_LIST_HEAD(&handle->server.connections);
-
-	return 0;
-
-free_name:
-	free(name);
-	return -1;
+	return ptr;
 }
 
-/* Used by the daemon to initialize its server so applications
- * can connect to it.
- */
-
-int ustcomm_init_ustd(struct ustcomm_ustd *handle, const char *sock_path)
+char * ustcomm_restore_ptr(char *ptr, char *data_field, int data_field_size)
 {
-	char *name;
-	int retval = 0;
-
-	if(sock_path) {
-		asprintf(&name, "%s", sock_path);
-	}
-	else {
-		int result;
-
-		/* Only check if socket dir exists if we are using the default directory */
-		result = ensure_dir_exists(SOCK_DIR);
-		if(result == -1) {
-			ERR("Unable to create socket directory %s", SOCK_DIR);
-			return -1;
-		}
-
-		asprintf(&name, "%s/%s", SOCK_DIR, "ustd");
+	if ((unsigned long)ptr > data_field_size ||
+	    ptr == USTCOMM_POISON_PTR) {
+		return NULL;
 	}
 
-	handle->server.listen_fd = init_named_socket(name, &handle->server.socketpath);
-	if(handle->server.listen_fd < 0) {
-		ERR("error initializing named socket at %s", name);
-		retval = -1;
-		goto free_name;
-	}
-
-	INIT_LIST_HEAD(&handle->server.connections);
-
-free_name:
-	free(name);
-
-	return retval;
+	return data_field + (long)ptr;
 }
 
-static void ustcomm_fini_server(struct ustcomm_server *server, int keep_socket_file)
+
+int ustcomm_pack_channel_info(struct ustcomm_header *header,
+			      struct ustcomm_channel_info *ch_inf,
+			      const char *channel)
 {
-	int result;
-	struct stat st;
+	int offset = 0;
 
-	if(!keep_socket_file) {
-		/* Destroy socket */
-		result = stat(server->socketpath, &st);
-		if(result == -1) {
-			PERROR("stat (%s)", server->socketpath);
-			return;
-		}
+	ch_inf->channel = ustcomm_print_data(ch_inf->data,
+					     sizeof(ch_inf->data),
+					     &offset,
+					     channel);
 
-		/* Paranoid check before deleting. */
-		result = S_ISSOCK(st.st_mode);
-		if(!result) {
-			ERR("The socket we are about to delete is not a socket.");
-			return;
-		}
-
-		result = unlink(server->socketpath);
-		if(result == -1) {
-			PERROR("unlink");
-		}
+	if (ch_inf->channel == USTCOMM_POISON_PTR) {
+		return -ENOMEM;
 	}
 
-	free(server->socketpath);
-
-	result = close(server->listen_fd);
-	if(result == -1) {
-		PERROR("close");
-		return;
-	}
-}
-
-/* Free a traceable application server */
-
-void ustcomm_fini_app(struct ustcomm_app *handle, int keep_socket_file)
-{
-	ustcomm_fini_server(&handle->server, keep_socket_file);
-}
-
-/* Free a ustd server */
-
-void ustcomm_fini_ustd(struct ustcomm_ustd *handle)
-{
-	ustcomm_fini_server(&handle->server, 0);
-}
-
-static const char *find_tok(const char *str)
-{
-	while(*str == ' ') {
-		str++;
-
-		if(*str == 0)
-			return NULL;
-	}
-
-	return str;
-}
-
-static const char *find_sep(const char *str)
-{
-	while(*str != ' ') {
-		str++;
-
-		if(*str == 0)
-			break;
-	}
-
-	return str;
-}
-
-int nth_token_is(const char *str, const char *token, int tok_no)
-{
-	int i;
-	const char *start;
-	const char *end;
-
-	for(i=0; i<=tok_no; i++) {
-		str = find_tok(str);
-		if(str == NULL)
-			return -1;
-
-		start = str;
-
-		str = find_sep(str);
-		if(str == NULL)
-			return -1;
-
-		end = str;
-	}
-
-	if(end-start != strlen(token))
-		return 0;
-
-	if(strncmp(start, token, end-start))
-		return 0;
-
-	return 1;
-}
-
-char *nth_token(const char *str, int tok_no)
-{
-	static char *retval = NULL;
-	int i;
-	const char *start;
-	const char *end;
-
-	for(i=0; i<=tok_no; i++) {
-		str = find_tok(str);
-		if(str == NULL)
-			return NULL;
-
-		start = str;
-
-		str = find_sep(str);
-		if(str == NULL)
-			return NULL;
-
-		end = str;
-	}
-
-	if(retval) {
-		free(retval);
-		retval = NULL;
-	}
-
-	asprintf(&retval, "%.*s", (int)(end-start), start);
-
-	return retval;
-}
-
-/* Callback from multipoll.
- * Receive a new connection on the listening socket.
- */
-
-static int process_mp_incoming_conn(void *priv, int fd, short events)
-{
-	struct ustcomm_connection *newconn;
-	struct ustcomm_server *server = (struct ustcomm_server *) priv;
-	int newfd;
-	int result;
-
-	result = newfd = accept(server->listen_fd, NULL, NULL);
-	if(result == -1) {
-		PERROR("accept");
-		return -1;
-	}
-
-	newconn = (struct ustcomm_connection *) zmalloc(sizeof(struct ustcomm_connection));
-	if(newconn == NULL) {
-		ERR("zmalloc returned NULL");
-		return -1;
-	}
-
-	ustcomm_init_connection(newconn);
-	newconn->fd = newfd;
-
-	list_add(&newconn->list, &server->connections);
+	header->size = COMPUTE_MSG_SIZE(ch_inf, offset);
 
 	return 0;
 }
 
-/* Callback from multipoll.
- * Receive a message on an existing connection.
- */
 
-static int process_mp_conn_msg(void *priv, int fd, short revents)
+int ustcomm_unpack_channel_info(struct ustcomm_channel_info *ch_inf)
 {
-	struct ustcomm_multipoll_conn_info *mpinfo = (struct ustcomm_multipoll_conn_info *) priv;
-	int result;
-	char *msg;
-	struct ustcomm_source src;
-
-	if(revents) {
-		src.fd = fd;
-
-		result = recv_message_conn(mpinfo->conn, &msg);
-		if(result == -1) {
-			ERR("error in recv_message_conn");
-		}
-
-		else if(result == 0) {
-			/* connection finished */
-			ustcomm_close_app(mpinfo->conn);
-			list_del(&mpinfo->conn->list);
-			free(mpinfo->conn);
-		}
-		else {
-			mpinfo->cb(msg, &src);
-			free(msg);
-		}
+	ch_inf->channel = ustcomm_restore_ptr(ch_inf->channel,
+					      ch_inf->data,
+					      sizeof(ch_inf->data));
+	if (!ch_inf->channel) {
+		return -EINVAL;
 	}
 
 	return 0;
 }
 
-int free_ustcomm_client_poll(void *data)
+int ustcomm_pack_buffer_info(struct ustcomm_header *header,
+			     struct ustcomm_buffer_info *buf_inf,
+			     const char *channel,
+			     int channel_cpu)
 {
-	free(data);
+	int offset = 0;
+
+	buf_inf->channel = ustcomm_print_data(buf_inf->data,
+					      sizeof(buf_inf->data),
+					      &offset,
+					      channel);
+
+	if (buf_inf->channel == USTCOMM_POISON_PTR) {
+		return -ENOMEM;
+	}
+
+	buf_inf->ch_cpu = channel_cpu;
+
+	header->size = COMPUTE_MSG_SIZE(buf_inf, offset);
+
 	return 0;
 }
 
-void ustcomm_mp_add_app_clients(struct mpentries *ent, struct ustcomm_app *app, int (*cb)(char *recvbuf, struct ustcomm_source *src))
+
+int ustcomm_unpack_buffer_info(struct ustcomm_buffer_info *buf_inf)
 {
-	struct ustcomm_connection *conn;
-
-	/* add listener socket */
-	multipoll_add(ent, app->server.listen_fd, POLLIN, process_mp_incoming_conn, &app->server, NULL);
-
-	list_for_each_entry(conn, &app->server.connections, list) {
-		struct ustcomm_multipoll_conn_info *mpinfo = (struct ustcomm_multipoll_conn_info *) zmalloc(sizeof(struct ustcomm_multipoll_conn_info));
-		mpinfo->conn = conn;
-		mpinfo->cb = cb;
-		multipoll_add(ent, conn->fd, POLLIN, process_mp_conn_msg, mpinfo, free_ustcomm_client_poll);
+	buf_inf->channel = ustcomm_restore_ptr(buf_inf->channel,
+					       buf_inf->data,
+					       sizeof(buf_inf->data));
+	if (!buf_inf->channel) {
+		return -EINVAL;
 	}
+
+	return 0;
+}
+
+int ustcomm_pack_marker_info(struct ustcomm_header *header,
+			     struct ustcomm_marker_info *marker_inf,
+			     const char *channel,
+			     const char *marker)
+{
+	int offset = 0;
+
+	marker_inf->channel = ustcomm_print_data(marker_inf->data,
+						 sizeof(marker_inf->data),
+						 &offset,
+						 channel);
+
+	if (marker_inf->channel == USTCOMM_POISON_PTR) {
+		return -ENOMEM;
+	}
+
+
+	marker_inf->marker = ustcomm_print_data(marker_inf->data,
+						 sizeof(marker_inf->data),
+						 &offset,
+						 marker);
+
+	if (marker_inf->marker == USTCOMM_POISON_PTR) {
+		return -ENOMEM;
+	}
+
+	header->size = COMPUTE_MSG_SIZE(marker_inf, offset);
+
+	return 0;
+}
+
+int ustcomm_unpack_marker_info(struct ustcomm_marker_info *marker_inf)
+{
+	marker_inf->channel = ustcomm_restore_ptr(marker_inf->channel,
+						  marker_inf->data,
+						  sizeof(marker_inf->data));
+	if (!marker_inf->channel) {
+		return -EINVAL;
+	}
+
+	marker_inf->marker = ustcomm_restore_ptr(marker_inf->marker,
+						 marker_inf->data,
+						 sizeof(marker_inf->data));
+	if (!marker_inf->marker) {
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+int ustcomm_pack_sock_path(struct ustcomm_header *header,
+			   struct ustcomm_sock_path *sock_path_inf,
+			   const char *socket_path)
+{
+	int offset = 0;
+
+	sock_path_inf->sock_path =
+		ustcomm_print_data(sock_path_inf->data,
+				   sizeof(sock_path_inf->data),
+				   &offset,
+				   socket_path);
+
+	if (sock_path_inf->sock_path == USTCOMM_POISON_PTR) {
+		return -ENOMEM;
+	}
+
+	header->size = COMPUTE_MSG_SIZE(sock_path_inf, offset);
+
+	return 0;
+}
+
+int ustcomm_unpack_sock_path(struct ustcomm_sock_path *sock_path_inf)
+{
+	sock_path_inf->sock_path =
+		ustcomm_restore_ptr(sock_path_inf->sock_path,
+				    sock_path_inf->data,
+				    sizeof(sock_path_inf->data));
+	if (!sock_path_inf->sock_path) {
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+int ustcomm_send_ch_req(int sock, char *channel, int command,
+			struct ustcomm_header *recv_header,
+			char *recv_data)
+{
+	struct ustcomm_header send_header;
+	struct ustcomm_channel_info ch_info;
+	int result;
+
+	result = ustcomm_pack_channel_info(&send_header,
+					   &ch_info,
+					   channel);
+	if (result < 0) {
+		return result;
+	}
+
+	send_header.command = command;
+
+	return ustcomm_req(sock,
+			   &send_header,
+			   (char *)&ch_info,
+			   recv_header,
+			   recv_data);
+}
+
+int ustcomm_send_buf_req(int sock, char *channel, int ch_cpu,
+			 int command,
+			 struct ustcomm_header *recv_header,
+			 char *recv_data)
+{
+	struct ustcomm_header send_header;
+	struct ustcomm_buffer_info buf_info;
+	int result;
+
+	result = ustcomm_pack_buffer_info(&send_header,
+					  &buf_info,
+					  channel,
+					  ch_cpu);
+	if (result < 0) {
+		return result;
+	}
+
+	send_header.command = command;
+
+	return ustcomm_req(sock,
+			   &send_header,
+			   (char *)&buf_info,
+			   recv_header,
+			   recv_data);
 }

@@ -235,7 +235,7 @@ static notrace void marker_probe_cb_noarg(const struct marker *mdata,
 
 static void free_old_closure(struct rcu_head *head)
 {
-	struct marker_entry *entry = container_of(head,
+	struct marker_entry *entry = _ust_container_of(head,
 		struct marker_entry, rcu);
 	free(entry->oldptr);
 	/* Make sure we free the data before setting the pending flag to 0 */
@@ -428,10 +428,10 @@ static struct marker_entry *add_marker(const char *channel, const char *name,
 		}
 	}
 	/*
-	 * Using malloc here to allocate a variable length element. Could
+	 * Using zmalloc here to allocate a variable length element. Could
 	 * cause some memory fragmentation if overused.
 	 */
-	e = malloc(sizeof(struct marker_entry)
+	e = zmalloc(sizeof(struct marker_entry)
 		    + channel_len + name_len + format_len);
 	if (!e)
 		return ERR_PTR(-ENOMEM);
@@ -529,7 +529,7 @@ static int set_marker(struct marker_entry *entry, struct marker *elem,
 
 	if (entry->format) {
 		if (strcmp(entry->format, elem->format) != 0) {
-			DBG("Format mismatch for probe %s (%s), marker (%s)",
+			ERR("Format mismatch for probe %s (%s), marker (%s)",
 				entry->name,
 				entry->format,
 				elem->format);
@@ -594,11 +594,11 @@ static int set_marker(struct marker_entry *entry, struct marker *elem,
 //ust//			BUG_ON(!ret);
 			ret = tracepoint_probe_register_noupdate(
 				elem->tp_name,
-				elem->tp_cb);
+				elem->tp_cb, NULL);
 		} else {
 			ret = tracepoint_probe_unregister_noupdate(
 				elem->tp_name,
-				elem->tp_cb);
+				elem->tp_cb, NULL);
 			/*
 			 * tracepoint_probe_update_all() must be called
 			 * before the module containing tp_cb is unloaded.
@@ -630,7 +630,7 @@ static void disable_marker(struct marker *elem)
 		 * checking has been done in the __trace_mark_tp() macro.
 		 */
 		ret = tracepoint_probe_unregister_noupdate(elem->tp_name,
-			elem->tp_cb);
+			elem->tp_cb, NULL);
 		WARN_ON(ret);
 		/*
 		 * tracepoint_probe_update_all() must be called
@@ -1363,7 +1363,7 @@ int marker_register_lib(struct marker *markers_start, int markers_count)
 {
 	struct lib *pl;
 
-	pl = (struct lib *) malloc(sizeof(struct lib));
+	pl = (struct lib *) zmalloc(sizeof(struct lib));
 
 	pl->markers_start = markers_start;
 	pl->markers_count = markers_count;

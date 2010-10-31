@@ -26,83 +26,58 @@
 #include <stdint.h>
 #include <pthread.h>
 #include <signal.h>
+#include <sys/epoll.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/un.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <regex.h>
 #include <urcu/uatomic_arch.h>
+#include <urcu/list.h>
 
 #include <ust/marker.h>
+#include <ust/tracepoint.h>
 #include <ust/tracectl.h>
 #include "tracer.h"
 #include "usterr.h"
 #include "ustcomm.h"
 #include "buffers.h"
 #include "marker-control.h"
-#include "multipoll.h"
-
-#define USTSIGNAL SIGIO
-
-#define MAX_MSG_SIZE (100)
-#define MSG_NOTIF 1
-#define MSG_REGISTER_NOTIF 2
 
 /* This should only be accessed by the constructor, before the creation
  * of the listener, and then only by the listener.
  */
 s64 pidunique = -1LL;
 
+/* The process pid is used to detect a non-traceable fork
+ * and allow the non-traceable fork to be ignored
+ * by destructor sequences in libust
+ */
+static pid_t processpid = 0;
+
+static struct ustcomm_header _receive_header;
+static struct ustcomm_header *receive_header = &_receive_header;
+static char receive_buffer[USTCOMM_BUFFER_SIZE];
+static char send_buffer[USTCOMM_BUFFER_SIZE];
+
+static int epoll_fd;
+static struct ustcomm_sock *listen_sock;
+
 extern struct chan_info_struct chan_infos[];
 
-struct list_head blocked_consumers = LIST_HEAD_INIT(blocked_consumers);
+static struct list_head open_buffers_list = LIST_HEAD_INIT(open_buffers_list);
 
-static struct ustcomm_app ustcomm_app;
-
-struct tracecmd { /* no padding */
-	uint32_t size;
-	uint16_t command;
-};
+static struct list_head ust_socks = LIST_HEAD_INIT(ust_socks);
 
 /* volatile because shared between the listener and the main thread */
 int buffers_to_export = 0;
-
-struct trctl_msg {
-	/* size: the size of all the fields except size itself */
-	uint32_t size;
-	uint16_t type;
-	/* Only the necessary part of the payload is transferred. It
-         * may even be none of it.
-         */
-	char payload[94];
-};
-
-struct consumer_channel {
-	int fd;
-	struct ltt_channel_struct *chan;
-};
-
-struct blocked_consumer {
-	int fd_consumer;
-	int fd_producer;
-	int tmp_poll_idx;
-
-	/* args to ustcomm_send_reply */
-	struct ustcomm_server server;
-	struct ustcomm_source src;
-
-	/* args to ust_buffers_get_subbuf */
-	struct ust_buffer *buf;
-
-	struct list_head list;
-};
 
 static long long make_pidunique(void)
 {
 	s64 retval;
 	struct timeval tv;
-	
+
 	gettimeofday(&tv, NULL);
 
 	retval = tv.tv_sec;
@@ -120,14 +95,89 @@ static void print_markers(FILE *fp)
 	marker_iter_reset(&iter);
 	marker_iter_start(&iter);
 
-	while(iter.marker) {
-		fprintf(fp, "marker: %s/%s %d \"%s\" %p\n", iter.marker->channel, iter.marker->name, (int)imv_read(iter.marker->state), iter.marker->format, iter.marker->location);
+	while (iter.marker) {
+		fprintf(fp, "marker: %s/%s %d \"%s\" %p\n",
+			iter.marker->channel,
+			iter.marker->name,
+			(int)imv_read(iter.marker->state),
+			iter.marker->format,
+			iter.marker->location);
 		marker_iter_next(&iter);
 	}
 	unlock_markers();
 }
 
-static int init_socket(void);
+static void print_trace_events(FILE *fp)
+{
+	struct trace_event_iter iter;
+
+	lock_trace_events();
+	trace_event_iter_reset(&iter);
+	trace_event_iter_start(&iter);
+
+	while (iter.trace_event) {
+		fprintf(fp, "trace_event: %s\n", iter.trace_event->name);
+		trace_event_iter_next(&iter);
+	}
+	unlock_trace_events();
+}
+
+static int connect_ustd(void)
+{
+	int result, fd;
+	char default_daemon_path[] = SOCK_DIR "/ustd";
+	char *explicit_daemon_path, *daemon_path;
+
+	explicit_daemon_path = getenv("UST_DAEMON_SOCKET");
+	if (explicit_daemon_path) {
+		daemon_path = explicit_daemon_path;
+	} else {
+		daemon_path = default_daemon_path;
+	}
+
+	DBG("Connecting to daemon_path %s", daemon_path);
+
+	result = ustcomm_connect_path(daemon_path, &fd);
+	if (result < 0) {
+		WARN("connect_ustd failed, daemon_path: %s",
+		     daemon_path);
+		return result;
+	}
+
+	return fd;
+}
+
+
+static void request_buffer_consumer(int sock,
+				   const char *channel,
+				   int cpu)
+{
+	struct ustcomm_header send_header, recv_header;
+	struct ustcomm_buffer_info buf_inf;
+	int result = 0;
+
+	result = ustcomm_pack_buffer_info(&send_header,
+					  &buf_inf,
+					  channel,
+					  cpu);
+
+	if (result < 0) {
+		ERR("failed to pack buffer info message %s_%d",
+		    channel, cpu);
+		return;
+	}
+
+	buf_inf.pid = getpid();
+	send_header.command = CONSUME_BUFFER;
+
+	result = ustcomm_req(sock, &send_header, (char *) &buf_inf,
+			     &recv_header, NULL);
+	if (result <= 0) {
+		PERROR("request for buffer consumer failed, is the daemon online?");
+	}
+
+	return;
+}
 
 /* Ask the daemon to collect a trace called trace_name and being
  * produced by this pid.
@@ -138,330 +188,120 @@ static int init_socket(void);
 
 static void inform_consumer_daemon(const char *trace_name)
 {
-	int i,j;
+	int sock, i,j;
 	struct ust_trace *trace;
-	pid_t pid = getpid();
-	int result;
+	const char *ch_name;
+
+	sock = connect_ustd();
+	if (sock < 0) {
+		return;
+	}
+
+	DBG("Connected to ustd");
 
 	ltt_lock_traces();
 
 	trace = _ltt_trace_find(trace_name);
-	if(trace == NULL) {
+	if (trace == NULL) {
 		WARN("inform_consumer_daemon: could not find trace \"%s\"; it is probably already destroyed", trace_name);
-		goto finish;
+		goto unlock_traces;
 	}
 
-	for(i=0; i < trace->nr_channels; i++) {
-		if(trace->channels[i].request_collection) {
+	for (i=0; i < trace->nr_channels; i++) {
+		if (trace->channels[i].request_collection) {
 			/* iterate on all cpus */
-			for(j=0; j<trace->channels[i].n_cpus; j++) {
-				char *buf;
-				asprintf(&buf, "%s_%d", trace->channels[i].channel_name, j);
-				result = ustcomm_request_consumer(pid, buf);
-				if(result == -1) {
-					WARN("Failed to request collection for channel %s. Is the daemon available?", trace->channels[i].channel_name);
-					/* continue even if fail */
-				}
-				free(buf);
-				STORE_SHARED(buffers_to_export, LOAD_SHARED(buffers_to_export)+1);
+			for (j=0; j<trace->channels[i].n_cpus; j++) {
+				ch_name = trace->channels[i].channel_name;
+				request_buffer_consumer(sock, ch_name, j);
+				STORE_SHARED(buffers_to_export,
+					     LOAD_SHARED(buffers_to_export)+1);
 			}
 		}
 	}
 
-	finish:
+unlock_traces:
 	ltt_unlock_traces();
+
+	close(sock);
 }
 
-int process_blkd_consumer_act(void *priv, int fd, short events)
+static struct ust_channel *find_channel(const char *ch_name,
+					struct ust_trace *trace)
 {
-	int result;
-	long consumed_old = 0;
-	char *reply;
-	struct blocked_consumer *bc = (struct blocked_consumer *) priv;
-	char inbuf;
+	int i;
 
-	result = read(bc->fd_producer, &inbuf, 1);
-	if(result == -1) {
-		PERROR("read");
-		return -1;
-	}
-	if(result == 0) {
-		int res;
-		DBG("listener: got messsage that a buffer ended");
-
-		res = close(bc->fd_producer);
-		if(res == -1) {
-			PERROR("close");
+	for (i=0; i<trace->nr_channels; i++) {
+		if (!strcmp(trace->channels[i].channel_name, ch_name)) {
+			return &trace->channels[i];
 		}
-
-		list_del(&bc->list);
-
-		result = ustcomm_send_reply(&bc->server, "END", &bc->src);
-		if(result < 0) {
-			ERR("ustcomm_send_reply failed");
-			return -1;
-		}
-
-		return 0;
 	}
 
-	result = ust_buffers_get_subbuf(bc->buf, &consumed_old);
-	if(result == -EAGAIN) {
-		WARN("missed buffer?");
-		return 0;
-	}
-	else if(result < 0) {
-		ERR("ust_buffers_get_subbuf: error: %s", strerror(-result));
-	}
-	asprintf(&reply, "%s %ld", "OK", consumed_old);
-	result = ustcomm_send_reply(&bc->server, reply, &bc->src);
-	if(result < 0) {
-		ERR("ustcomm_send_reply failed");
-		free(reply);
-		return -1;
-	}
-	free(reply);
+	return NULL;
+}
 
-	list_del(&bc->list);
+static int get_buffer_shmid_pipe_fd(const char *trace_name, const char *ch_name,
+				    int ch_cpu,
+				    int *buf_shmid,
+				    int *buf_struct_shmid,
+				    int *buf_pipe_fd)
+{
+	struct ust_trace *trace;
+	struct ust_channel *channel;
+	struct ust_buffer *buf;
+
+	DBG("get_buffer_shmid_pipe_fd");
+
+	ltt_lock_traces();
+	trace = _ltt_trace_find(trace_name);
+	ltt_unlock_traces();
+
+	if (trace == NULL) {
+		ERR("cannot find trace!");
+		return -ENODATA;
+	}
+
+	channel = find_channel(ch_name, trace);
+	if (!channel) {
+		ERR("cannot find channel %s!", ch_name);
+		return -ENODATA;
+	}
+
+	buf = channel->buf[ch_cpu];
+
+	*buf_shmid = buf->shmid;
+	*buf_struct_shmid = channel->buf_struct_shmids[ch_cpu];
+	*buf_pipe_fd = buf->data_ready_fd_read;
 
 	return 0;
 }
 
-void blocked_consumers_add_to_mp(struct mpentries *ent)
+static int get_subbuf_num_size(const char *trace_name, const char *ch_name,
+			       int *num, int *size)
 {
-	struct blocked_consumer *bc;
-
-	list_for_each_entry(bc, &blocked_consumers, list) {
-		multipoll_add(ent, bc->fd_producer, POLLIN, process_blkd_consumer_act, bc, NULL);
-	}
-
-}
-
-void seperate_channel_cpu(const char *channel_and_cpu, char **channel, int *cpu)
-{
-	const char *sep;
-
-	sep = rindex(channel_and_cpu, '_');
-	if(sep == NULL) {
-		*cpu = -1;
-		sep = channel_and_cpu + strlen(channel_and_cpu);
-	}
-	else {
-		*cpu = atoi(sep+1);
-	}
-
-	asprintf(channel, "%.*s", (int)(sep-channel_and_cpu), channel_and_cpu);
-}
-
-static int do_cmd_get_shmid(const char *recvbuf, struct ustcomm_source *src)
-{
-	int retval = 0;
 	struct ust_trace *trace;
-	char trace_name[] = "auto";
-	int i;
-	char *channel_and_cpu;
-	int found = 0;
-	int result;
-	char *ch_name;
-	int ch_cpu;
-
-	DBG("get_shmid");
-
-	channel_and_cpu = nth_token(recvbuf, 1);
-	if(channel_and_cpu == NULL) {
-		ERR("cannot parse channel");
-		goto end;
-	}
-
-	seperate_channel_cpu(channel_and_cpu, &ch_name, &ch_cpu);
-	if(ch_cpu == -1) {
-		ERR("problem parsing channel name");
-		goto free_short_chan_name;
-	}
-
-	ltt_lock_traces();
-	trace = _ltt_trace_find(trace_name);
-	ltt_unlock_traces();
-
-	if(trace == NULL) {
-		ERR("cannot find trace!");
-		retval = -1;
-		goto free_short_chan_name;
-	}
-
-	for(i=0; i<trace->nr_channels; i++) {
-		struct ust_channel *channel = &trace->channels[i];
-		struct ust_buffer *buf = channel->buf[ch_cpu];
-
-		if(!strcmp(trace->channels[i].channel_name, ch_name)) {
-			char *reply;
-
-//			DBG("the shmid for the requested channel is %d", buf->shmid);
-//			DBG("the shmid for its buffer structure is %d", channel->buf_struct_shmids);
-			asprintf(&reply, "%d %d", buf->shmid, channel->buf_struct_shmids[ch_cpu]);
-
-			result = ustcomm_send_reply(&ustcomm_app.server, reply, src);
-			if(result) {
-				ERR("ustcomm_send_reply failed");
-				free(reply);
-				retval = -1;
-				goto free_short_chan_name;
-			}
-
-			free(reply);
-
-			found = 1;
-			break;
-		}
-	}
-
-	if(!found) {
-		ERR("channel not found (%s)", channel_and_cpu);
-	}
-
-	free_short_chan_name:
-	free(ch_name);
-
-	end:
-	return retval;
-}
-
-static int do_cmd_get_n_subbufs(const char *recvbuf, struct ustcomm_source *src)
-{
-	int retval = 0;
-	struct ust_trace *trace;
-	char trace_name[] = "auto";
-	int i;
-	char *channel_and_cpu;
-	int found = 0;
-	int result;
-	char *ch_name;
-	int ch_cpu;
-
-	DBG("get_n_subbufs");
-
-	channel_and_cpu = nth_token(recvbuf, 1);
-	if(channel_and_cpu == NULL) {
-		ERR("cannot parse channel");
-		goto end;
-	}
-
-	seperate_channel_cpu(channel_and_cpu, &ch_name, &ch_cpu);
-	if(ch_cpu == -1) {
-		ERR("problem parsing channel name");
-		goto free_short_chan_name;
-	}
-
-	ltt_lock_traces();
-	trace = _ltt_trace_find(trace_name);
-	ltt_unlock_traces();
-
-	if(trace == NULL) {
-		ERR("cannot find trace!");
-		retval = -1;
-		goto free_short_chan_name;
-	}
-
-	for(i=0; i<trace->nr_channels; i++) {
-		struct ust_channel *channel = &trace->channels[i];
-
-		if(!strcmp(trace->channels[i].channel_name, ch_name)) {
-			char *reply;
-
-			DBG("the n_subbufs for the requested channel is %d", channel->subbuf_cnt);
-			asprintf(&reply, "%d", channel->subbuf_cnt);
-
-			result = ustcomm_send_reply(&ustcomm_app.server, reply, src);
-			if(result) {
-				ERR("ustcomm_send_reply failed");
-				free(reply);
-				retval = -1;
-				goto free_short_chan_name;
-			}
-
-			free(reply);
-			found = 1;
-			break;
-		}
-	}
-	if(found == 0) {
-		ERR("unable to find channel");
-	}
-
-	free_short_chan_name:
-	free(ch_name);
-
-	end:
-	return retval;
-}
-
-static int do_cmd_get_subbuf_size(const char *recvbuf, struct ustcomm_source *src)
-{
-	int retval = 0;
-	struct ust_trace *trace;
-	char trace_name[] = "auto";
-	int i;
-	char *channel_and_cpu;
-	int found = 0;
-	int result;
-	char *ch_name;
-	int ch_cpu;
+	struct ust_channel *channel;
 
 	DBG("get_subbuf_size");
 
-	channel_and_cpu = nth_token(recvbuf, 1);
-	if(channel_and_cpu == NULL) {
-		ERR("cannot parse channel");
-		goto end;
-	}
-
-	seperate_channel_cpu(channel_and_cpu, &ch_name, &ch_cpu);
-	if(ch_cpu == -1) {
-		ERR("problem parsing channel name");
-		goto free_short_chan_name;
-	}
-
 	ltt_lock_traces();
 	trace = _ltt_trace_find(trace_name);
 	ltt_unlock_traces();
 
-	if(trace == NULL) {
+	if (!trace) {
 		ERR("cannot find trace!");
-		retval = -1;
-		goto free_short_chan_name;
+		return -ENODATA;
 	}
 
-	for(i=0; i<trace->nr_channels; i++) {
-		struct ust_channel *channel = &trace->channels[i];
-
-		if(!strcmp(trace->channels[i].channel_name, ch_name)) {
-			char *reply;
-
-			DBG("the subbuf_size for the requested channel is %zd", channel->subbuf_size);
-			asprintf(&reply, "%zd", channel->subbuf_size);
-
-			result = ustcomm_send_reply(&ustcomm_app.server, reply, src);
-			if(result) {
-				ERR("ustcomm_send_reply failed");
-				free(reply);
-				retval = -1;
-				goto free_short_chan_name;
-			}
-
-			free(reply);
-			found = 1;
-			break;
-		}
-	}
-	if(found == 0) {
+	channel = find_channel(ch_name, trace);
+	if (!channel) {
 		ERR("unable to find channel");
+		return -ENODATA;
 	}
 
-	free_short_chan_name:
-	free(ch_name);
+	*num = channel->subbuf_cnt;
+	*size = channel->subbuf_size;
 
-	end:
-	return retval;
+	return 0;
 }
 
 /* Return the power of two which is equal or higher to v */
@@ -471,590 +311,767 @@ static unsigned int pow2_higher_or_eq(unsigned int v)
 	int hb = fls(v);
 	int retval = 1<<(hb-1);
 
-	if(v-retval == 0)
+	if (v-retval == 0)
 		return retval;
 	else
 		return retval<<1;
 }
 
-static int do_cmd_set_subbuf_size(const char *recvbuf, struct ustcomm_source *src)
+static int set_subbuf_size(const char *trace_name, const char *ch_name,
+			   unsigned int size)
 {
-	char *channel_slash_size;
-	char ch_name[256]="";
-	unsigned int size, power;
+	unsigned int power;
 	int retval = 0;
 	struct ust_trace *trace;
-	char trace_name[] = "auto";
-	int i;
-	int found = 0;
+	struct ust_channel *channel;
 
 	DBG("set_subbuf_size");
 
-	channel_slash_size = nth_token(recvbuf, 1);
-	sscanf(channel_slash_size, "%255[^/]/%u", ch_name, &size);
-
-	if(ch_name == NULL) {
-		ERR("cannot parse channel");
-		goto end;
-	}
-
 	power = pow2_higher_or_eq(size);
 	power = max_t(unsigned int, 2u, power);
-	if (power != size)
+	if (power != size) {
 		WARN("using the next power of two for buffer size = %u\n", power);
+	}
 
 	ltt_lock_traces();
 	trace = _ltt_trace_find_setup(trace_name);
-	if(trace == NULL) {
+	if (trace == NULL) {
 		ERR("cannot find trace!");
-		retval = -1;
-		goto end;
+		retval = -ENODATA;
+		goto unlock_traces;
 	}
 
-	for(i = 0; i < trace->nr_channels; i++) {
-		struct ust_channel *channel = &trace->channels[i];
-
-		if(!strcmp(trace->channels[i].channel_name, ch_name)) {
-
-			channel->subbuf_size = power;
-			DBG("the set_subbuf_size for the requested channel is %zd", channel->subbuf_size);
-
-			found = 1;
-			break;
-		}
-	}
-	if(found == 0) {
+	channel = find_channel(ch_name, trace);
+	if (!channel) {
 		ERR("unable to find channel");
+		retval = -ENODATA;
+		goto unlock_traces;
 	}
 
-	end:
+	channel->subbuf_size = power;
+	DBG("the set_subbuf_size for the requested channel is %u", channel->subbuf_size);
+
+unlock_traces:
 	ltt_unlock_traces();
+
 	return retval;
 }
 
-static int do_cmd_set_subbuf_num(const char *recvbuf, struct ustcomm_source *src)
+static int set_subbuf_num(const char *trace_name, const char *ch_name,
+				 unsigned int num)
 {
-	char *channel_slash_num;
-	char ch_name[256]="";
-	unsigned int num;
-	int retval = 0;
 	struct ust_trace *trace;
-	char trace_name[] = "auto";
-	int i;
-	int found = 0;
+	struct ust_channel *channel;
+	int retval = 0;
 
 	DBG("set_subbuf_num");
 
-	channel_slash_num = nth_token(recvbuf, 1);
-	sscanf(channel_slash_num, "%255[^/]/%u", ch_name, &num);
-
-	if(ch_name == NULL) {
-		ERR("cannot parse channel");
-		goto end;
-	}
 	if (num < 2) {
 		ERR("subbuffer count should be greater than 2");
-		goto end;
+		return -EINVAL;
 	}
 
 	ltt_lock_traces();
 	trace = _ltt_trace_find_setup(trace_name);
-	if(trace == NULL) {
+	if (trace == NULL) {
 		ERR("cannot find trace!");
-		retval = -1;
-		goto end;
+		retval = -ENODATA;
+		goto unlock_traces;
 	}
 
-	for(i = 0; i < trace->nr_channels; i++) {
-		struct ust_channel *channel = &trace->channels[i];
-
-		if(!strcmp(trace->channels[i].channel_name, ch_name)) {
-
-			channel->subbuf_cnt = num;
-			DBG("the set_subbuf_cnt for the requested channel is %zd", channel->subbuf_cnt);
-
-			found = 1;
-			break;
-		}
-	}
-	if(found == 0) {
+	channel = find_channel(ch_name, trace);
+	if (!channel) {
 		ERR("unable to find channel");
+		retval = -ENODATA;
+		goto unlock_traces;
 	}
 
-	end:
+	channel->subbuf_cnt = num;
+	DBG("the set_subbuf_cnt for the requested channel is %zd", channel->subbuf_cnt);
+
+unlock_traces:
 	ltt_unlock_traces();
 	return retval;
 }
 
-static int do_cmd_get_subbuffer(const char *recvbuf, struct ustcomm_source *src)
+static int get_subbuffer(const char *trace_name, const char *ch_name,
+			 int ch_cpu, long *consumed_old)
 {
 	int retval = 0;
 	struct ust_trace *trace;
-	char trace_name[] = "auto";
-	int i;
-	char *channel_and_cpu;
-	int found = 0;
-	char *ch_name;
-	int ch_cpu;
+	struct ust_channel *channel;
+	struct ust_buffer *buf;
 
 	DBG("get_subbuf");
 
-	channel_and_cpu = nth_token(recvbuf, 1);
-	if(channel_and_cpu == NULL) {
-		ERR("cannot parse channel");
-		goto end;
-	}
-
-	seperate_channel_cpu(channel_and_cpu, &ch_name, &ch_cpu);
-	if(ch_cpu == -1) {
-		ERR("problem parsing channel name");
-		goto free_short_chan_name;
-	}
+	*consumed_old = 0;
 
 	ltt_lock_traces();
 	trace = _ltt_trace_find(trace_name);
 
-	if(trace == NULL) {
-		int result;
-
+	if (!trace) {
 		DBG("Cannot find trace. It was likely destroyed by the user.");
-		result = ustcomm_send_reply(&ustcomm_app.server, "NOTFOUND", src);
-		if(result) {
-			ERR("ustcomm_send_reply failed");
-			retval = -1;
-			goto unlock_traces;
-		}
-
+		retval = -ENODATA;
 		goto unlock_traces;
 	}
 
-	for(i=0; i<trace->nr_channels; i++) {
-		struct ust_channel *channel = &trace->channels[i];
-
-		if(!strcmp(trace->channels[i].channel_name, ch_name)) {
-			struct ust_buffer *buf = channel->buf[ch_cpu];
-			struct blocked_consumer *bc;
-
-			found = 1;
-
-			bc = (struct blocked_consumer *) malloc(sizeof(struct blocked_consumer));
-			if(bc == NULL) {
-				ERR("malloc returned NULL");
-				goto unlock_traces;
-			}
-			bc->fd_consumer = src->fd;
-			bc->fd_producer = buf->data_ready_fd_read;
-			bc->buf = buf;
-			bc->src = *src;
-			bc->server = ustcomm_app.server;
-
-			list_add(&bc->list, &blocked_consumers);
-
-			/* Being here is the proof the daemon has mapped the buffer in its
-			 * memory. We may now decrement buffers_to_export.
-			 */
-			if(uatomic_read(&buf->consumed) == 0) {
-				DBG("decrementing buffers_to_export");
-				STORE_SHARED(buffers_to_export, LOAD_SHARED(buffers_to_export)-1);
-			}
-
-			break;
-		}
-	}
-	if(found == 0) {
+	channel = find_channel(ch_name, trace);
+	if (!channel) {
 		ERR("unable to find channel");
+		retval = -ENODATA;
+		goto unlock_traces;
 	}
 
-	unlock_traces:
+	buf = channel->buf[ch_cpu];
+
+	retval = ust_buffers_get_subbuf(buf, consumed_old);
+	if (retval < 0) {
+		WARN("missed buffer?");
+	}
+
+unlock_traces:
 	ltt_unlock_traces();
 
-	free_short_chan_name:
-	free(ch_name);
-
-	end:
 	return retval;
 }
 
-static int do_cmd_put_subbuffer(const char *recvbuf, struct ustcomm_source *src)
+
+static int notify_buffer_mapped(const char *trace_name,
+				const char *ch_name,
+				int ch_cpu)
 {
 	int retval = 0;
 	struct ust_trace *trace;
-	char trace_name[] = "auto";
-	int i;
-	char *channel_and_cpu;
-	int found = 0;
-	int result;
-	char *ch_name;
-	int ch_cpu;
-	long consumed_old;
-	char *consumed_old_str;
-	char *endptr;
-	char *reply = NULL;
+	struct ust_channel *channel;
+	struct ust_buffer *buf;
 
-	DBG("put_subbuf");
-
-	channel_and_cpu = strdup(nth_token(recvbuf, 1));
-	if(channel_and_cpu == NULL) {
-		ERR("cannot parse channel");
-		retval = -1;
-		goto end;
-	}
-
-	consumed_old_str = strdup(nth_token(recvbuf, 2));
-	if(consumed_old_str == NULL) {
-		ERR("cannot parse consumed_old");
-		retval = -1;
-		goto free_channel_and_cpu;
-	}
-	consumed_old = strtol(consumed_old_str, &endptr, 10);
-	if(*endptr != '\0') {
-		ERR("invalid value for consumed_old");
-		retval = -1;
-		goto free_consumed_old_str;
-	}
-
-	seperate_channel_cpu(channel_and_cpu, &ch_name, &ch_cpu);
-	if(ch_cpu == -1) {
-		ERR("problem parsing channel name");
-		retval = -1;
-		goto free_short_chan_name;
-	}
+	DBG("get_buffer_fd");
 
 	ltt_lock_traces();
 	trace = _ltt_trace_find(trace_name);
 
-	if(trace == NULL) {
+	if (!trace) {
+		retval = -ENODATA;
 		DBG("Cannot find trace. It was likely destroyed by the user.");
-		result = ustcomm_send_reply(&ustcomm_app.server, "NOTFOUND", src);
-		if(result) {
-			ERR("ustcomm_send_reply failed");
-			retval = -1;
-			goto unlock_traces;
-		}
-
 		goto unlock_traces;
 	}
 
-	for(i=0; i<trace->nr_channels; i++) {
-		struct ust_channel *channel = &trace->channels[i];
-
-		if(!strcmp(trace->channels[i].channel_name, ch_name)) {
-			struct ust_buffer *buf = channel->buf[ch_cpu];
-
-			found = 1;
-
-			result = ust_buffers_put_subbuf(buf, consumed_old);
-			if(result < 0) {
-				WARN("ust_buffers_put_subbuf: error (subbuf=%s)", channel_and_cpu);
-				asprintf(&reply, "%s", "ERROR");
-			}
-			else {
-				DBG("ust_buffers_put_subbuf: success (subbuf=%s)", channel_and_cpu);
-				asprintf(&reply, "%s", "OK");
-			}
-
-			result = ustcomm_send_reply(&ustcomm_app.server, reply, src);
-			if(result) {
-				ERR("ustcomm_send_reply failed");
-				free(reply);
-				retval = -1;
-				goto unlock_traces;
-			}
-
-			free(reply);
-			break;
-		}
-	}
-	if(found == 0) {
+	channel = find_channel(ch_name, trace);
+	if (!channel) {
+		retval = -ENODATA;
 		ERR("unable to find channel");
+		goto unlock_traces;
 	}
 
-	unlock_traces:
-	ltt_unlock_traces();
-	free_short_chan_name:
-	free(ch_name);
-	free_consumed_old_str:
-	free(consumed_old_str);
-	free_channel_and_cpu:
-	free(channel_and_cpu);
+	buf = channel->buf[ch_cpu];
 
-	end:
+	/* Being here is the proof the daemon has mapped the buffer in its
+	 * memory. We may now decrement buffers_to_export.
+	 */
+	if (uatomic_read(&buf->consumed) == 0) {
+		DBG("decrementing buffers_to_export");
+		STORE_SHARED(buffers_to_export, LOAD_SHARED(buffers_to_export)-1);
+	}
+
+	/* The buffer has been exported, ergo, we can add it to the
+	 * list of open buffers
+	 */
+	list_add(&buf->open_buffers_list, &open_buffers_list);
+
+unlock_traces:
+	ltt_unlock_traces();
+
+	return retval;
+}
+
+static int put_subbuffer(const char *trace_name, const char *ch_name,
+			 int ch_cpu, long consumed_old)
+{
+	int retval = 0;
+	struct ust_trace *trace;
+	struct ust_channel *channel;
+	struct ust_buffer *buf;
+
+	DBG("put_subbuf");
+
+	ltt_lock_traces();
+	trace = _ltt_trace_find(trace_name);
+
+	if (!trace) {
+		retval = -ENODATA;
+		DBG("Cannot find trace. It was likely destroyed by the user.");
+		goto unlock_traces;
+	}
+
+	channel = find_channel(ch_name, trace);
+	if (!channel) {
+		retval = -ENODATA;
+		ERR("unable to find channel");
+		goto unlock_traces;
+	}
+
+	buf = channel->buf[ch_cpu];
+
+	retval = ust_buffers_put_subbuf(buf, consumed_old);
+	if (retval < 0) {
+		WARN("ust_buffers_put_subbuf: error (subbuf=%s_%d)",
+		     ch_name, ch_cpu);
+	} else {
+		DBG("ust_buffers_put_subbuf: success (subbuf=%s_%d)",
+		    ch_name, ch_cpu);
+	}
+
+unlock_traces:
+	ltt_unlock_traces();
+
 	return retval;
 }
 
 static void listener_cleanup(void *ptr)
 {
-	ustcomm_fini_app(&ustcomm_app, 0);
+	ustcomm_del_named_sock(listen_sock, 0);
 }
 
-static void do_cmd_force_switch()
+static void force_subbuf_switch()
 {
-	struct blocked_consumer *bc;
+	struct ust_buffer *buf;
 
-	list_for_each_entry(bc, &blocked_consumers, list) {
-		ltt_force_switch(bc->buf, FORCE_FLUSH);
+	list_for_each_entry(buf, &open_buffers_list,
+			    open_buffers_list) {
+		ltt_force_switch(buf, FORCE_FLUSH);
 	}
 }
 
-int process_client_cmd(char *recvbuf, struct ustcomm_source *src)
+/* Simple commands are those which need only respond with a return value. */
+static int process_simple_client_cmd(int command, char *recv_buf)
 {
 	int result;
-	char trace_name[] = "auto";
 	char trace_type[] = "ustrelay";
-	int len;
+	char trace_name[] = "auto";
 
-	DBG("received a message! it's: %s", recvbuf);
-	len = strlen(recvbuf);
+	switch(command) {
+	case SET_SOCK_PATH:
+	{
+		struct ustcomm_sock_path *sock_msg;
+		sock_msg = (struct ustcomm_sock_path *)recv_buf;
+		sock_msg->sock_path =
+			ustcomm_restore_ptr(sock_msg->sock_path,
+					    sock_msg->data,
+					    sizeof(sock_msg->data));
+		if (!sock_msg->sock_path) {
 
-	if(!strcmp(recvbuf, "print_markers")) {
-		print_markers(stderr);
+			return -EINVAL;
+		}
+		return setenv("UST_DAEMON_SOCKET", sock_msg->sock_path, 1);
 	}
-	else if(!strcmp(recvbuf, "list_markers")) {
+	case START:
+		/* start is an operation that setups the trace, allocates it and starts it */
+		result = ltt_trace_setup(trace_name);
+		if (result < 0) {
+			ERR("ltt_trace_setup failed");
+			return result;
+		}
+
+		result = ltt_trace_set_type(trace_name, trace_type);
+		if (result < 0) {
+			ERR("ltt_trace_set_type failed");
+			return result;
+		}
+
+		result = ltt_trace_alloc(trace_name);
+		if (result < 0) {
+			ERR("ltt_trace_alloc failed");
+			return result;
+		}
+
+		inform_consumer_daemon(trace_name);
+
+		result = ltt_trace_start(trace_name);
+		if (result < 0) {
+			ERR("ltt_trace_start failed");
+			return result;
+		}
+
+		return 0;
+	case SETUP_TRACE:
+		DBG("trace setup");
+
+		result = ltt_trace_setup(trace_name);
+		if (result < 0) {
+			ERR("ltt_trace_setup failed");
+			return result;
+		}
+
+		result = ltt_trace_set_type(trace_name, trace_type);
+		if (result < 0) {
+			ERR("ltt_trace_set_type failed");
+			return result;
+		}
+
+		return 0;
+	case ALLOC_TRACE:
+		DBG("trace alloc");
+
+		result = ltt_trace_alloc(trace_name);
+		if (result < 0) {
+			ERR("ltt_trace_alloc failed");
+			return result;
+		}
+		inform_consumer_daemon(trace_name);
+
+		return 0;
+
+	case CREATE_TRACE:
+		DBG("trace create");
+
+		result = ltt_trace_setup(trace_name);
+		if (result < 0) {
+			ERR("ltt_trace_setup failed");
+			return result;
+		}
+
+		result = ltt_trace_set_type(trace_name, trace_type);
+		if (result < 0) {
+			ERR("ltt_trace_set_type failed");
+			return result;
+		}
+
+		return 0;
+	case START_TRACE:
+		DBG("trace start");
+
+		result = ltt_trace_alloc(trace_name);
+		if (result < 0) {
+			ERR("ltt_trace_alloc failed");
+			return result;
+		}
+		if (!result) {
+			inform_consumer_daemon(trace_name);
+		}
+
+		result = ltt_trace_start(trace_name);
+		if (result < 0) {
+			ERR("ltt_trace_start failed");
+			return result;
+		}
+
+		return 0;
+	case STOP_TRACE:
+		DBG("trace stop");
+
+		result = ltt_trace_stop(trace_name);
+		if (result < 0) {
+			ERR("ltt_trace_stop failed");
+			return result;
+		}
+
+		return 0;
+	case DESTROY_TRACE:
+		DBG("trace destroy");
+
+		result = ltt_trace_destroy(trace_name, 0);
+		if (result < 0) {
+			ERR("ltt_trace_destroy failed");
+			return result;
+		}
+		return 0;
+	case FORCE_SUBBUF_SWITCH:
+		/* FIXME: return codes? */
+		force_subbuf_switch();
+
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static void process_channel_cmd(int sock, int command,
+				struct ustcomm_channel_info *ch_inf)
+{
+	struct ustcomm_header _reply_header;
+	struct ustcomm_header *reply_header = &_reply_header;
+	struct ustcomm_channel_info *reply_msg =
+		(struct ustcomm_channel_info *)send_buffer;
+	char trace_name[] = "auto";
+	int result, offset = 0, num, size;
+
+	memset(reply_header, 0, sizeof(*reply_header));
+
+	switch (command) {
+	case GET_SUBBUF_NUM_SIZE:
+		result = get_subbuf_num_size(trace_name,
+					     ch_inf->channel,
+					     &num, &size);
+		if (result < 0) {
+			reply_header->result = result;
+			break;
+		}
+
+		reply_msg->channel = USTCOMM_POISON_PTR;
+		reply_msg->subbuf_num = num;
+		reply_msg->subbuf_size = size;
+
+
+		reply_header->size = COMPUTE_MSG_SIZE(reply_msg, offset);
+
+		break;
+	case SET_SUBBUF_NUM:
+		reply_header->result = set_subbuf_num(trace_name,
+						      ch_inf->channel,
+						      ch_inf->subbuf_num);
+
+		break;
+	case SET_SUBBUF_SIZE:
+		reply_header->result = set_subbuf_size(trace_name,
+						       ch_inf->channel,
+						       ch_inf->subbuf_size);
+
+
+		break;
+	}
+	if (ustcomm_send(sock, reply_header, (char *)reply_msg) < 0) {
+		ERR("ustcomm_send failed");
+	}
+}
+
+static void process_buffer_cmd(int sock, int command,
+			       struct ustcomm_buffer_info *buf_inf)
+{
+	struct ustcomm_header _reply_header;
+	struct ustcomm_header *reply_header = &_reply_header;
+	struct ustcomm_buffer_info *reply_msg =
+		(struct ustcomm_buffer_info *)send_buffer;
+	char trace_name[] = "auto";
+	int result, offset = 0, buf_shmid, buf_struct_shmid, buf_pipe_fd;
+	long consumed_old;
+
+	memset(reply_header, 0, sizeof(*reply_header));
+
+	switch (command) {
+	case GET_BUF_SHMID_PIPE_FD:
+		result = get_buffer_shmid_pipe_fd(trace_name, buf_inf->channel,
+						  buf_inf->ch_cpu,
+						  &buf_shmid,
+						  &buf_struct_shmid,
+						  &buf_pipe_fd);
+		if (result < 0) {
+			reply_header->result = result;
+			break;
+		}
+
+		reply_msg->channel = USTCOMM_POISON_PTR;
+		reply_msg->buf_shmid = buf_shmid;
+		reply_msg->buf_struct_shmid = buf_struct_shmid;
+
+		reply_header->size = COMPUTE_MSG_SIZE(reply_msg, offset);
+		reply_header->fd_included = 1;
+
+		if (ustcomm_send_fd(sock, reply_header, (char *)reply_msg,
+				    &buf_pipe_fd) < 0) {
+			ERR("ustcomm_send failed");
+		}
+		return;
+
+	case NOTIFY_BUF_MAPPED:
+		reply_header->result =
+			notify_buffer_mapped(trace_name,
+					     buf_inf->channel,
+					     buf_inf->ch_cpu);
+		break;
+	case GET_SUBBUFFER:
+		result = get_subbuffer(trace_name, buf_inf->channel,
+				       buf_inf->ch_cpu, &consumed_old);
+		if (result < 0) {
+			reply_header->result = result;
+			break;
+		}
+
+		reply_msg->channel = USTCOMM_POISON_PTR;
+		reply_msg->consumed_old = consumed_old;
+
+		reply_header->size = COMPUTE_MSG_SIZE(reply_msg, offset);
+
+		break;
+	case PUT_SUBBUFFER:
+		result = put_subbuffer(trace_name, buf_inf->channel,
+				       buf_inf->ch_cpu,
+				       buf_inf->consumed_old);
+		reply_header->result = result;
+
+		break;
+	}
+
+	if (ustcomm_send(sock, reply_header, (char *)reply_msg) < 0) {
+		ERR("ustcomm_send failed");
+	}
+
+}
+
+static void process_marker_cmd(int sock, int command,
+			       struct ustcomm_marker_info *marker_inf)
+{
+	struct ustcomm_header _reply_header;
+	struct ustcomm_header *reply_header = &_reply_header;
+	int result;
+
+	memset(reply_header, 0, sizeof(*reply_header));
+
+	switch(command) {
+	case ENABLE_MARKER:
+
+		result = ltt_marker_connect(marker_inf->channel,
+					    marker_inf->marker,
+					    "default");
+		if (result < 0) {
+			WARN("could not enable marker; channel=%s,"
+			     " name=%s",
+			     marker_inf->channel,
+			     marker_inf->marker);
+
+		}
+		break;
+	case DISABLE_MARKER:
+		result = ltt_marker_disconnect(marker_inf->channel,
+					       marker_inf->marker,
+					       "default");
+		if (result < 0) {
+			WARN("could not disable marker; channel=%s,"
+			     " name=%s",
+			     marker_inf->channel,
+			     marker_inf->marker);
+		}
+		break;
+	}
+
+	reply_header->result = result;
+
+	if (ustcomm_send(sock, reply_header, NULL) < 0) {
+		ERR("ustcomm_send failed");
+	}
+
+}
+static void process_client_cmd(struct ustcomm_header *recv_header,
+			       char *recv_buf, int sock)
+{
+	int result;
+	struct ustcomm_header _reply_header;
+	struct ustcomm_header *reply_header = &_reply_header;
+	char *send_buf = send_buffer;
+
+	memset(reply_header, 0, sizeof(*reply_header));
+	memset(send_buf, 0, sizeof(send_buffer));
+
+	switch(recv_header->command) {
+	case GET_SUBBUF_NUM_SIZE:
+	case SET_SUBBUF_NUM:
+	case SET_SUBBUF_SIZE:
+	{
+		struct ustcomm_channel_info *ch_inf;
+		ch_inf = (struct ustcomm_channel_info *)recv_buf;
+		result = ustcomm_unpack_channel_info(ch_inf);
+		if (result < 0) {
+			ERR("couldn't unpack channel info");
+			reply_header->result = -EINVAL;
+			goto send_response;
+		}
+		process_channel_cmd(sock, recv_header->command, ch_inf);
+		return;
+	}
+	case GET_BUF_SHMID_PIPE_FD:
+	case NOTIFY_BUF_MAPPED:
+	case GET_SUBBUFFER:
+	case PUT_SUBBUFFER:
+	{
+		struct ustcomm_buffer_info *buf_inf;
+		buf_inf = (struct ustcomm_buffer_info *)recv_buf;
+		result = ustcomm_unpack_buffer_info(buf_inf);
+		if (result < 0) {
+			ERR("couldn't unpack buffer info");
+			reply_header->result = -EINVAL;
+			goto send_response;
+		}
+		process_buffer_cmd(sock, recv_header->command, buf_inf);
+		return;
+	}
+	case ENABLE_MARKER:
+	case DISABLE_MARKER:
+	{
+		struct ustcomm_marker_info *marker_inf;
+		marker_inf = (struct ustcomm_marker_info *)recv_buf;
+		result = ustcomm_unpack_marker_info(marker_inf);
+		if (result < 0) {
+			ERR("couldn't unpack marker info");
+			reply_header->result = -EINVAL;
+			goto send_response;
+		}
+		process_marker_cmd(sock, recv_header->command, marker_inf);
+		return;
+	}
+	case LIST_MARKERS:
+	{
 		char *ptr;
 		size_t size;
 		FILE *fp;
 
 		fp = open_memstream(&ptr, &size);
+		if (fp == NULL) {
+			ERR("opening memstream failed");
+			return;
+		}
 		print_markers(fp);
 		fclose(fp);
 
-		result = ustcomm_send_reply(&ustcomm_app.server, ptr, src);
+		reply_header->size = size;
+
+		result = ustcomm_send(sock, reply_header, ptr);
 
 		free(ptr);
+
+		if (result < 0) {
+			PERROR("failed to send markers list");
+		}
+
+		break;
 	}
-	else if(!strcmp(recvbuf, "start")) {
-		/* start is an operation that setups the trace, allocates it and starts it */
-		result = ltt_trace_setup(trace_name);
-		if(result < 0) {
-			ERR("ltt_trace_setup failed");
-			return -1;
+	case LIST_TRACE_EVENTS:
+	{
+		char *ptr;
+		size_t size;
+		FILE *fp;
+
+		fp = open_memstream(&ptr, &size);
+		if (fp == NULL) {
+			ERR("opening memstream failed");
+			return;
+		}
+		print_trace_events(fp);
+		fclose(fp);
+
+		reply_header->size = size;
+
+		result = ustcomm_send(sock, reply_header, ptr);
+
+		free(ptr);
+
+		if (result < 0) {
+			ERR("list_trace_events failed");
+			return;
 		}
 
-		result = ltt_trace_set_type(trace_name, trace_type);
-		if(result < 0) {
-			ERR("ltt_trace_set_type failed");
-			return -1;
-		}
-
-		result = ltt_trace_alloc(trace_name);
-		if(result < 0) {
-			ERR("ltt_trace_alloc failed");
-			return -1;
-		}
-
-		inform_consumer_daemon(trace_name);
-
-		result = ltt_trace_start(trace_name);
-		if(result < 0) {
-			ERR("ltt_trace_start failed");
-			return -1;
-		}
+		break;
 	}
-	else if(!strcmp(recvbuf, "trace_setup")) {
-		DBG("trace setup");
-
-		result = ltt_trace_setup(trace_name);
-		if(result < 0) {
-			ERR("ltt_trace_setup failed");
-			return -1;
-		}
-
-		result = ltt_trace_set_type(trace_name, trace_type);
-		if(result < 0) {
-			ERR("ltt_trace_set_type failed");
-			return -1;
-		}
-	}
-	else if(!strcmp(recvbuf, "trace_alloc")) {
-		DBG("trace alloc");
-
-		result = ltt_trace_alloc(trace_name);
-		if(result < 0) {
-			ERR("ltt_trace_alloc failed");
-			return -1;
-		}
-		inform_consumer_daemon(trace_name);
-	}
-	else if(!strcmp(recvbuf, "trace_create")) {
-		DBG("trace create");
-
-		result = ltt_trace_setup(trace_name);
-		if(result < 0) {
-			ERR("ltt_trace_setup failed");
-			return -1;
-		}
-
-		result = ltt_trace_set_type(trace_name, trace_type);
-		if(result < 0) {
-			ERR("ltt_trace_set_type failed");
-			return -1;
-		}
-	}
-	else if(!strcmp(recvbuf, "trace_start")) {
-		DBG("trace start");
-
-		result = ltt_trace_alloc(trace_name);
-		if(result < 0) {
-			ERR("ltt_trace_alloc failed");
-			return -1;
-		}
-		if(!result) {
-			inform_consumer_daemon(trace_name);
-		}
-
-		result = ltt_trace_start(trace_name);
-		if(result < 0) {
-			ERR("ltt_trace_start failed");
-			return -1;
-		}
-	}
-	else if(!strcmp(recvbuf, "trace_stop")) {
-		DBG("trace stop");
-
-		result = ltt_trace_stop(trace_name);
-		if(result < 0) {
-			ERR("ltt_trace_stop failed");
-			return -1;
-		}
-	}
-	else if(!strcmp(recvbuf, "trace_destroy")) {
-
-		DBG("trace destroy");
-
-		result = ltt_trace_destroy(trace_name, 0);
-		if(result < 0) {
-			ERR("ltt_trace_destroy failed");
-			return -1;
-		}
-	}
-	else if(nth_token_is(recvbuf, "get_shmid", 0) == 1) {
-		do_cmd_get_shmid(recvbuf, src);
-	}
-	else if(nth_token_is(recvbuf, "get_n_subbufs", 0) == 1) {
-		do_cmd_get_n_subbufs(recvbuf, src);
-	}
-	else if(nth_token_is(recvbuf, "get_subbuf_size", 0) == 1) {
-		do_cmd_get_subbuf_size(recvbuf, src);
-	}
-	else if(nth_token_is(recvbuf, "load_probe_lib", 0) == 1) {
+	case LOAD_PROBE_LIB:
+	{
 		char *libfile;
 
-		libfile = nth_token(recvbuf, 1);
+		/* FIXME: No functionality at all... */
+		libfile = recv_buf;
 
 		DBG("load_probe_lib loading %s", libfile);
 
-		free(libfile);
+		break;
 	}
-	else if(nth_token_is(recvbuf, "get_subbuffer", 0) == 1) {
-		do_cmd_get_subbuffer(recvbuf, src);
-	}
-	else if(nth_token_is(recvbuf, "put_subbuffer", 0) == 1) {
-		do_cmd_put_subbuffer(recvbuf, src);
-	}
-	else if(nth_token_is(recvbuf, "set_subbuf_size", 0) == 1) {
-		do_cmd_set_subbuf_size(recvbuf, src);
-	}
-	else if(nth_token_is(recvbuf, "set_subbuf_num", 0) == 1) {
-		do_cmd_set_subbuf_num(recvbuf, src);
-	}
-	else if(nth_token_is(recvbuf, "enable_marker", 0) == 1) {
-		char *channel_slash_name = nth_token(recvbuf, 1);
-		char channel_name[256]="";
-		char marker_name[256]="";
+	case GET_PIDUNIQUE:
+	{
+		struct ustcomm_pidunique *pid_msg;
+		pid_msg = (struct ustcomm_pidunique *)send_buf;
 
-		result = sscanf(channel_slash_name, "%255[^/]/%255s", channel_name, marker_name);
+		pid_msg->pidunique = pidunique;
+		reply_header->size = sizeof(pid_msg);
 
-		if(channel_name == NULL || marker_name == NULL) {
-			WARN("invalid marker name");
-			goto next_cmd;
+		goto send_response;
+
+	}
+	case GET_SOCK_PATH:
+	{
+		struct ustcomm_sock_path *sock_msg;
+		char *sock_path_env;
+
+		sock_msg = (struct ustcomm_sock_path *)send_buf;
+
+		sock_path_env = getenv("UST_DAEMON_SOCKET");
+
+		if (!sock_path_env) {
+			result = ustcomm_pack_sock_path(reply_header,
+							sock_msg,
+							SOCK_DIR "/ustd");
+
+		} else {
+			result = ustcomm_pack_sock_path(reply_header,
+							sock_msg,
+							sock_path_env);
 		}
+		reply_header->result = result;
 
-		result = ltt_marker_connect(channel_name, marker_name, "default");
-		if(result < 0) {
-			WARN("could not enable marker; channel=%s, name=%s", channel_name, marker_name);
-		}
+		goto send_response;
 	}
-	else if(nth_token_is(recvbuf, "disable_marker", 0) == 1) {
-		char *channel_slash_name = nth_token(recvbuf, 1);
-		char *marker_name;
-		char *channel_name;
+	default:
+		reply_header->result =
+			process_simple_client_cmd(recv_header->command,
+						  recv_buf);
+		goto send_response;
 
-		result = sscanf(channel_slash_name, "%a[^/]/%as", &channel_name, &marker_name);
-
-		if(marker_name == NULL) {
-		}
-
-		result = ltt_marker_disconnect(channel_name, marker_name, "default");
-		if(result < 0) {
-			WARN("could not disable marker; channel=%s, name=%s", channel_name, marker_name);
-		}
-	}
-	else if(nth_token_is(recvbuf, "get_pidunique", 0) == 1) {
-		char *reply;
-
-		asprintf(&reply, "%lld", pidunique);
-
-		result = ustcomm_send_reply(&ustcomm_app.server, reply, src);
-		if(result) {
-			ERR("listener: get_pidunique: ustcomm_send_reply failed");
-			goto next_cmd;
-		}
-
-		free(reply);
-	}
-	else if(nth_token_is(recvbuf, "get_sock_path", 0) == 1) {
-		char *reply = getenv("UST_DAEMON_SOCKET");
-		if(!reply) {
-			asprintf(&reply, "%s/%s", SOCK_DIR, "ustd");
-			result = ustcomm_send_reply(&ustcomm_app.server, reply, src);
-			free(reply);
-		}
-		else {
-			result = ustcomm_send_reply(&ustcomm_app.server, reply, src);
-		}
-		if(result)
-			ERR("ustcomm_send_reply failed");
-	}
-	else if(nth_token_is(recvbuf, "set_sock_path", 0) == 1) {
-		char *sock_path = nth_token(recvbuf, 1);
-		result = setenv("UST_DAEMON_SOCKET", sock_path, 1);
-		if(result)
-			ERR("cannot set UST_DAEMON_SOCKET environment variable");
-	}
-	else if(nth_token_is(recvbuf, "force_switch", 0) == 1) {
-		do_cmd_force_switch();
-	}
-	else {
-		ERR("unable to parse message: %s", recvbuf);
 	}
 
-next_cmd:
+	return;
 
-	return 0;
+send_response:
+	ustcomm_send(sock, reply_header, send_buf);
 }
+
+#define MAX_EVENTS 10
 
 void *listener_main(void *p)
 {
-	int result;
+	struct ustcomm_sock *epoll_sock;
+	struct epoll_event events[MAX_EVENTS];
+	struct sockaddr addr;
+	int accept_fd, nfds, result, i, addr_size;
 
 	DBG("LISTENER");
 
 	pthread_cleanup_push(listener_cleanup, NULL);
 
 	for(;;) {
-		struct mpentries mpent;
-
-		multipoll_init(&mpent);
-
-		blocked_consumers_add_to_mp(&mpent);
-		ustcomm_mp_add_app_clients(&mpent, &ustcomm_app, process_client_cmd);
-
-		result = multipoll_poll(&mpent, -1);
-		if(result == -1) {
-			ERR("error in multipoll_poll");
+		nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+		if (nfds == -1) {
+			PERROR("listener_main: epoll_wait failed");
+			continue;
 		}
 
-		multipoll_destroy(&mpent);
+		for (i = 0; i < nfds; i++) {
+			epoll_sock = (struct ustcomm_sock *)events[i].data.ptr;
+			if (epoll_sock == listen_sock) {
+				addr_size = sizeof(struct sockaddr);
+				accept_fd = accept(epoll_sock->fd,
+						   &addr,
+						   (socklen_t *)&addr_size);
+				if (accept_fd == -1) {
+					PERROR("listener_main: accept failed");
+					continue;
+				}
+				ustcomm_init_sock(accept_fd, epoll_fd,
+						 &ust_socks);
+			} else {
+				memset(receive_header, 0,
+				       sizeof(*receive_header));
+				memset(receive_buffer, 0,
+				       sizeof(receive_buffer));
+				result = ustcomm_recv(epoll_sock->fd,
+						      receive_header,
+						      receive_buffer);
+				if (result == 0) {
+					ustcomm_del_sock(epoll_sock, 0);
+				} else {
+					process_client_cmd(receive_header,
+							   receive_buffer,
+							   epoll_sock->fd);
+				}
+			}
+		}
 	}
 
 	pthread_cleanup_pop(1);
@@ -1072,7 +1089,7 @@ void create_listener(void)
 	sigset_t sig_all_blocked;
 	sigset_t orig_parent_mask;
 
-	if(have_listener) {
+	if (have_listener) {
 		WARN("not creating listener because we already had one");
 		return;
 	}
@@ -1086,28 +1103,22 @@ void create_listener(void)
 	sigfillset(&sig_all_blocked);
 
 	result = pthread_sigmask(SIG_SETMASK, &sig_all_blocked, &orig_parent_mask);
-	if(result) {
+	if (result) {
 		PERROR("pthread_sigmask: %s", strerror(result));
 	}
 
 	result = pthread_create(&listener_thread, NULL, listener_main, NULL);
-	if(result == -1) {
+	if (result == -1) {
 		PERROR("pthread_create");
 	}
 
 	/* Restore original signal mask in parent */
 	result = pthread_sigmask(SIG_SETMASK, &orig_parent_mask, NULL);
-	if(result) {
+	if (result) {
 		PERROR("pthread_sigmask: %s", strerror(result));
-	}
-	else {
+	} else {
 		have_listener = 1;
 	}
-}
-
-static int init_socket(void)
-{
-	return ustcomm_init_app(getpid(), &ustcomm_app);
 }
 
 #define AUTOPROBE_DISABLED      0
@@ -1123,12 +1134,11 @@ static void auto_probe_connect(struct marker *m)
 	char* concat_name = NULL;
 	const char *probe_name = "default";
 
-	if(autoprobe_method == AUTOPROBE_DISABLED) {
+	if (autoprobe_method == AUTOPROBE_DISABLED) {
 		return;
-	}
-	else if(autoprobe_method == AUTOPROBE_ENABLE_REGEX) {
+	} else if (autoprobe_method == AUTOPROBE_ENABLE_REGEX) {
 		result = asprintf(&concat_name, "%s/%s", m->channel, m->name);
-		if(result == -1) {
+		if (result == -1) {
 			ERR("auto_probe_connect: asprintf failed (marker %s/%s)",
 				m->channel, m->name);
 			return;
@@ -1141,11 +1151,46 @@ static void auto_probe_connect(struct marker *m)
 	}
 
 	result = ltt_marker_connect(m->channel, m->name, probe_name);
-	if(result && result != -EEXIST)
+	if (result && result != -EEXIST)
 		ERR("ltt_marker_connect (marker = %s/%s, errno = %d)", m->channel, m->name, -result);
 
 	DBG("auto connected marker %s (addr: %p) %s to probe default", m->channel, m, m->name);
 
+}
+
+static struct ustcomm_sock * init_app_socket(int epoll_fd)
+{
+	char *name;
+	int result;
+	struct ustcomm_sock *sock;
+
+	result = asprintf(&name, "%s/%d", SOCK_DIR, (int)getpid());
+	if (result < 0) {
+		ERR("string overflow allocating socket name, "
+		    "UST thread bailing");
+		return NULL;
+	}
+
+	result = ensure_dir_exists(SOCK_DIR);
+	if (result == -1) {
+		ERR("Unable to create socket directory %s, UST thread bailing",
+		    SOCK_DIR);
+		goto free_name;
+	}
+
+	sock = ustcomm_init_named_socket(name, epoll_fd);
+	if (!sock) {
+		ERR("Error initializing named socket (%s). Check that directory"
+		    "exists and that it is writable. UST thread bailing", name);
+		goto free_name;
+	}
+
+	free(name);
+	return sock;
+
+free_name:
+	free(name);
+	return NULL;
 }
 
 static void __attribute__((constructor)) init()
@@ -1162,19 +1207,29 @@ static void __attribute__((constructor)) init()
 	 * pid, (before and after an exec).
 	 */
 	pidunique = make_pidunique();
+	processpid = getpid();
 
 	DBG("Tracectl constructor");
 
-	result = init_socket();
-	if(result == -1) {
-		ERR("init_socket error");
+	/* Set up epoll */
+	epoll_fd = epoll_create(MAX_EVENTS);
+	if (epoll_fd == -1) {
+		ERR("epoll_create failed, tracing shutting down");
+		return;
+	}
+
+	/* Create the socket */
+	listen_sock = init_app_socket(epoll_fd);
+	if (!listen_sock) {
+		ERR("failed to create application socket,"
+		    " tracing shutting down");
 		return;
 	}
 
 	create_listener();
 
 	autoprobe_val = getenv("UST_AUTOPROBE");
-	if(autoprobe_val) {
+	if (autoprobe_val) {
 		struct marker_iter iter;
 
 		DBG("Autoprobe enabled.");
@@ -1188,7 +1243,7 @@ static void __attribute__((constructor)) init()
 		/* first, set the callback that will connect the
 		 * probe on new markers
 		 */
-		if(autoprobe_val[0] == '/') {
+		if (autoprobe_val[0] == '/') {
 			result = regcomp(&autoprobe_regex, autoprobe_val+1, 0);
 			if (result) {
 				char regexerr[150];
@@ -1196,12 +1251,10 @@ static void __attribute__((constructor)) init()
 				regerror(result, &autoprobe_regex, regexerr, sizeof(regexerr));
 				ERR("cannot parse regex %s (%s), will ignore UST_AUTOPROBE", autoprobe_val, regexerr);
 				/* don't crash the application just for this */
-			}
-			else {
+			} else {
 				autoprobe_method = AUTOPROBE_ENABLE_REGEX;
 			}
-		}
-		else {
+		} else {
 			/* just enable all instrumentation */
 			autoprobe_method = AUTOPROBE_ENABLE_ALL;
 		}
@@ -1213,51 +1266,49 @@ static void __attribute__((constructor)) init()
 		marker_iter_start(&iter);
 
 		DBG("now iterating on markers already registered");
-		while(iter.marker) {
+		while (iter.marker) {
 			DBG("now iterating on marker %s", iter.marker->name);
 			auto_probe_connect(iter.marker);
 			marker_iter_next(&iter);
 		}
 	}
 
-	if(getenv("UST_OVERWRITE")) {
+	if (getenv("UST_OVERWRITE")) {
 		int val = atoi(getenv("UST_OVERWRITE"));
-		if(val == 0 || val == 1) {
+		if (val == 0 || val == 1) {
 			STORE_SHARED(ust_channels_overwrite_by_default, val);
-		}
-		else {
+		} else {
 			WARN("invalid value for UST_OVERWRITE");
 		}
 	}
 
-	if(getenv("UST_AUTOCOLLECT")) {
+	if (getenv("UST_AUTOCOLLECT")) {
 		int val = atoi(getenv("UST_AUTOCOLLECT"));
-		if(val == 0 || val == 1) {
+		if (val == 0 || val == 1) {
 			STORE_SHARED(ust_channels_request_collection_by_default, val);
-		}
-		else {
+		} else {
 			WARN("invalid value for UST_AUTOCOLLECT");
 		}
 	}
 
 	subbuffer_size_val = getenv("UST_SUBBUF_SIZE");
-	if(subbuffer_size_val) {
+	if (subbuffer_size_val) {
 		sscanf(subbuffer_size_val, "%u", &subbuffer_size);
 		power = pow2_higher_or_eq(subbuffer_size);
-		if(power != subbuffer_size)
+		if (power != subbuffer_size)
 			WARN("using the next power of two for buffer size = %u\n", power);
 		chan_infos[LTT_CHANNEL_UST].def_subbufsize = power;
 	}
 
 	subbuffer_count_val = getenv("UST_SUBBUF_NUM");
-	if(subbuffer_count_val) {
+	if (subbuffer_count_val) {
 		sscanf(subbuffer_count_val, "%u", &subbuffer_count);
-		if(subbuffer_count < 2)
+		if (subbuffer_count < 2)
 			subbuffer_count = 2;
 		chan_infos[LTT_CHANNEL_UST].def_subbufcount = subbuffer_count;
 	}
 
-	if(getenv("UST_TRACE")) {
+	if (getenv("UST_TRACE")) {
 		char trace_name[] = "auto";
 		char trace_type[] = "ustrelay";
 
@@ -1295,25 +1346,25 @@ static void __attribute__((constructor)) init()
 		ltt_channels_register("ust");
 
 		result = ltt_trace_setup(trace_name);
-		if(result < 0) {
+		if (result < 0) {
 			ERR("ltt_trace_setup failed");
 			return;
 		}
 
 		result = ltt_trace_set_type(trace_name, trace_type);
-		if(result < 0) {
+		if (result < 0) {
 			ERR("ltt_trace_set_type failed");
 			return;
 		}
 
 		result = ltt_trace_alloc(trace_name);
-		if(result < 0) {
+		if (result < 0) {
 			ERR("ltt_trace_alloc failed");
 			return;
 		}
 
 		result = ltt_trace_start(trace_name);
-		if(result < 0) {
+		if (result < 0) {
 			ERR("ltt_trace_start failed");
 			return;
 		}
@@ -1349,12 +1400,12 @@ static void destroy_traces(void)
 	DBG("destructor stopping traces");
 
 	result = ltt_trace_stop("auto");
-	if(result == -1) {
+	if (result == -1) {
 		ERR("ltt_trace_stop error");
 	}
 
 	result = ltt_trace_destroy("auto", 0);
-	if(result == -1) {
+	if (result == -1) {
 		ERR("ltt_trace_destroy error");
 	}
 }
@@ -1367,7 +1418,7 @@ static int trace_recording(void)
 	ltt_lock_traces();
 
 	list_for_each_entry(trace, &ltt_traces.head, list) {
-		if(trace->active) {
+		if (trace->active) {
 			retval = 1;
 			break;
 		}
@@ -1378,24 +1429,17 @@ static int trace_recording(void)
 	return retval;
 }
 
-#if 0
-static int have_consumer(void)
-{
-	return !list_empty(&blocked_consumers);
-}
-#endif
-
 int restarting_usleep(useconds_t usecs)
 {
-        struct timespec tv; 
-        int result; 
- 
-        tv.tv_sec = 0; 
-        tv.tv_nsec = usecs * 1000; 
- 
-        do { 
-                result = nanosleep(&tv, &tv); 
-        } while(result == -1 && errno == EINTR); 
+        struct timespec tv;
+        int result;
+
+        tv.tv_sec = 0;
+        tv.tv_nsec = usecs * 1000;
+
+        do {
+                result = nanosleep(&tv, &tv);
+        } while (result == -1 && errno == EINTR);
 
 	return result;
 }
@@ -1404,15 +1448,15 @@ static void stop_listener(void)
 {
 	int result;
 
-	if(!have_listener)
+	if (!have_listener)
 		return;
 
 	result = pthread_cancel(listener_thread);
-	if(result != 0) {
+	if (result != 0) {
 		ERR("pthread_cancel: %s", strerror(result));
 	}
 	result = pthread_join(listener_thread, NULL);
-	if(result != 0) {
+	if (result != 0) {
 		ERR("pthread_join: %s", strerror(result));
 	}
 }
@@ -1429,15 +1473,19 @@ static void stop_listener(void)
 
 static void __attribute__((destructor)) keepalive()
 {
-	if(trace_recording() && LOAD_SHARED(buffers_to_export)) {
+	if (processpid != getpid()) {
+		return;
+	}
+
+	if (trace_recording() && LOAD_SHARED(buffers_to_export)) {
 		int total = 0;
 		DBG("Keeping process alive for consumer daemon...");
-		while(LOAD_SHARED(buffers_to_export)) {
+		while (LOAD_SHARED(buffers_to_export)) {
 			const int interv = 200000;
 			restarting_usleep(interv);
 			total += interv;
 
-			if(total >= 3000000) {
+			if (total >= 3000000) {
 				WARN("non-consumed buffers remaining after wait limit; not waiting anymore");
 				break;
 			}
@@ -1472,42 +1520,66 @@ void ust_potential_exec(void)
 
 static void ust_fork(void)
 {
-	struct blocked_consumer *bc;
-	struct blocked_consumer *deletable_bc = NULL;
+	struct ust_buffer *buf, *buf_tmp;
+	struct ustcomm_sock *sock, *sock_tmp;
 	int result;
 
 	/* FIXME: technically, the locks could have been taken before the fork */
 	DBG("ust: forking");
+
+	/* Get the pid of the new process */
+	processpid = getpid();
 
 	/* break lock if necessary */
 	ltt_unlock_traces();
 
 	ltt_trace_stop("auto");
 	ltt_trace_destroy("auto", 1);
-	/* Delete all active connections */
-	ustcomm_close_all_connections(&ustcomm_app.server);
-
-	/* Delete all blocked consumers */
-	list_for_each_entry(bc, &blocked_consumers, list) {
-		result = close(bc->fd_producer);
-		if(result == -1) {
-			PERROR("close");
-		}
-		free(deletable_bc);
-		deletable_bc = bc;
-		list_del(&bc->list);
+	/* Delete all active connections, but leave them in the epoll set */
+	list_for_each_entry_safe(sock, sock_tmp, &ust_socks, list) {
+		ustcomm_del_sock(sock, 1);
 	}
 
-	/* free app, keeping socket file */
-	ustcomm_fini_app(&ustcomm_app, 1);
+	/* Delete all blocked consumers */
+	list_for_each_entry_safe(buf, buf_tmp, &open_buffers_list,
+				 open_buffers_list) {
+		result = close(buf->data_ready_fd_read);
+		if (result == -1) {
+			PERROR("close");
+		}
+		result = close(buf->data_ready_fd_write);
+		if (result == -1) {
+			PERROR("close");
+		}
+		list_del(&buf->open_buffers_list);
+	}
 
+	/* Clean up the listener socket and epoll, keeping the scoket file */
+	ustcomm_del_named_sock(listen_sock, 1);
+	close(epoll_fd);
+
+	/* Re-start the launch sequence */
 	STORE_SHARED(buffers_to_export, 0);
 	have_listener = 0;
-	init_socket();
+
+	/* Set up epoll */
+	epoll_fd = epoll_create(MAX_EVENTS);
+	if (epoll_fd == -1) {
+		ERR("epoll_create failed, tracing shutting down");
+		return;
+	}
+
+	/* Create the socket */
+	listen_sock = init_app_socket(epoll_fd);
+	if (!listen_sock) {
+		ERR("failed to create application socket,"
+		    " tracing shutting down");
+		return;
+	}
 	create_listener();
 	ltt_trace_setup("auto");
 	result = ltt_trace_set_type("auto", "ustrelay");
-	if(result < 0) {
+	if (result < 0) {
 		ERR("ltt_trace_set_type failed");
 		return;
 	}
@@ -1534,7 +1606,7 @@ void ust_before_fork(ust_fork_info_t *fork_info)
         /* Disable signals */
         sigfillset(&all_sigs);
         result = sigprocmask(SIG_BLOCK, &all_sigs, &fork_info->orig_sigs);
-        if(result == -1) {
+        if (result == -1) {
                 PERROR("sigprocmask");
                 return;
         }
@@ -1547,7 +1619,7 @@ static void ust_after_fork_common(ust_fork_info_t *fork_info)
 
         /* Restore signals */
         result = sigprocmask(SIG_SETMASK, &fork_info->orig_sigs, NULL);
-        if(result == -1) {
+        if (result == -1) {
                 PERROR("sigprocmask");
                 return;
         }

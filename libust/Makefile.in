@@ -75,10 +75,11 @@ LTLIBRARIES = $(lib_LTLIBRARIES)
 libust_la_DEPENDENCIES = $(top_builddir)/snprintf/libustsnprintf.la \
 	$(top_builddir)/libustcomm/libustcomm.la
 am_libust_la_OBJECTS = libust_la-marker.lo libust_la-tracepoint.lo \
-	libust_la-channels.lo libust_la-marker-control.lo \
-	libust_la-buffers.lo libust_la-tracer.lo \
-	libust_la-tracercore.lo libust_la-serialize.lo \
-	libust_la-tracectl.lo libust_la-type-serializer.lo
+	libust_la-trace_event.lo libust_la-channels.lo \
+	libust_la-marker-control.lo libust_la-buffers.lo \
+	libust_la-tracer.lo libust_la-tracercore.lo \
+	libust_la-serialize.lo libust_la-tracectl.lo \
+	libust_la-type-serializer.lo
 libust_la_OBJECTS = $(am_libust_la_OBJECTS)
 AM_V_lt = $(am__v_lt_$(V))
 am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
@@ -240,6 +241,7 @@ lib_LTLIBRARIES = libust.la
 libust_la_SOURCES = \
 	marker.c \
 	tracepoint.c \
+	trace_event.c \
 	channels.c \
 	channels.h \
 	marker-control.c \
@@ -343,6 +345,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libust_la-marker-control.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libust_la-marker.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libust_la-serialize.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libust_la-trace_event.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libust_la-tracectl.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libust_la-tracepoint.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libust_la-tracer.Plo@am__quote@
@@ -388,6 +391,14 @@ libust_la-tracepoint.lo: tracepoint.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='tracepoint.c' object='libust_la-tracepoint.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libust_la_CFLAGS) $(CFLAGS) -c -o libust_la-tracepoint.lo `test -f 'tracepoint.c' || echo '$(srcdir)/'`tracepoint.c
+
+libust_la-trace_event.lo: trace_event.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libust_la_CFLAGS) $(CFLAGS) -MT libust_la-trace_event.lo -MD -MP -MF $(DEPDIR)/libust_la-trace_event.Tpo -c -o libust_la-trace_event.lo `test -f 'trace_event.c' || echo '$(srcdir)/'`trace_event.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libust_la-trace_event.Tpo $(DEPDIR)/libust_la-trace_event.Plo
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='trace_event.c' object='libust_la-trace_event.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libust_la_CFLAGS) $(CFLAGS) -c -o libust_la-trace_event.lo `test -f 'trace_event.c' || echo '$(srcdir)/'`trace_event.c
 
 libust_la-channels.lo: channels.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libust_la_CFLAGS) $(CFLAGS) -MT libust_la-channels.lo -MD -MP -MF $(DEPDIR)/libust_la-channels.Tpo -c -o libust_la-channels.lo `test -f 'channels.c' || echo '$(srcdir)/'`channels.c

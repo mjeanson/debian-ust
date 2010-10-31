@@ -51,8 +51,7 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 LTLIBRARIES = $(noinst_LTLIBRARIES)
 libustcomm_la_LIBADD =
-am_libustcomm_la_OBJECTS = libustcomm_la-ustcomm.lo \
-	libustcomm_la-multipoll.lo
+am_libustcomm_la_OBJECTS = libustcomm_la-ustcomm.lo
 libustcomm_la_OBJECTS = $(am_libustcomm_la_OBJECTS)
 AM_V_lt = $(am__v_lt_$(V))
 am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
@@ -213,9 +212,7 @@ AM_CFLAGS = -fno-strict-aliasing
 noinst_LTLIBRARIES = libustcomm.la
 libustcomm_la_SOURCES = \
 	ustcomm.h \
-	ustcomm.c \
-	multipoll.h \
-	multipoll.c
+	ustcomm.c
 
 libustcomm_la_LDFLAGS = -no-undefined -static
 libustcomm_la_CFLAGS = -DUST_COMPONENT="libustcomm" -fPIC -fno-strict-aliasing
@@ -271,7 +268,6 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libustcomm_la-multipoll.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libustcomm_la-ustcomm.Plo@am__quote@
 
 .c.o:
@@ -305,14 +301,6 @@ libustcomm_la-ustcomm.lo: ustcomm.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='ustcomm.c' object='libustcomm_la-ustcomm.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustcomm_la_CFLAGS) $(CFLAGS) -c -o libustcomm_la-ustcomm.lo `test -f 'ustcomm.c' || echo '$(srcdir)/'`ustcomm.c
-
-libustcomm_la-multipoll.lo: multipoll.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustcomm_la_CFLAGS) $(CFLAGS) -MT libustcomm_la-multipoll.lo -MD -MP -MF $(DEPDIR)/libustcomm_la-multipoll.Tpo -c -o libustcomm_la-multipoll.lo `test -f 'multipoll.c' || echo '$(srcdir)/'`multipoll.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libustcomm_la-multipoll.Tpo $(DEPDIR)/libustcomm_la-multipoll.Plo
-@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='multipoll.c' object='libustcomm_la-multipoll.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustcomm_la_CFLAGS) $(CFLAGS) -c -o libustcomm_la-multipoll.lo `test -f 'multipoll.c' || echo '$(srcdir)/'`multipoll.c
 
 mostlyclean-libtool:
 	-rm -f *.lo

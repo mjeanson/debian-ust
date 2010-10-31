@@ -32,6 +32,7 @@ enum command {
 	STOP_TRACE,
 	DESTROY_TRACE,
 	LIST_MARKERS,
+	LIST_TRACE_EVENTS,
 	ENABLE_MARKER,
 	DISABLE_MARKER,
 	GET_ONLINE_PIDS,
@@ -73,6 +74,7 @@ Commands:\n\
     --enable-marker \"CHANNEL/MARKER\"\tEnable a marker\n\
     --disable-marker \"CHANNEL/MARKER\"\tDisable a marker\n\
     --list-markers\t\t\tList the markers of the process, their\n\t\t\t\t\t  state and format string\n\
+    --list-trace-events\t\t\tList the trace-events of the process\n\
     --force-switch\t\t\tForce a subbuffer switch\n\
 \
 ");
@@ -94,6 +96,7 @@ int parse_opts_long(int argc, char **argv, struct ust_opts *opts)
 			{ "stop-trace", 0, 0, STOP_TRACE },
 			{ "destroy-trace", 0, 0, DESTROY_TRACE },
 			{ "list-markers", 0, 0, LIST_MARKERS },
+			{ "list-trace-events", 0, 0, LIST_TRACE_EVENTS},
 			{ "enable-marker", 1, 0, ENABLE_MARKER },
 			{ "disable-marker", 1, 0, DISABLE_MARKER },
 			{ "help", 0, 0, 'h' },
@@ -166,10 +169,58 @@ int parse_opts_long(int argc, char **argv, struct ust_opts *opts)
 	return 0;
 }
 
+static int scan_ch_marker(const char *channel_marker, char **channel,
+			char **marker)
+{
+	int result;
+
+	*channel = NULL;
+	*marker = NULL;
+
+	result = sscanf(channel_marker, "%a[^/]/%as", channel, marker);
+	if (result != 2) {
+		if (errno) {
+			PERROR("Failed to read channel and marker names");
+		} else {
+			ERR("Failed to parse marker and channel names");
+		}
+		if (*channel) {
+			free(*channel);
+		}
+		if (*marker) {
+			free(*marker);
+		}
+		return -1;
+	} else {
+		return 0;
+	}
+}
+
+static int scan_ch_and_num(const char *ch_num, char **channel, unsigned int *num)
+{
+	int result;
+
+	*channel = NULL;
+
+	result = sscanf(ch_num, "%a[^/]/%u", channel, num);
+	if (result != 2) {
+		if (errno) {
+			PERROR("Failed to parse channel and number");
+		} else {
+			ERR("Failed to parse channel and number");
+		}
+		if (*channel) {
+			free(*channel);
+		}
+		return -1;
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	pid_t *pidit;
 	int result;
+	int retval = EXIT_SUCCESS;
 	char *tmp;
 	struct ust_opts opts;
 
@@ -215,6 +266,8 @@ int main(int argc, char *argv[])
 
 	pidit = opts.pids;
 	struct marker_status *cmsf = NULL;
+	struct trace_event_status *tes = NULL;
+	unsigned int i = 0;
 
 	while(*pidit != -1) {
 		switch (opts.cmd) {
@@ -222,6 +275,7 @@ int main(int argc, char *argv[])
 				result = ustcmd_create_trace(*pidit);
 				if (result) {
 					ERR("error while trying to create trace with PID %u\n", (unsigned int) *pidit);
+					retval = EXIT_FAILURE;
 					break;
 				}
 				break;
@@ -230,6 +284,7 @@ int main(int argc, char *argv[])
 				result = ustcmd_start_trace(*pidit);
 				if (result) {
 					ERR("error while trying to for trace with PID %u\n", (unsigned int) *pidit);
+					retval = EXIT_FAILURE;
 					break;
 				}
 				break;
@@ -238,6 +293,7 @@ int main(int argc, char *argv[])
 				result = ustcmd_stop_trace(*pidit);
 				if (result) {
 					ERR("error while trying to stop trace for PID %u\n", (unsigned int) *pidit);
+					retval = EXIT_FAILURE;
 					break;
 				}
 				break;
@@ -246,6 +302,7 @@ int main(int argc, char *argv[])
 				result = ustcmd_destroy_trace(*pidit);
 				if (result) {
 					ERR("error while trying to destroy trace with PID %u\n", (unsigned int) *pidit);
+					retval = EXIT_FAILURE;
 					break;
 				}
 				break;
@@ -253,12 +310,11 @@ int main(int argc, char *argv[])
 			case LIST_MARKERS:
 				cmsf = NULL;
 				if (ustcmd_get_cmsf(&cmsf, *pidit)) {
-					fprintf(stderr,
-						"error while trying to list markers for"
-						" PID %u\n", (unsigned int) *pidit);
+					ERR("error while trying to list markers for PID %u\n", (unsigned int) *pidit);
+					retval = EXIT_FAILURE;
 					break;
 				}
-				unsigned int i = 0;
+				i = 0;
 				while (cmsf[i].channel != NULL) {
 					printf("{PID: %u, channel/marker: %s/%s, "
 						"state: %u, fmt: %s}\n",
@@ -272,27 +328,102 @@ int main(int argc, char *argv[])
 				ustcmd_free_cmsf(cmsf);
 				break;
 
+			case LIST_TRACE_EVENTS:
+				tes = NULL;
+				if (ustcmd_get_tes(&tes, *pidit)) {
+					ERR("error while trying to list "
+					    "trace_events for PID %u\n",
+					    (unsigned int) *pidit);
+					break;
+				}
+				i = 0;
+				while (tes[i].name != NULL) {
+					printf("{PID: %u, trace_event: %s}\n",
+					       (unsigned int) *pidit,
+					       tes[i].name);
+					++i;
+				}
+				ustcmd_free_tes(tes);
+
+				break;
 			case ENABLE_MARKER:
-				if(opts.regex)
-					ustcmd_set_marker_state(opts.regex, 1, *pidit);
+				if (opts.regex) {
+					char *channel, *marker;
+
+					if (scan_ch_marker(opts.regex,
+							   &channel, &marker)) {
+						retval = EXIT_FAILURE;
+						break;
+					}
+					if (ustcmd_set_marker_state(channel, marker, 1, *pidit)) {
+						PERROR("error while trying to enable marker %s with PID %u",
+						       opts.regex, (unsigned int) *pidit);
+						retval = EXIT_FAILURE;
+					}
+				}
+
 				break;
 			case DISABLE_MARKER:
-				if(opts.regex)
-					ustcmd_set_marker_state(opts.regex, 0, *pidit);
+				if (opts.regex) {
+					char *channel, *marker;
+
+					if (scan_ch_marker(opts.regex,
+							   &channel, &marker)) {
+						retval = EXIT_FAILURE;
+						break;
+					}
+					if (ustcmd_set_marker_state(channel, marker, 0, *pidit)) {
+						ERR("error while trying to disable marker %s with PID %u\n",
+								opts.regex, (unsigned int) *pidit);
+						retval = EXIT_FAILURE;
+					}
+				}
 				break;
 
 			case SET_SUBBUF_SIZE:
-				ustcmd_set_subbuf_size(opts.regex, *pidit);
+				if (opts.regex) {
+					char *channel;
+					unsigned int size;
+					if (scan_ch_and_num(opts.regex, &channel, &size)) {
+						retval = EXIT_FAILURE;
+						break;
+					}
+
+					if (ustcmd_set_subbuf_size(channel, size, *pidit)) {
+						ERR("error while trying to set the size of subbuffers with PID %u\n",
+								(unsigned int) *pidit);
+						retval = EXIT_FAILURE;
+					}
+				}
 				break;
 
 			case SET_SUBBUF_NUM:
-				ustcmd_set_subbuf_num(opts.regex, *pidit);
+				if (opts.regex) {
+					char *channel;
+					unsigned int num;
+					if (scan_ch_and_num(opts.regex, &channel, &num)) {
+						retval = EXIT_FAILURE;
+						break;
+					}
+
+					if (num < 2) {
+						ERR("Subbuffer count should be greater or equal to 2");
+						retval = EXIT_FAILURE;
+						break;
+					}
+					if (ustcmd_set_subbuf_num(channel, num, *pidit)) {
+						ERR("error while trying to set the number of subbuffers with PID %u\n",
+								(unsigned int) *pidit);
+						retval = EXIT_FAILURE;
+					}
+				}
 				break;
 
 			case GET_SUBBUF_SIZE:
 				result = ustcmd_get_subbuf_size(opts.regex, *pidit);
 				if (result == -1) {
 					ERR("error while trying to get_subuf_size with PID %u\n", (unsigned int) *pidit);
+					retval = EXIT_FAILURE;
 					break;
 				}
 
@@ -303,6 +434,7 @@ int main(int argc, char *argv[])
 				result = ustcmd_get_subbuf_num(opts.regex, *pidit);
 				if (result == -1) {
 					ERR("error while trying to get_subuf_num with PID %u\n", (unsigned int) *pidit);
+					retval = EXIT_FAILURE;
 					break;
 				}
 
@@ -313,7 +445,7 @@ int main(int argc, char *argv[])
 				result = ustcmd_alloc_trace(*pidit);
 				if (result) {
 					ERR("error while trying to alloc trace with PID %u\n", (unsigned int) *pidit);
-					break;
+					retval = EXIT_FAILURE;
 				}
 				break;
 
@@ -321,6 +453,7 @@ int main(int argc, char *argv[])
 				result = ustcmd_get_sock_path(&tmp, *pidit);
 				if (result) {
 					ERR("error while trying to get sock path for PID %u\n", (unsigned int) *pidit);
+					retval = EXIT_FAILURE;
 					break;
 				}
 				printf("the socket path is %s\n", tmp);
@@ -331,6 +464,7 @@ int main(int argc, char *argv[])
 				result = ustcmd_set_sock_path(opts.regex, *pidit);
 				if (result) {
 					ERR("error while trying to set sock path for PID %u\n", (unsigned int) *pidit);
+					retval = EXIT_FAILURE;
 				}
 				break;
 
@@ -338,12 +472,14 @@ int main(int argc, char *argv[])
 				result = ustcmd_force_switch(*pidit);
 				if (result) {
 					ERR("error while trying to force switch for PID %u\n", (unsigned int) *pidit);
+					retval = EXIT_FAILURE;
 				}
 				break;
 
 			default:
 				ERR("unknown command\n");
-			break;
+				retval = EXIT_FAILURE;
+				break;
 		}
 
 		pidit++;
@@ -356,6 +492,6 @@ int main(int argc, char *argv[])
 		free(opts.regex);
 	}
 
-	return 0;
+	return retval;
 }
 
