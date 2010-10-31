@@ -1,3 +1,9 @@
+ust (0.7-3) unstable; urgency=low
+
+  * [2c4036] Restore info-dir-section patch from previous NMU
+
+ -- Jon Bernard <jbernard@debian.org>  Sat, 30 Oct 2010 20:31:26 -0400
+
 ust (0.7-2.1) unstable; urgency=high
 
   * Non-maintainer upload.
