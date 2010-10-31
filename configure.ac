@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 #AC_PREREQ([2.63])
-AC_INIT([ust], [0.7], [pierre-marc dot fournier at polymtl dot ca])
+AC_INIT([ust], [0.8], [pierre-marc dot fournier at polymtl dot ca])
 AC_CONFIG_AUX_DIR([config])
 AC_CANONICAL_TARGET
 AC_CANONICAL_HOST
@@ -121,6 +121,10 @@ AC_CONFIG_FILES([
 	tests/test-libustinstr-malloc/Makefile
 	tests/dlopen/Makefile
 	tests/same_line_marker/Makefile
+	tests/trace_event/Makefile
+	tests/tracepoint/Makefile
+	tests/register_test/Makefile
+	tests/ustcmd_function_tests/Makefile
 	libustinstr-malloc/Makefile
 	libustfork/Makefile
 	libustd/Makefile

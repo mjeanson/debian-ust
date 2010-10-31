@@ -203,7 +203,7 @@ int ust_buffers_create_buf(struct ust_channel *channel, int cpu)
 
 static void ust_buffers_destroy_channel(struct kref *kref)
 {
-	struct ust_channel *chan = container_of(kref, struct ust_channel, kref);
+	struct ust_channel *chan = _ust_container_of(kref, struct ust_channel, kref);
 	free(chan);
 }
 
@@ -225,7 +225,7 @@ static void ust_buffers_destroy_buf(struct ust_buffer *buf)
 /* called from kref_put */
 static void ust_buffers_remove_buf(struct kref *kref)
 {
-	struct ust_buffer *buf = container_of(kref, struct ust_buffer, kref);
+	struct ust_buffer *buf = _ust_container_of(kref, struct ust_buffer, kref);
 	ust_buffers_destroy_buf(buf);
 }
 
@@ -592,7 +592,7 @@ static void ltt_relay_print_buffer_errors(struct ust_channel *channel, int cpu)
 
 static void ltt_relay_release_channel(struct kref *kref)
 {
-	struct ust_channel *ltt_chan = container_of(kref,
+	struct ust_channel *ltt_chan = _ust_container_of(kref,
 			struct ust_channel, kref);
 	free(ltt_chan->buf);
 }
@@ -777,11 +777,11 @@ static int ust_buffers_create_channel(const char *trace_name, struct ust_trace *
 	ltt_chan->commit_count_mask = (~0UL >> ltt_chan->n_subbufs_order);
 	ltt_chan->n_cpus = get_n_cpus();
 //ust//	ltt_chan->buf = percpu_alloc_mask(sizeof(struct ltt_channel_buf_struct), GFP_KERNEL, cpu_possible_map);
-	ltt_chan->buf = (void *) malloc(ltt_chan->n_cpus * sizeof(void *));
+	ltt_chan->buf = (void *) zmalloc(ltt_chan->n_cpus * sizeof(void *));
 	if(ltt_chan->buf == NULL) {
 		goto error;
 	}
-	ltt_chan->buf_struct_shmids = (int *) malloc(ltt_chan->n_cpus * sizeof(int));
+	ltt_chan->buf_struct_shmids = (int *) zmalloc(ltt_chan->n_cpus * sizeof(int));
 	if(ltt_chan->buf_struct_shmids == NULL)
 		goto free_buf;
 

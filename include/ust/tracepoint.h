@@ -4,6 +4,7 @@
 /*
  * Copyright (C) 2008 Mathieu Desnoyers <mathieu.desnoyers@polymtl.ca>
  * Copyright (C) 2009 Pierre-Marc Fournier
+ * Copyright (C) 2009 Steven Rostedt <rostedt@goodmis.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -32,16 +33,23 @@
 struct module;
 struct tracepoint;
 
+struct probe {
+	void *func;
+	void *data;
+};
+
 struct tracepoint {
 	const char *name;		/* Tracepoint name */
 	DEFINE_IMV(char, state);	/* State. */
-	void **funcs;
+	struct probe *probes;
 } __attribute__((aligned(32)));		/*
 					 * Aligned on 32 bytes because it is
 					 * globally visible and gcc happily
 					 * align these on the structure size.
 					 * Keep in sync with vmlinux.lds.h.
 					 */
+
+#define PARAMS(args...) args
 
 #define TP_PROTO(args...)	args
 #define TP_ARGS(args...)	args
@@ -55,16 +63,20 @@ struct tracepoint {
  */
 #define __DO_TRACE(tp, proto, args)					\
 	do {								\
-		void **it_func;						\
+		struct probe *it_probe_ptr;				\
+		void *it_func;						\
+		void *__data;						\
 									\
-		rcu_read_lock(); /*ust rcu_read_lock_sched_notrace();	*/			\
-		it_func = rcu_dereference((tp)->funcs);			\
-		if (it_func) {						\
+		rcu_read_lock();					\
+		it_probe_ptr = rcu_dereference((tp)->probes);		\
+		if (it_probe_ptr) {					\
 			do {						\
-				((void(*)(proto))(*it_func))(args);	\
-			} while (*(++it_func));				\
+				it_func	= (it_probe_ptr)->func;		\
+				__data = (it_probe_ptr)->data;		\
+				((void(*)(proto))(it_func))(args);	\
+			} while ((++it_probe_ptr)->func);		\
 		}							\
-		rcu_read_unlock(); /*ust rcu_read_unlock_sched_notrace(); */			\
+		rcu_read_unlock();					\
 	} while (0)
 
 #define __CHECK_TRACE(name, generic, proto, args)			\
@@ -90,37 +102,47 @@ struct tracepoint {
  * If generic is true, a variable read is used.
  * If generic is false, immediate values are used.
  */
-#define DECLARE_TRACE(name, proto, args)				\
+#define __DECLARE_TRACE(name, proto, args, data_proto, data_args)	\
 	extern struct tracepoint __tracepoint_##name;			\
 	static inline void trace_##name(proto)				\
 	{								\
-		__CHECK_TRACE(name, 0, TP_PROTO(proto), TP_ARGS(args));	\
+		__CHECK_TRACE(name, 0, TP_PROTO(data_proto),		\
+			      TP_ARGS(data_args));			\
 	}								\
 	static inline void _trace_##name(proto)				\
 	{								\
-		__CHECK_TRACE(name, 1, TP_PROTO(proto), TP_ARGS(args));	\
+		__CHECK_TRACE(name, 1, TP_PROTO(data_proto),		\
+			      TP_ARGS(data_args));			\
 	}								\
-	static inline int register_trace_##name(void (*probe)(proto))	\
+	static inline int						\
+	register_trace_##name(void (*probe)(data_proto), void *data)	\
 	{								\
-		return tracepoint_probe_register(#name, (void *)probe);	\
+		return tracepoint_probe_register(#name, (void *)probe,	\
+						 data);			\
+									\
 	}								\
-	static inline int unregister_trace_##name(void (*probe)(proto))	\
+	static inline int						\
+	unregister_trace_##name(void (*probe)(data_proto), void *data)	\
 	{								\
-		return tracepoint_probe_unregister(#name, (void *)probe);\
+		return tracepoint_probe_unregister(#name, (void *)probe, \
+						   data);		\
 	}
 
-#define DEFINE_TRACE(name)						\
+#define DEFINE_TRACE_FN(name, reg, unreg)					\
 	static const char __tpstrtab_##name[]				\
 	__attribute__((section("__tracepoints_strings"))) = #name;	\
 	struct tracepoint __tracepoint_##name				\
 	__attribute__((section("__tracepoints"), aligned(32))) =	\
 		{ __tpstrtab_##name, 0, NULL }
 
+#define DEFINE_TRACE(name)						\
+	DEFINE_TRACE_FN(name, NULL, NULL);
+
 extern void tracepoint_update_probe_range(struct tracepoint *begin,
 	struct tracepoint *end);
 
 #else /* !CONFIG_TRACEPOINTS */
-#define DECLARE_TRACE(name, proto, args)				\
+#define __DECLARE_TRACE(name, proto, args)				\
 	static inline void trace_##name(proto)				\
 	{ }								\
 	static inline void _trace_##name(proto)				\
@@ -143,20 +165,27 @@ static inline void tracepoint_update_probe_range(struct tracepoint *begin,
 { }
 #endif /* CONFIG_TRACEPOINTS */
 
+#define DECLARE_TRACE(name, proto, args)			\
+	__DECLARE_TRACE(name, PARAMS(proto), PARAMS(args),	\
+			PARAMS(void *__data, proto),		\
+			PARAMS(__data, args))
+
 /*
  * Connect a probe to a tracepoint.
  * Internal API, should not be used directly.
  */
-extern int tracepoint_probe_register(const char *name, void *probe);
+extern int tracepoint_probe_register(const char *name, void *probe, void *data);
 
 /*
  * Disconnect a probe from a tracepoint.
  * Internal API, should not be used directly.
  */
-extern int tracepoint_probe_unregister(const char *name, void *probe);
+extern int tracepoint_probe_unregister(const char *name, void *probe, void *data);
 
-extern int tracepoint_probe_register_noupdate(const char *name, void *probe);
-extern int tracepoint_probe_unregister_noupdate(const char *name, void *probe);
+extern int tracepoint_probe_register_noupdate(const char *name, void *probe,
+					      void *data);
+extern int tracepoint_probe_unregister_noupdate(const char *name, void *probe,
+						void *data);
 extern void tracepoint_probe_update_all(void);
 
 struct tracepoint_iter {
@@ -205,5 +234,179 @@ extern int tracepoint_unregister_lib(struct tracepoint *tracepoints_start);
 	{								\
 		tracepoint_unregister_lib(__start___tracepoints); \
 	}
+
+
+#ifndef TRACE_EVENT
+/*
+ * For use with the TRACE_EVENT macro:
+ *
+ * We define a tracepoint, its arguments, its printf format
+ * and its 'fast binary record' layout.
+ *
+ * Firstly, name your tracepoint via TRACE_EVENT(name : the
+ * 'subsystem_event' notation is fine.
+ *
+ * Think about this whole construct as the
+ * 'trace_sched_switch() function' from now on.
+ *
+ *
+ *  TRACE_EVENT(sched_switch,
+ *
+ *	*
+ *	* A function has a regular function arguments
+ *	* prototype, declare it via TP_PROTO():
+ *	*
+ *
+ *	TP_PROTO(struct rq *rq, struct task_struct *prev,
+ *		 struct task_struct *next),
+ *
+ *	*
+ *	* Define the call signature of the 'function'.
+ *	* (Design sidenote: we use this instead of a
+ *	*  TP_PROTO1/TP_PROTO2/TP_PROTO3 ugliness.)
+ *	*
+ *
+ *	TP_ARGS(rq, prev, next),
+ *
+ *	*
+ *	* Fast binary tracing: define the trace record via
+ *	* TP_STRUCT__entry(). You can think about it like a
+ *	* regular C structure local variable definition.
+ *	*
+ *	* This is how the trace record is structured and will
+ *	* be saved into the ring buffer. These are the fields
+ *	* that will be exposed to readers.
+ *	*
+ *	* The declared 'local variable' is called '__entry'
+ *	*
+ *	* __field(pid_t, prev_prid) is equivalent to a standard declariton:
+ *	*
+ *	*	pid_t	prev_pid;
+ *	*
+ *	* __array(char, prev_comm, TASK_COMM_LEN) is equivalent to:
+ *	*
+ *	*	char	prev_comm[TASK_COMM_LEN];
+ *	*
+ *
+ *	TP_STRUCT__entry(
+ *		__array(	char,	prev_comm,	TASK_COMM_LEN	)
+ *		__field(	pid_t,	prev_pid			)
+ *		__field(	int,	prev_prio			)
+ *		__array(	char,	next_comm,	TASK_COMM_LEN	)
+ *		__field(	pid_t,	next_pid			)
+ *		__field(	int,	next_prio			)
+ *	),
+ *
+ *	*
+ *	* Assign the entry into the trace record, by embedding
+ *	* a full C statement block into TP_fast_assign(). You
+ *	* can refer to the trace record as '__entry' -
+ *	* otherwise you can put arbitrary C code in here.
+ *	*
+ *	* Note: this C code will execute every time a trace event
+ *	* happens, on an active tracepoint.
+ *	*
+ *
+ *	TP_fast_assign(
+ *		memcpy(__entry->next_comm, next->comm, TASK_COMM_LEN);
+ *		__entry->prev_pid	= prev->pid;
+ *		__entry->prev_prio	= prev->prio;
+ *		memcpy(__entry->prev_comm, prev->comm, TASK_COMM_LEN);
+ *		__entry->next_pid	= next->pid;
+ *		__entry->next_prio	= next->prio;
+ *	)
+ *
+ *	*
+ *	* Formatted output of a trace record via TP_printf().
+ *	* This is how the tracepoint will appear under debugging
+ *	* of tracepoints.
+ *	*
+ *	* (raw-binary tracing wont actually perform this step.)
+ *	*
+ *
+ *	TP_printf("task %s:%d [%d] ==> %s:%d [%d]",
+ *		__entry->prev_comm, __entry->prev_pid, __entry->prev_prio,
+ *		__entry->next_comm, __entry->next_pid, __entry->next_prio),
+ *
+ * );
+ *
+ * This macro construct is thus used for the regular printf format
+ * tracing setup.
+ *
+ * A set of (un)registration functions can be passed to the variant
+ * TRACE_EVENT_FN to perform any (un)registration work.
+ */
+
+struct trace_event {
+	const char *name;
+	int (*regfunc)(void *data);
+	int (*unregfunc)(void *data);
+} __attribute__((aligned(32)));
+
+struct trace_event_lib {
+	struct trace_event *trace_events_start;
+	int trace_events_count;
+	struct list_head list;
+};
+
+struct trace_event_iter {
+	struct trace_event_lib *lib;
+	struct trace_event *trace_event;
+};
+
+extern void lock_trace_events(void);
+extern void unlock_trace_events(void);
+
+extern void trace_event_iter_start(struct trace_event_iter *iter);
+extern void trace_event_iter_next(struct trace_event_iter *iter);
+extern void trace_event_iter_reset(struct trace_event_iter *iter);
+
+extern int trace_event_get_iter_range(struct trace_event **trace_event,
+				      struct trace_event *begin,
+				      struct trace_event *end);
+
+extern void trace_event_update_process(void);
+extern int is_trace_event_enabled(const char *channel, const char *name);
+
+extern int trace_event_register_lib(struct trace_event *start_trace_events,
+				    int trace_event_count);
+
+extern int trace_event_unregister_lib(struct trace_event *start_trace_events);
+
+#define TRACE_EVENT_LIB							\
+	extern struct trace_event __start___trace_events[]		\
+	__attribute__((weak, visibility("hidden")));			\
+	extern struct trace_event __stop___trace_events[]		\
+	__attribute__((weak, visibility("hidden")));			\
+	static void __attribute__((constructor))			\
+	__trace_events__init(void)					\
+	{								\
+		long trace_event_count =((long)__stop___trace_events-	\
+					 (long)__start___trace_events)	\
+			/sizeof(struct trace_event);			\
+		trace_event_register_lib(__start___trace_events,	\
+					 trace_event_count);		\
+	}								\
+									\
+	static void __attribute__((destructor))				\
+	__trace_event__destroy(void)					\
+	{								\
+		trace_event_unregister_lib(__start___trace_events);	\
+	}
+
+#define DECLARE_TRACE_EVENT_CLASS(name, proto, args, tstruct, assign, print)
+#define DEFINE_TRACE_EVENT(template, name, proto, args)		\
+	DECLARE_TRACE(name, PARAMS(proto), PARAMS(args))
+#define DEFINE_TRACE_EVENT_PRINT(template, name, proto, args, print)	\
+	DECLARE_TRACE(name, PARAMS(proto), PARAMS(args))
+
+#define TRACE_EVENT(name, proto, args, struct, assign, print)	\
+	DECLARE_TRACE(name, PARAMS(proto), PARAMS(args))
+#define TRACE_EVENT_FN(name, proto, args, struct,		\
+		assign, print, reg, unreg)			\
+	DECLARE_TRACE(name, PARAMS(proto), PARAMS(args))
+
+#endif /* ifdef TRACE_EVENT (see note above) */
+
 
 #endif /* _UST_TRACEPOINT_H */

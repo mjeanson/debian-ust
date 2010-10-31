@@ -1,7 +1,4 @@
-/*
- * multipoll.h
- *
- * Copyright (C) 2010 - Pierre-Marc Fournier (pierre-marc dot fournier at polymtl dot ca)
+/* Copyright (C) 2010 Nils Carlson
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -17,28 +14,16 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
  */
+#ifndef __TAP_H
+#define __TAP_H
 
-#ifndef UST_MULTIPOLL_H
-#define UST_MULTIPOLL_H
+#include <stdarg.h>
+#include <stdio.h>
 
-struct pollfd_extra {
-	int (*func)(void *priv, int fd, short events);
-	void *priv;
+void tap_plan(int count);
 
-	int (*destroy_priv)(void *priv);
-};
+void tap_ok(int bool, const char *format, ...);
 
-struct mpentries {
-	struct pollfd *pollfds;
-	struct pollfd_extra *extras;
+int tap_status(void);
 
-	int n_used;
-	int n_avail;
-};
-
-extern int multipoll_init(struct mpentries *ent);
-extern int multipoll_add(struct mpentries *ent, int fd, short events, int (*func)(void *priv, int fd, short events), void *priv, int (*destroy_priv)(void *));
-extern int multipoll_destroy(struct mpentries *ent);
-extern int multipoll_poll(struct mpentries *ent, int timeout);
-
-#endif /* UST_MULTIPOLL_H */
+#endif /* __TAP_H */

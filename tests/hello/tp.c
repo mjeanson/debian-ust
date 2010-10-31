@@ -19,16 +19,26 @@
 #include <ust/marker.h>
 #include "usterr.h"
 
+struct hello_trace_struct {
+	char *message;
+};
+
+struct hello_trace_struct hello_struct = {
+	.message = "ehlo\n",
+};
+
 DEFINE_TRACE(hello_tptest);
 
-void tptest_probe(int anint)
+void tptest_probe(void *data, int anint)
 {
+	struct hello_trace_struct *hello;
+	hello=(struct hello_trace_struct *)data;
 	DBG("in tracepoint probe...");
-	trace_mark(ust, tptest, "anint %d", anint);
+	printf("this is the message: %s\n", hello->message);
 }
 
 static void __attribute__((constructor)) init()
 {
-	DBG("connecting tracepoint...");
-	register_trace_hello_tptest(tptest_probe);
+	DBG("connecting tracepoint...\n");
+	register_trace_hello_tptest(tptest_probe, &hello_struct);
 }
