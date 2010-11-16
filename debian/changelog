@@ -1,3 +1,13 @@
+ust (0.8-1) unstable; urgency=low
+
+  * [e3e73f] Imported Upstream version 0.8
+  * [9eb1f6] Remove NMU security patch, applied upstream
+  * [0021e4] Generate info and html manual at build-time
+  * [899c34] Include new libtap library
+  * [94f07d] Remove debian manpages, included upstream
+
+ -- Jon Bernard <jbernard@debian.org>  Tue, 16 Nov 2010 12:23:41 -0500
+
 ust (0.7-3) unstable; urgency=low
 
   * [2c4036] Restore info-dir-section patch from previous NMU
