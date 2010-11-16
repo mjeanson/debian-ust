@@ -1,0 +1,18 @@
+Description: Include missing section and category in the info documentation
+Author: Jon Bernard <jbernard@debian.org>
+
+--- a/doc/manual/manual.texinfo
++++ b/doc/manual/manual.texinfo
+@@ -4,6 +4,12 @@
+ @settitle LTTng Userspace Tracer (UST) Manual
+ @c %**end of header
+ 
++@dircategory Individual utilities
++
++@direntry
++* ust: (ust).                LTTng Userspace Tracer.
++@end direntry
++
+ @copying
+ This manual is for program, version version.
+ 
