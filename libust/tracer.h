@@ -94,7 +94,7 @@ struct chan_info_struct {
 };
 
 struct ltt_active_marker {
-	struct list_head node;		/* active markers list */
+	struct cds_list_head node;		/* active markers list */
 	const char *channel;
 	const char *name;
 	const char *format;
@@ -158,7 +158,7 @@ struct ltt_trace_ops {
 struct ltt_transport {
 	char *name;
 	struct module *owner;
-	struct list_head node;
+	struct cds_list_head node;
 	struct ltt_trace_ops ops;
 };
 
@@ -170,7 +170,7 @@ enum trace_mode { LTT_TRACE_NORMAL, LTT_TRACE_FLIGHT, LTT_TRACE_HYBRID };
 /* Per-trace information - each trace/flight recorder represented by one */
 struct ust_trace {
 	/* First 32 bytes cache-hot cacheline */
-	struct list_head list;
+	struct cds_list_head list;
 	struct ltt_trace_ops *ops;
 	int active;
 	/* Second 32 bytes cache-hot cacheline */
@@ -185,9 +185,9 @@ struct ust_trace {
 	struct {
 		struct dentry			*trace_root;
 	} dentry;
-	struct kref kref; /* Each channel has a kref of the trace struct */
+	struct urcu_ref urcu_ref; /* Each channel has a urcu_ref of the trace struct */
 	struct ltt_transport *transport;
-	struct kref ltt_transport_kref;
+	struct urcu_ref ltt_transport_urcu_ref;
 	char trace_name[NAME_MAX];
 } ____cacheline_aligned;
 
@@ -427,8 +427,8 @@ extern void ltt_core_register(int (*function)(u8, void *));
 
 extern void ltt_core_unregister(void);
 
-extern void ltt_release_trace(struct kref *kref);
-extern void ltt_release_transport(struct kref *kref);
+extern void ltt_release_trace(struct urcu_ref *urcu_ref);
+extern void ltt_release_transport(struct urcu_ref *urcu_ref);
 
 extern void ltt_dump_marker_state(struct ust_trace *trace);
 

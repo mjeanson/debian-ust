@@ -43,7 +43,7 @@ struct ltt_reserve_switch_offsets {
 
 
 static DEFINE_MUTEX(ust_buffers_channels_mutex);
-static LIST_HEAD(ust_buffers_channels);
+static CDS_LIST_HEAD(ust_buffers_channels);
 
 static int get_n_cpus(void)
 {
@@ -197,13 +197,13 @@ int ust_buffers_create_buf(struct ust_channel *channel, int cpu)
 		return -1;
 
 	buf->chan = channel;
-	kref_get(&channel->kref);
+	urcu_ref_get(&channel->urcu_ref);
 	return 0;
 }
 
-static void ust_buffers_destroy_channel(struct kref *kref)
+static void ust_buffers_destroy_channel(struct urcu_ref *urcu_ref)
 {
-	struct ust_channel *chan = _ust_container_of(kref, struct ust_channel, kref);
+	struct ust_channel *chan = _ust_container_of(urcu_ref, struct ust_channel, urcu_ref);
 	free(chan);
 }
 
@@ -219,13 +219,13 @@ static void ust_buffers_destroy_buf(struct ust_buffer *buf)
 
 //ust//	chan->buf[buf->cpu] = NULL;
 	free(buf);
-	kref_put(&chan->kref, ust_buffers_destroy_channel);
+	urcu_ref_put(&chan->urcu_ref, ust_buffers_destroy_channel);
 }
 
-/* called from kref_put */
-static void ust_buffers_remove_buf(struct kref *kref)
+/* called from urcu_ref_put */
+static void ust_buffers_remove_buf(struct urcu_ref *urcu_ref)
 {
-	struct ust_buffer *buf = _ust_container_of(kref, struct ust_buffer, kref);
+	struct ust_buffer *buf = _ust_container_of(urcu_ref, struct ust_buffer, urcu_ref);
 	ust_buffers_destroy_buf(buf);
 }
 
@@ -237,7 +237,7 @@ int ust_buffers_open_buf(struct ust_channel *chan, int cpu)
 	if (result == -1)
 		return -1;
 
-	kref_init(&chan->buf[cpu]->kref);
+	urcu_ref_init(&chan->buf[cpu]->urcu_ref);
 
 	result = ust_buffers_init_buffer(chan->trace, chan, chan->buf[cpu], chan->subbuf_cnt);
 	if(result == -1)
@@ -254,7 +254,7 @@ int ust_buffers_open_buf(struct ust_channel *chan, int cpu)
  */
 static void ust_buffers_close_buf(struct ust_buffer *buf)
 {
-	kref_put(&buf->kref, ust_buffers_remove_buf);
+	urcu_ref_put(&buf->urcu_ref, ust_buffers_remove_buf);
 }
 
 int ust_buffers_channel_open(struct ust_channel *chan, size_t subbuf_size, size_t subbuf_cnt)
@@ -280,7 +280,7 @@ int ust_buffers_channel_open(struct ust_channel *chan, size_t subbuf_size, size_
 	chan->subbuf_size_order = get_count_order(subbuf_size);
 	chan->alloc_size = subbuf_size * subbuf_cnt;
 
-	kref_init(&chan->kref);
+	urcu_ref_init(&chan->urcu_ref);
 
 	pthread_mutex_lock(&ust_buffers_channels_mutex);
 	for(i=0; i<chan->n_cpus; i++) {
@@ -288,7 +288,7 @@ int ust_buffers_channel_open(struct ust_channel *chan, size_t subbuf_size, size_
 		if (result == -1)
 			goto error;
 	}
-	list_add(&chan->list, &ust_buffers_channels);
+	cds_list_add(&chan->list, &ust_buffers_channels);
 	pthread_mutex_unlock(&ust_buffers_channels_mutex);
 
 	return 0;
@@ -301,7 +301,7 @@ error:
 		do {} while(0);
 	}
 
-	kref_put(&chan->kref, ust_buffers_destroy_channel);
+	urcu_ref_put(&chan->urcu_ref, ust_buffers_destroy_channel);
 	pthread_mutex_unlock(&ust_buffers_channels_mutex);
 	return -1;
 }
@@ -320,8 +320,8 @@ void ust_buffers_channel_close(struct ust_channel *chan)
 			ust_buffers_close_buf(chan->buf[i]);
 	}
 
-	list_del(&chan->list);
-	kref_put(&chan->kref, ust_buffers_destroy_channel);
+	cds_list_del(&chan->list);
+	urcu_ref_put(&chan->urcu_ref, ust_buffers_destroy_channel);
 	pthread_mutex_unlock(&ust_buffers_channels_mutex);
 }
 
@@ -349,7 +349,7 @@ static void ltt_buffer_begin(struct ust_buffer *buf,
 	header->cycle_count_begin = tsc;
 	header->data_size = 0xFFFFFFFF; /* for recognizing crashed buffers */
 	header->sb_size = 0xFFFFFFFF; /* for recognizing crashed buffers */
-	/* FIXME: add memory barrier? */
+	/* FIXME: add memory cmm_barrier? */
 	ltt_write_trace_header(channel->trace, header);
 }
 
@@ -386,7 +386,7 @@ static notrace void ltt_buf_unfull(struct ust_buffer *buf,
 }
 
 /*
- * Promote compiler barrier to a smp_mb().
+ * Promote compiler cmm_barrier to a smp_mb().
  * For the specific LTTng case, this IPI call should be removed if the
  * architecture does not reorder writes.  This should eventually be provided by
  * a separate architecture-specific infrastructure.
@@ -414,7 +414,7 @@ int ust_buffers_get_subbuf(struct ust_buffer *buf, long *consumed)
 	 * this is OK because then there is no wmb to execute there.
 	 * If our thread is executing on the same CPU as the on the buffers
 	 * belongs to, we don't have to synchronize it at all. If we are
-	 * migrated, the scheduler will take care of the memory barriers.
+	 * migrated, the scheduler will take care of the memory cmm_barriers.
 	 * Normally, smp_call_function_single() should ensure program order when
 	 * executing the remote function, which implies that it surrounds the
 	 * function execution with :
@@ -429,7 +429,7 @@ int ust_buffers_get_subbuf(struct ust_buffer *buf, long *consumed)
 	 * smp_mb()
 	 *
 	 * However, smp_call_function_single() does not seem to clearly execute
-	 * such barriers. It depends on spinlock semantic to provide the barrier
+	 * such cmm_barriers. It depends on spinlock semantic to provide the cmm_barrier
 	 * before executing the IPI and, when busy-looping, csd_lock_wait only
 	 * executes smp_mb() when it has to wait for the other CPU.
 	 *
@@ -437,9 +437,9 @@ int ust_buffers_get_subbuf(struct ust_buffer *buf, long *consumed)
 	 * required ourself, even if duplicated. It has no performance impact
 	 * anyway.
 	 *
-	 * smp_mb() is needed because smp_rmb() and smp_wmb() only order read vs
+	 * smp_mb() is needed because cmm_smp_rmb() and cmm_smp_wmb() only order read vs
 	 * read and write vs write. They do not ensure core synchronization. We
-	 * really have to ensure total order between the 3 barriers running on
+	 * really have to ensure total order between the 3 cmm_barriers running on
 	 * the 2 CPUs.
 	 */
 //ust// #ifdef LTT_NO_IPI_BARRIER
@@ -447,7 +447,7 @@ int ust_buffers_get_subbuf(struct ust_buffer *buf, long *consumed)
 	 * Local rmb to match the remote wmb to read the commit count before the
 	 * buffer data and the write offset.
 	 */
-	smp_rmb();
+	cmm_smp_rmb();
 //ust// #else
 //ust// 	if (raw_smp_processor_id() != buf->cpu) {
 //ust// 		smp_mb();	/* Total order with IPI handler smp_mb() */
@@ -590,10 +590,10 @@ static void ltt_relay_print_buffer_errors(struct ust_channel *channel, int cpu)
 	ltt_relay_print_errors(trace, channel, cpu);
 }
 
-static void ltt_relay_release_channel(struct kref *kref)
+static void ltt_relay_release_channel(struct urcu_ref *urcu_ref)
 {
-	struct ust_channel *ltt_chan = _ust_container_of(kref,
-			struct ust_channel, kref);
+	struct ust_channel *ltt_chan = _ust_container_of(urcu_ref,
+			struct ust_channel, urcu_ref);
 	free(ltt_chan->buf);
 }
 
@@ -648,9 +648,9 @@ static int ust_buffers_init_buffer(struct ust_trace *trace,
 		zmalloc(sizeof(*buf->commit_count) * n_subbufs);
 	if (!buf->commit_count)
 		return -ENOMEM;
-	kref_get(&trace->kref);
-	kref_get(&trace->ltt_transport_kref);
-	kref_get(&ltt_chan->kref);
+	urcu_ref_get(&trace->urcu_ref);
+	urcu_ref_get(&trace->ltt_transport_urcu_ref);
+	urcu_ref_get(&ltt_chan->urcu_ref);
 	uatomic_set(&buf->offset, ltt_subbuffer_header_size());
 	uatomic_set(&buf->consumed, 0);
 	uatomic_set(&buf->active_readers, 0);
@@ -694,14 +694,14 @@ static void ust_buffers_destroy_buffer(struct ust_channel *ltt_chan, int cpu)
 	struct ust_trace *trace = ltt_chan->trace;
 	struct ust_buffer *ltt_buf = ltt_chan->buf[cpu];
 
-	kref_put(&ltt_chan->trace->ltt_transport_kref,
+	urcu_ref_put(&ltt_chan->trace->ltt_transport_urcu_ref,
 		ltt_release_transport);
 	ltt_relay_print_buffer_errors(ltt_chan, cpu);
 //ust//	free(ltt_buf->commit_seq);
 	free(ltt_buf->commit_count);
 	ltt_buf->commit_count = NULL;
-	kref_put(&ltt_chan->kref, ltt_relay_release_channel);
-	kref_put(&trace->kref, ltt_release_trace);
+	urcu_ref_put(&ltt_chan->urcu_ref, ltt_relay_release_channel);
+	urcu_ref_put(&trace->urcu_ref, ltt_release_trace);
 //ust//	wake_up_interruptible(&trace->kref_wq);
 }
 
@@ -769,7 +769,7 @@ static int ust_buffers_create_channel(const char *trace_name, struct ust_trace *
 {
 	int result;
 
-	kref_init(&ltt_chan->kref);
+	urcu_ref_init(&ltt_chan->urcu_ref);
 
 	ltt_chan->trace = trace;
 	ltt_chan->overwrite = overwrite;
@@ -859,7 +859,7 @@ static void ltt_relay_finish_channel(struct ust_channel *channel)
 static void ltt_relay_remove_channel(struct ust_channel *channel)
 {
 	ust_buffers_channel_close(channel);
-	kref_put(&channel->kref, ltt_relay_release_channel);
+	urcu_ref_put(&channel->urcu_ref, ltt_relay_release_channel);
 }
 
 /*
@@ -895,10 +895,10 @@ static void ltt_reserve_switch_old_subbuf(
 
 	/*
 	 * Must write slot data before incrementing commit count.
-	 * This compiler barrier is upgraded into a smp_wmb() by the IPI
-	 * sent by get_subbuf() when it does its smp_rmb().
+	 * This compiler cmm_barrier is upgraded into a cmm_smp_wmb() by the IPI
+	 * sent by get_subbuf() when it does its cmm_smp_rmb().
 	 */
-	smp_wmb();
+	cmm_smp_wmb();
 	uatomic_add(&buf->commit_count[oldidx].cc, padding_size);
 	commit_count = uatomic_read(&buf->commit_count[oldidx].cc);
 	ltt_check_deliver(chan, buf, offsets->old - 1, commit_count, oldidx);
@@ -924,10 +924,10 @@ static void ltt_reserve_switch_new_subbuf(
 
 	/*
 	 * Must write slot data before incrementing commit count.
-	 * This compiler barrier is upgraded into a smp_wmb() by the IPI
-	 * sent by get_subbuf() when it does its smp_rmb().
+	 * This compiler cmm_barrier is upgraded into a cmm_smp_wmb() by the IPI
+	 * sent by get_subbuf() when it does its cmm_smp_rmb().
 	 */
-	smp_wmb();
+	cmm_smp_wmb();
 	uatomic_add(&buf->commit_count[beginidx].cc, ltt_subbuffer_header_size());
 	commit_count = uatomic_read(&buf->commit_count[beginidx].cc);
 	/* Check if the written buffer has to be delivered */
@@ -969,10 +969,10 @@ static void ltt_reserve_end_switch_current(
 
 	/*
 	 * Must write slot data before incrementing commit count.
-	 * This compiler barrier is upgraded into a smp_wmb() by the IPI
-	 * sent by get_subbuf() when it does its smp_rmb().
+	 * This compiler cmm_barrier is upgraded into a cmm_smp_wmb() by the IPI
+	 * sent by get_subbuf() when it does its cmm_smp_rmb().
 	 */
-	smp_wmb();
+	cmm_smp_wmb();
 	uatomic_add(&buf->commit_count[endidx].cc, padding_size);
 	commit_count = uatomic_read(&buf->commit_count[endidx].cc);
 	ltt_check_deliver(chan, buf,

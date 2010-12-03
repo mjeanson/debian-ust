@@ -181,7 +181,7 @@ static enum ltt_channels get_channel_type_from_name(const char *name)
 //ust// 
 //ust// }
 
-static LIST_HEAD(ltt_transport_list);
+static CDS_LIST_HEAD(ltt_transport_list);
 
 /**
  * ltt_transport_register - LTT transport registration
@@ -205,7 +205,7 @@ void ltt_transport_register(struct ltt_transport *transport)
 //ust//	vmalloc_sync_all();
 
 	ltt_lock_traces();
-	list_add_tail(&transport->node, &ltt_transport_list);
+	cds_list_add_tail(&transport->node, &ltt_transport_list);
 	ltt_unlock_traces();
 }
 
@@ -216,7 +216,7 @@ void ltt_transport_register(struct ltt_transport *transport)
 void ltt_transport_unregister(struct ltt_transport *transport)
 {
 	ltt_lock_traces();
-	list_del(&transport->node);
+	cds_list_del(&transport->node);
 	ltt_unlock_traces();
 }
 
@@ -275,7 +275,7 @@ static void trace_async_wakeup(struct ust_trace *trace)
 //ust// #else
 //ust// 	ltt_lock_traces();
 //ust// #endif
-//ust// 	list_for_each_entry_rcu(trace, &ltt_traces.head, list) {
+//ust// 	cds_list_for_each_entry_rcu(trace, &ltt_traces.head, list) {
 //ust// 		trace_async_wakeup(trace);
 //ust// 	}
 //ust// #ifndef CONFIG_PREEMPT_RT
@@ -297,7 +297,7 @@ struct ust_trace *_ltt_trace_find(const char *trace_name)
 {
 	struct ust_trace *trace;
 
-	list_for_each_entry(trace, &ltt_traces.head, list)
+	cds_list_for_each_entry(trace, &ltt_traces.head, list)
 		if (!strncmp(trace->trace_name, trace_name, NAME_MAX))
 			return trace;
 
@@ -313,7 +313,7 @@ struct ust_trace *_ltt_trace_find_setup(const char *trace_name)
 {
 	struct ust_trace *trace;
 
-	list_for_each_entry(trace, &ltt_traces.setup_head, list)
+	cds_list_for_each_entry(trace, &ltt_traces.setup_head, list)
 		if (!strncmp(trace->trace_name, trace_name, NAME_MAX))
 			return trace;
 
@@ -324,7 +324,7 @@ struct ust_trace *_ltt_trace_find_setup(const char *trace_name)
  * ltt_release_transport - Release an LTT transport
  * @kref : reference count on the transport
  */
-void ltt_release_transport(struct kref *kref)
+void ltt_release_transport(struct urcu_ref *urcu_ref)
 {
 //ust// 	struct ust_trace *trace = container_of(kref,
 //ust// 			struct ust_trace, ltt_transport_kref);
@@ -335,10 +335,10 @@ void ltt_release_transport(struct kref *kref)
  * ltt_release_trace - Release a LTT trace
  * @kref : reference count on the trace
  */
-void ltt_release_trace(struct kref *kref)
+void ltt_release_trace(struct urcu_ref *urcu_ref)
 {
-	struct ust_trace *trace = _ust_container_of(kref,
-			struct ust_trace, kref);
+	struct ust_trace *trace = _ust_container_of(urcu_ref,
+			struct ust_trace, urcu_ref);
 	ltt_channels_trace_free(trace->channels);
 	free(trace);
 }
@@ -417,7 +417,7 @@ int _ltt_trace_setup(const char *trace_name)
 			chan_infos[chantype].def_subbufcount;
 	}
 
-	list_add(&new_trace->list, &ltt_traces.setup_head);
+	cds_list_add(&new_trace->list, &ltt_traces.setup_head);
 	return 0;
 
 trace_free:
@@ -439,7 +439,7 @@ int ltt_trace_setup(const char *trace_name)
 /* must be called from within a traces lock. */
 static void _ltt_trace_free(struct ust_trace *trace)
 {
-	list_del(&trace->list);
+	cds_list_del(&trace->list);
 	free(trace);
 }
 
@@ -458,7 +458,7 @@ int ltt_trace_set_type(const char *trace_name, const char *trace_type)
 		goto traces_error;
 	}
 
-	list_for_each_entry(tran_iter, &ltt_transport_list, node) {
+	cds_list_for_each_entry(tran_iter, &ltt_transport_list, node) {
 		if (!strcmp(tran_iter->name, trace_type)) {
 			transport = tran_iter;
 			break;
@@ -640,9 +640,9 @@ int ltt_trace_alloc(const char *trace_name)
 		goto traces_error;
 	}
 
-	kref_init(&trace->kref);
-	kref_init(&trace->ltt_transport_kref);
-//ust//	init_waitqueue_head(&trace->kref_wq);
+	urcu_ref_init(&trace->urcu_ref);
+	urcu_ref_init(&trace->ltt_transport_urcu_ref);
+//ust//	init_waitqueue_head(&trace->urcu_ref_wq);
 	trace->active = 0;
 //ust//	get_trace_clock();
 	trace->freq_scale = trace_clock_freq_scale();
@@ -692,13 +692,13 @@ int ltt_trace_alloc(const char *trace_name)
 		}
 	}
 
-	list_del(&trace->list);
-//ust//	if (list_empty(&ltt_traces.head)) {
+	cds_list_del(&trace->list);
+//ust//	if (cds_list_empty(&ltt_traces.head)) {
 //ust//		mod_timer(&ltt_async_wakeup_timer,
 //ust//				jiffies + LTT_PERCPU_TIMER_INTERVAL);
 //ust//		set_kernel_trace_flag_all_tasks();
 //ust//	}
-	list_add_rcu(&trace->list, &ltt_traces.head);
+	cds_list_add_rcu(&trace->list, &ltt_traces.head);
 //ust//	synchronize_sched();
 
 	ltt_unlock_traces();
@@ -762,9 +762,9 @@ static int _ltt_trace_destroy(struct ust_trace *trace)
 		goto active_error;
 	}
 	/* Everything went fine */
-	list_del_rcu(&trace->list);
+	cds_list_del_rcu(&trace->list);
 	synchronize_rcu();
-	if (list_empty(&ltt_traces.head)) {
+	if (cds_list_empty(&ltt_traces.head)) {
 //ust//		clear_kernel_trace_flag_all_tasks();
 		/*
 		 * We stop the asynchronous delivery of reader wakeup, but
@@ -811,7 +811,7 @@ static void __ltt_trace_destroy(struct ust_trace *trace, int drop)
 			trace->ops->remove_channel(chan);
 	}
 
-	kref_put(&trace->ltt_transport_kref, ltt_release_transport);
+	urcu_ref_put(&trace->ltt_transport_urcu_ref, ltt_release_transport);
 
 //ust//	module_put(trace->transport->owner);
 
@@ -824,7 +824,7 @@ static void __ltt_trace_destroy(struct ust_trace *trace, int drop)
 //ust//		__wait_event_interruptible(trace->kref_wq,
 //ust//			(atomic_read(&trace->kref.refcount) == 1), ret);
 //ust//	}
-	kref_put(&trace->kref, ltt_release_trace);
+	urcu_ref_put(&trace->urcu_ref, ltt_release_trace);
 }
 
 int ltt_trace_destroy(const char *trace_name, int drop)
