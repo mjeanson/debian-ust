@@ -66,9 +66,9 @@ static struct ustcomm_sock *listen_sock;
 
 extern struct chan_info_struct chan_infos[];
 
-static struct list_head open_buffers_list = LIST_HEAD_INIT(open_buffers_list);
+static struct cds_list_head open_buffers_list = CDS_LIST_HEAD_INIT(open_buffers_list);
 
-static struct list_head ust_socks = LIST_HEAD_INIT(ust_socks);
+static struct cds_list_head ust_socks = CDS_LIST_HEAD_INIT(ust_socks);
 
 /* volatile because shared between the listener and the main thread */
 int buffers_to_export = 0;
@@ -149,8 +149,9 @@ static int connect_ustd(void)
 
 
 static void request_buffer_consumer(int sock,
-				   const char *channel,
-				   int cpu)
+				    const char *trace,
+				    const char *channel,
+				    int cpu)
 {
 	struct ustcomm_header send_header, recv_header;
 	struct ustcomm_buffer_info buf_inf;
@@ -158,6 +159,7 @@ static void request_buffer_consumer(int sock,
 
 	result = ustcomm_pack_buffer_info(&send_header,
 					  &buf_inf,
+					  trace,
 					  channel,
 					  cpu);
 
@@ -212,9 +214,10 @@ static void inform_consumer_daemon(const char *trace_name)
 			/* iterate on all cpus */
 			for (j=0; j<trace->channels[i].n_cpus; j++) {
 				ch_name = trace->channels[i].channel_name;
-				request_buffer_consumer(sock, ch_name, j);
-				STORE_SHARED(buffers_to_export,
-					     LOAD_SHARED(buffers_to_export)+1);
+				request_buffer_consumer(sock, trace_name,
+							ch_name, j);
+				CMM_STORE_SHARED(buffers_to_export,
+					     CMM_LOAD_SHARED(buffers_to_export)+1);
 			}
 		}
 	}
@@ -470,13 +473,13 @@ static int notify_buffer_mapped(const char *trace_name,
 	 */
 	if (uatomic_read(&buf->consumed) == 0) {
 		DBG("decrementing buffers_to_export");
-		STORE_SHARED(buffers_to_export, LOAD_SHARED(buffers_to_export)-1);
+		CMM_STORE_SHARED(buffers_to_export, CMM_LOAD_SHARED(buffers_to_export)-1);
 	}
 
 	/* The buffer has been exported, ergo, we can add it to the
 	 * list of open buffers
 	 */
-	list_add(&buf->open_buffers_list, &open_buffers_list);
+	cds_list_add(&buf->open_buffers_list, &open_buffers_list);
 
 unlock_traces:
 	ltt_unlock_traces();
@@ -536,7 +539,7 @@ static void force_subbuf_switch()
 {
 	struct ust_buffer *buf;
 
-	list_for_each_entry(buf, &open_buffers_list,
+	cds_list_for_each_entry(buf, &open_buffers_list,
 			    open_buffers_list) {
 		ltt_force_switch(buf, FORCE_FLUSH);
 	}
@@ -545,10 +548,6 @@ static void force_subbuf_switch()
 /* Simple commands are those which need only respond with a return value. */
 static int process_simple_client_cmd(int command, char *recv_buf)
 {
-	int result;
-	char trace_type[] = "ustrelay";
-	char trace_name[] = "auto";
-
 	switch(command) {
 	case SET_SOCK_PATH:
 	{
@@ -564,6 +563,27 @@ static int process_simple_client_cmd(int command, char *recv_buf)
 		}
 		return setenv("UST_DAEMON_SOCKET", sock_msg->sock_path, 1);
 	}
+
+	case FORCE_SUBBUF_SWITCH:
+		/* FIXME: return codes? */
+		force_subbuf_switch();
+
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+
+static int process_trace_cmd(int command, char *trace_name)
+{
+	int result;
+	char trace_type[] = "ustrelay";
+
+	switch(command) {
 	case START:
 		/* start is an operation that setups the trace, allocates it and starts it */
 		result = ltt_trace_setup(trace_name);
@@ -675,18 +695,11 @@ static int process_simple_client_cmd(int command, char *recv_buf)
 			return result;
 		}
 		return 0;
-	case FORCE_SUBBUF_SWITCH:
-		/* FIXME: return codes? */
-		force_subbuf_switch();
-
-		break;
-
-	default:
-		return -EINVAL;
 	}
 
 	return 0;
 }
+
 
 static void process_channel_cmd(int sock, int command,
 				struct ustcomm_channel_info *ch_inf)
@@ -695,14 +708,13 @@ static void process_channel_cmd(int sock, int command,
 	struct ustcomm_header *reply_header = &_reply_header;
 	struct ustcomm_channel_info *reply_msg =
 		(struct ustcomm_channel_info *)send_buffer;
-	char trace_name[] = "auto";
 	int result, offset = 0, num, size;
 
 	memset(reply_header, 0, sizeof(*reply_header));
 
 	switch (command) {
 	case GET_SUBBUF_NUM_SIZE:
-		result = get_subbuf_num_size(trace_name,
+		result = get_subbuf_num_size(ch_inf->trace,
 					     ch_inf->channel,
 					     &num, &size);
 		if (result < 0) {
@@ -719,13 +731,13 @@ static void process_channel_cmd(int sock, int command,
 
 		break;
 	case SET_SUBBUF_NUM:
-		reply_header->result = set_subbuf_num(trace_name,
+		reply_header->result = set_subbuf_num(ch_inf->trace,
 						      ch_inf->channel,
 						      ch_inf->subbuf_num);
 
 		break;
 	case SET_SUBBUF_SIZE:
-		reply_header->result = set_subbuf_size(trace_name,
+		reply_header->result = set_subbuf_size(ch_inf->trace,
 						       ch_inf->channel,
 						       ch_inf->subbuf_size);
 
@@ -744,7 +756,6 @@ static void process_buffer_cmd(int sock, int command,
 	struct ustcomm_header *reply_header = &_reply_header;
 	struct ustcomm_buffer_info *reply_msg =
 		(struct ustcomm_buffer_info *)send_buffer;
-	char trace_name[] = "auto";
 	int result, offset = 0, buf_shmid, buf_struct_shmid, buf_pipe_fd;
 	long consumed_old;
 
@@ -752,7 +763,8 @@ static void process_buffer_cmd(int sock, int command,
 
 	switch (command) {
 	case GET_BUF_SHMID_PIPE_FD:
-		result = get_buffer_shmid_pipe_fd(trace_name, buf_inf->channel,
+		result = get_buffer_shmid_pipe_fd(buf_inf->trace,
+						  buf_inf->channel,
 						  buf_inf->ch_cpu,
 						  &buf_shmid,
 						  &buf_struct_shmid,
@@ -777,12 +789,12 @@ static void process_buffer_cmd(int sock, int command,
 
 	case NOTIFY_BUF_MAPPED:
 		reply_header->result =
-			notify_buffer_mapped(trace_name,
+			notify_buffer_mapped(buf_inf->trace,
 					     buf_inf->channel,
 					     buf_inf->ch_cpu);
 		break;
 	case GET_SUBBUFFER:
-		result = get_subbuffer(trace_name, buf_inf->channel,
+		result = get_subbuffer(buf_inf->trace, buf_inf->channel,
 				       buf_inf->ch_cpu, &consumed_old);
 		if (result < 0) {
 			reply_header->result = result;
@@ -796,7 +808,7 @@ static void process_buffer_cmd(int sock, int command,
 
 		break;
 	case PUT_SUBBUFFER:
-		result = put_subbuffer(trace_name, buf_inf->channel,
+		result = put_subbuffer(buf_inf->trace, buf_inf->channel,
 				       buf_inf->ch_cpu,
 				       buf_inf->consumed_old);
 		reply_header->result = result;
@@ -1007,6 +1019,30 @@ static void process_client_cmd(struct ustcomm_header *recv_header,
 		reply_header->result = result;
 
 		goto send_response;
+	}
+	case START:
+	case SETUP_TRACE:
+	case ALLOC_TRACE:
+	case CREATE_TRACE:
+	case START_TRACE:
+	case STOP_TRACE:
+	case DESTROY_TRACE:
+	{
+		struct ustcomm_trace_info *trace_inf =
+			(struct ustcomm_trace_info *)recv_buf;
+
+		result = ustcomm_unpack_trace_info(trace_inf);
+		if (result < 0) {
+			ERR("couldn't unpack trace info");
+			reply_header->result = -EINVAL;
+			goto send_response;
+		}
+
+		reply_header->result =
+			process_trace_cmd(recv_header->command,
+					  trace_inf->trace);
+		goto send_response;
+
 	}
 	default:
 		reply_header->result =
@@ -1276,7 +1312,7 @@ static void __attribute__((constructor)) init()
 	if (getenv("UST_OVERWRITE")) {
 		int val = atoi(getenv("UST_OVERWRITE"));
 		if (val == 0 || val == 1) {
-			STORE_SHARED(ust_channels_overwrite_by_default, val);
+			CMM_STORE_SHARED(ust_channels_overwrite_by_default, val);
 		} else {
 			WARN("invalid value for UST_OVERWRITE");
 		}
@@ -1285,7 +1321,7 @@ static void __attribute__((constructor)) init()
 	if (getenv("UST_AUTOCOLLECT")) {
 		int val = atoi(getenv("UST_AUTOCOLLECT"));
 		if (val == 0 || val == 1) {
-			STORE_SHARED(ust_channels_request_collection_by_default, val);
+			CMM_STORE_SHARED(ust_channels_request_collection_by_default, val);
 		} else {
 			WARN("invalid value for UST_AUTOCOLLECT");
 		}
@@ -1417,7 +1453,7 @@ static int trace_recording(void)
 
 	ltt_lock_traces();
 
-	list_for_each_entry(trace, &ltt_traces.head, list) {
+	cds_list_for_each_entry(trace, &ltt_traces.head, list) {
 		if (trace->active) {
 			retval = 1;
 			break;
@@ -1477,10 +1513,10 @@ static void __attribute__((destructor)) keepalive()
 		return;
 	}
 
-	if (trace_recording() && LOAD_SHARED(buffers_to_export)) {
+	if (trace_recording() && CMM_LOAD_SHARED(buffers_to_export)) {
 		int total = 0;
 		DBG("Keeping process alive for consumer daemon...");
-		while (LOAD_SHARED(buffers_to_export)) {
+		while (CMM_LOAD_SHARED(buffers_to_export)) {
 			const int interv = 200000;
 			restarting_usleep(interv);
 			total += interv;
@@ -1536,12 +1572,12 @@ static void ust_fork(void)
 	ltt_trace_stop("auto");
 	ltt_trace_destroy("auto", 1);
 	/* Delete all active connections, but leave them in the epoll set */
-	list_for_each_entry_safe(sock, sock_tmp, &ust_socks, list) {
+	cds_list_for_each_entry_safe(sock, sock_tmp, &ust_socks, list) {
 		ustcomm_del_sock(sock, 1);
 	}
 
 	/* Delete all blocked consumers */
-	list_for_each_entry_safe(buf, buf_tmp, &open_buffers_list,
+	cds_list_for_each_entry_safe(buf, buf_tmp, &open_buffers_list,
 				 open_buffers_list) {
 		result = close(buf->data_ready_fd_read);
 		if (result == -1) {
@@ -1551,7 +1587,7 @@ static void ust_fork(void)
 		if (result == -1) {
 			PERROR("close");
 		}
-		list_del(&buf->open_buffers_list);
+		cds_list_del(&buf->open_buffers_list);
 	}
 
 	/* Clean up the listener socket and epoll, keeping the scoket file */
@@ -1559,7 +1595,7 @@ static void ust_fork(void)
 	close(epoll_fd);
 
 	/* Re-start the launch sequence */
-	STORE_SHARED(buffers_to_export, 0);
+	CMM_STORE_SHARED(buffers_to_export, 0);
 	have_listener = 0;
 
 	/* Set up epoll */

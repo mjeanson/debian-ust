@@ -27,7 +27,7 @@
 #define SOCK_DIR "/tmp/ust-app-socks"
 
 struct ustcomm_sock {
-	struct list_head list;
+	struct cds_list_head list;
 	int fd;
 	int epoll_fd;
 };
@@ -78,7 +78,13 @@ enum tracectl_commands {
 	STOP_TRACE,
 };
 
+struct ustcomm_trace_info {
+	char *trace;
+	char data[USTCOMM_DATA_SIZE];
+};
+
 struct ustcomm_channel_info {
+	char *trace;
 	char *channel;
 	unsigned int subbuf_size;
 	unsigned int subbuf_num;
@@ -86,6 +92,7 @@ struct ustcomm_channel_info {
 };
 
 struct ustcomm_buffer_info {
+	char *trace;
 	char *channel;
 	int ch_cpu;
 	pid_t pid;
@@ -96,6 +103,7 @@ struct ustcomm_buffer_info {
 };
 
 struct ustcomm_marker_info {
+	char *trace;
 	char *channel;
 	char *marker;
 	char data[USTCOMM_DATA_SIZE];
@@ -119,7 +127,7 @@ extern int ensure_dir_exists(const char *dir);
 
 /* Create and delete sockets */
 extern struct ustcomm_sock * ustcomm_init_sock(int fd, int epoll_fd,
-					       struct list_head *list);
+					       struct cds_list_head *list);
 extern void ustcomm_del_sock(struct ustcomm_sock *sock, int keep_in_epoll);
 
 /* Create and delete named sockets */
@@ -172,14 +180,22 @@ extern char * ustcomm_restore_ptr(char *ptr, char *data_field,
 	(size_t) (long)(struct_ptr)->data - (long)(struct_ptr) + (offset)
 
 /* Packing and unpacking functions, making life easier */
+extern int ustcomm_pack_trace_info(struct ustcomm_header *header,
+				   struct ustcomm_trace_info *trace_inf,
+				   const char *trace);
+
+extern int ustcomm_unpack_trace_info(struct ustcomm_trace_info *trace_inf);
+
 extern int ustcomm_pack_channel_info(struct ustcomm_header *header,
 				     struct ustcomm_channel_info *ch_inf,
+				     const char *trace,
 				     const char *channel);
 
 extern int ustcomm_unpack_channel_info(struct ustcomm_channel_info *ch_inf);
 
 extern int ustcomm_pack_buffer_info(struct ustcomm_header *header,
 				    struct ustcomm_buffer_info *buf_inf,
+				    const char *trace,
 				    const char *channel,
 				    int channel_cpu);
 
@@ -187,6 +203,7 @@ extern int ustcomm_unpack_buffer_info(struct ustcomm_buffer_info *buf_inf);
 
 extern int ustcomm_pack_marker_info(struct ustcomm_header *header,
 				    struct ustcomm_marker_info *marker_inf,
+				    const char *trace,
 				    const char *channel,
 				    const char *marker);
 
@@ -198,15 +215,5 @@ extern int ustcomm_pack_sock_path(struct ustcomm_header *header,
 				  const char *socket_path);
 
 extern int ustcomm_unpack_sock_path(struct ustcomm_sock_path *sock_path_inf);
-
-/* Packing and requesting functions */
-extern int ustcomm_send_ch_req(int sock, char *channel, int command,
-			       struct ustcomm_header *recv_header,
-			       char *recv_data);
-
-extern int ustcomm_send_buf_req(int sock, char *channel, int ch_cpu,
-				int command,
-				struct ustcomm_header *recv_header,
-				char *recv_data);
 
 #endif /* USTCOMM_H */

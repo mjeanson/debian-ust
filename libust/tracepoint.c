@@ -27,6 +27,7 @@
 
 #define _LGPL_SOURCE
 #include <urcu-bp.h>
+#include <urcu/hlist.h>
 
 //extern struct tracepoint __start___tracepoints[] __attribute__((visibility("hidden")));
 //extern struct tracepoint __stop___tracepoints[] __attribute__((visibility("hidden")));
@@ -35,7 +36,7 @@
 static const int tracepoint_debug;
 
 /* libraries that contain tracepoints (struct tracepoint_lib) */
-static LIST_HEAD(libs);
+static CDS_LIST_HEAD(libs);
 
 /*
  * tracepoints_mutex nests inside module_mutex. Tracepoints mutex protects the
@@ -49,7 +50,7 @@ static DEFINE_MUTEX(tracepoints_mutex);
  */
 #define TRACEPOINT_HASH_BITS 6
 #define TRACEPOINT_TABLE_SIZE (1 << TRACEPOINT_HASH_BITS)
-static struct hlist_head tracepoint_table[TRACEPOINT_TABLE_SIZE];
+static struct cds_hlist_head tracepoint_table[TRACEPOINT_TABLE_SIZE];
 
 /*
  * Note about RCU :
@@ -58,7 +59,7 @@ static struct hlist_head tracepoint_table[TRACEPOINT_TABLE_SIZE];
  * Tracepoint entries modifications are protected by the tracepoints_mutex.
  */
 struct tracepoint_entry {
-	struct hlist_node hlist;
+	struct cds_hlist_node hlist;
 	struct probe *probes;
 	int refcount;	/* Number of times armed. 0 if disarmed. */
 	char name[0];
@@ -67,7 +68,7 @@ struct tracepoint_entry {
 struct tp_probes {
 	union {
 //ust//		struct rcu_head rcu;
-		struct list_head list;
+		struct cds_list_head list;
 	} u;
 	struct probe probes[0];
 };
@@ -192,13 +193,13 @@ tracepoint_entry_remove_probe(struct tracepoint_entry *entry, void *probe,
  */
 static struct tracepoint_entry *get_tracepoint(const char *name)
 {
-	struct hlist_head *head;
-	struct hlist_node *node;
+	struct cds_hlist_head *head;
+	struct cds_hlist_node *node;
 	struct tracepoint_entry *e;
 	u32 hash = jhash(name, strlen(name), 0);
 
 	head = &tracepoint_table[hash & (TRACEPOINT_TABLE_SIZE - 1)];
-	hlist_for_each_entry(e, node, head, hlist) {
+	cds_hlist_for_each_entry(e, node, head, hlist) {
 		if (!strcmp(name, e->name))
 			return e;
 	}
@@ -211,14 +212,14 @@ static struct tracepoint_entry *get_tracepoint(const char *name)
  */
 static struct tracepoint_entry *add_tracepoint(const char *name)
 {
-	struct hlist_head *head;
-	struct hlist_node *node;
+	struct cds_hlist_head *head;
+	struct cds_hlist_node *node;
 	struct tracepoint_entry *e;
 	size_t name_len = strlen(name) + 1;
 	u32 hash = jhash(name, name_len-1, 0);
 
 	head = &tracepoint_table[hash & (TRACEPOINT_TABLE_SIZE - 1)];
-	hlist_for_each_entry(e, node, head, hlist) {
+	cds_hlist_for_each_entry(e, node, head, hlist) {
 		if (!strcmp(name, e->name)) {
 			DBG("tracepoint %s busy", name);
 			return ERR_PTR(-EEXIST);	/* Already there */
@@ -234,7 +235,7 @@ static struct tracepoint_entry *add_tracepoint(const char *name)
 	memcpy(&e->name[0], name, name_len);
 	e->probes = NULL;
 	e->refcount = 0;
-	hlist_add_head(&e->hlist, head);
+	cds_hlist_add_head(&e->hlist, head);
 	return e;
 }
 
@@ -244,7 +245,7 @@ static struct tracepoint_entry *add_tracepoint(const char *name)
  */
 static inline void remove_tracepoint(struct tracepoint_entry *e)
 {
-	hlist_del(&e->hlist);
+	cds_hlist_del(&e->hlist);
 	free(e);
 }
 
@@ -257,10 +258,10 @@ static void set_tracepoint(struct tracepoint_entry **entry,
 	WARN_ON(strcmp((*entry)->name, elem->name) != 0);
 
 	/*
-	 * rcu_assign_pointer has a smp_wmb() which makes sure that the new
+	 * rcu_assign_pointer has a cmm_smp_wmb() which makes sure that the new
 	 * probe callbacks array is consistent before setting a pointer to it.
 	 * This array is referenced by __DO_TRACE from
-	 * include/linux/tracepoints.h. A matching smp_read_barrier_depends()
+	 * include/linux/tracepoints.h. A matching cmm_smp_read_barrier_depends()
 	 * is used.
 	 */
 	rcu_assign_pointer(elem->probes, (*entry)->probes);
@@ -314,7 +315,7 @@ static void lib_update_tracepoints(void)
 	struct tracepoint_lib *lib;
 
 //ust//	pthread_mutex_lock(&module_mutex);
-	list_for_each_entry(lib, &libs, list)
+	cds_list_for_each_entry(lib, &libs, list)
 		tracepoint_update_probe_range(lib->tracepoints_start,
 				lib->tracepoints_start + lib->tracepoints_count);
 //ust//	pthread_mutex_unlock(&module_mutex);
@@ -420,7 +421,7 @@ int tracepoint_probe_unregister(const char *name, void *probe, void *data)
 }
 //ust// EXPORT_SYMBOL_GPL(tracepoint_probe_unregister);
 
-static LIST_HEAD(old_probes);
+static CDS_LIST_HEAD(old_probes);
 static int need_update;
 
 static void tracepoint_add_old_probes(void *old)
@@ -429,7 +430,7 @@ static void tracepoint_add_old_probes(void *old)
 	if (old) {
 		struct tp_probes *tp_probes = _ust_container_of(old,
 			struct tp_probes, probes[0]);
-		list_add(&tp_probes->u.list, &old_probes);
+		cds_list_add(&tp_probes->u.list, &old_probes);
 	}
 }
 
@@ -486,7 +487,7 @@ int tracepoint_probe_unregister_noupdate(const char *name, void *probe,
  */
 void tracepoint_probe_update_all(void)
 {
-	LIST_HEAD(release_probes);
+	CDS_LIST_HEAD(release_probes);
 	struct tp_probes *pos, *next;
 
 	pthread_mutex_lock(&tracepoints_mutex);
@@ -494,14 +495,14 @@ void tracepoint_probe_update_all(void)
 		pthread_mutex_unlock(&tracepoints_mutex);
 		return;
 	}
-	if (!list_empty(&old_probes))
-		list_replace_init(&old_probes, &release_probes);
+	if (!cds_list_empty(&old_probes))
+		cds_list_replace_init(&old_probes, &release_probes);
 	need_update = 0;
 	pthread_mutex_unlock(&tracepoints_mutex);
 
 	tracepoint_update_probes();
-	list_for_each_entry_safe(pos, next, &release_probes, u.list) {
-		list_del(&pos->u.list);
+	cds_list_for_each_entry_safe(pos, next, &release_probes, u.list) {
+		cds_list_del(&pos->u.list);
 //ust//		call_rcu_sched(&pos->u.rcu, rcu_free_old_probes);
 		synchronize_rcu();
 		free(pos);
@@ -519,7 +520,7 @@ int lib_get_iter_tracepoints(struct tracepoint_iter *iter)
 	int found = 0;
 
 //ust//	pthread_mutex_lock(&module_mutex);
-	list_for_each_entry(iter_lib, &libs, list) {
+	cds_list_for_each_entry(iter_lib, &libs, list) {
 		if (iter_lib < iter->lib)
 			continue;
 		else if (iter_lib > iter->lib)
@@ -668,7 +669,7 @@ int tracepoint_register_lib(struct tracepoint *tracepoints_start, int tracepoint
 
 	/* FIXME: maybe protect this with its own mutex? */
 	pthread_mutex_lock(&tracepoints_mutex);
-	list_add(&pl->list, &libs);
+	cds_list_add(&pl->list, &libs);
 	pthread_mutex_unlock(&tracepoints_mutex);
 
 	new_tracepoints(tracepoints_start, tracepoints_start + tracepoints_count);
@@ -687,10 +688,10 @@ int tracepoint_unregister_lib(struct tracepoint *tracepoints_start)
 
 	pthread_mutex_lock(&tracepoints_mutex);
 
-	list_for_each_entry(lib, &libs, list) {
+	cds_list_for_each_entry(lib, &libs, list) {
 		if(lib->tracepoints_start == tracepoints_start) {
 			struct tracepoint_lib *lib2free = lib;
-			list_del(&lib->list);
+			cds_list_del(&lib->list);
 			free(lib2free);
 			break;
 		}

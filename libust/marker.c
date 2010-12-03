@@ -21,6 +21,7 @@
 #define _LGPL_SOURCE
 #include <urcu-bp.h>
 #include <urcu/rculist.h>
+#include <urcu/hlist.h>
 
 #include <ust/core.h>
 #include <ust/marker.h>
@@ -45,7 +46,7 @@ static const int marker_debug;
  */
 static DEFINE_MUTEX(markers_mutex);
 
-static LIST_HEAD(libs);
+static CDS_LIST_HEAD(libs);
 
 
 void lock_markers(void)
@@ -64,7 +65,7 @@ void unlock_markers(void)
  */
 #define MARKER_HASH_BITS 6
 #define MARKER_TABLE_SIZE (1 << MARKER_HASH_BITS)
-static struct hlist_head marker_table[MARKER_TABLE_SIZE];
+static struct cds_hlist_head marker_table[MARKER_TABLE_SIZE];
 
 /*
  * Note about RCU :
@@ -75,7 +76,7 @@ static struct hlist_head marker_table[MARKER_TABLE_SIZE];
  * marker entries modifications are protected by the markers_mutex.
  */
 struct marker_entry {
-	struct hlist_node hlist;
+	struct cds_hlist_node hlist;
 	char *format;
 	char *name;
 			/* Probe wrapper */
@@ -127,7 +128,7 @@ notrace void __mark_empty_function(const struct marker *mdata,
  * @...:  Variable argument list.
  *
  * Since we do not use "typical" pointer based RCU in the 1 argument case, we
- * need to put a full smp_rmb() in this branch. This is why we do not use
+ * need to put a full cmm_smp_rmb() in this branch. This is why we do not use
  * rcu_dereference() for the pointer read.
  */
 notrace void marker_probe_cb(const struct marker *mdata,
@@ -146,12 +147,12 @@ notrace void marker_probe_cb(const struct marker *mdata,
 	if (likely(!ptype)) {
 		marker_probe_func *func;
 		/* Must read the ptype before ptr. They are not data dependant,
-		 * so we put an explicit smp_rmb() here. */
-		smp_rmb();
+		 * so we put an explicit cmm_smp_rmb() here. */
+		cmm_smp_rmb();
 		func = mdata->single.func;
 		/* Must read the ptr before private data. They are not data
-		 * dependant, so we put an explicit smp_rmb() here. */
-		smp_rmb();
+		 * dependant, so we put an explicit cmm_smp_rmb() here. */
+		cmm_smp_rmb();
 		va_start(args, regs);
 		func(mdata, mdata->single.probe_private, regs, call_private,
 			mdata->format, &args);
@@ -162,16 +163,16 @@ notrace void marker_probe_cb(const struct marker *mdata,
 		/*
 		 * Read mdata->ptype before mdata->multi.
 		 */
-		smp_rmb();
+		cmm_smp_rmb();
 		multi = mdata->multi;
 		/*
 		 * multi points to an array, therefore accessing the array
 		 * depends on reading multi. However, even in this case,
 		 * we must insure that the pointer is read _before_ the array
-		 * data. Same as rcu_dereference, but we need a full smp_rmb()
-		 * in the fast path, so put the explicit barrier here.
+		 * data. Same as rcu_dereference, but we need a full cmm_smp_rmb()
+		 * in the fast path, so put the explicit cmm_barrier here.
 		 */
-		smp_read_barrier_depends();
+		cmm_smp_read_barrier_depends();
 		for (i = 0; multi[i].func; i++) {
 			va_start(args, regs);
 			multi[i].func(mdata, multi[i].probe_private,
@@ -202,12 +203,12 @@ static notrace void marker_probe_cb_noarg(const struct marker *mdata,
 	if (likely(!ptype)) {
 		marker_probe_func *func;
 		/* Must read the ptype before ptr. They are not data dependant,
-		 * so we put an explicit smp_rmb() here. */
-		smp_rmb();
+		 * so we put an explicit cmm_smp_rmb() here. */
+		cmm_smp_rmb();
 		func = mdata->single.func;
 		/* Must read the ptr before private data. They are not data
-		 * dependant, so we put an explicit smp_rmb() here. */
-		smp_rmb();
+		 * dependant, so we put an explicit cmm_smp_rmb() here. */
+		cmm_smp_rmb();
 		func(mdata, mdata->single.probe_private, regs, call_private,
 			mdata->format, &args);
 	} else {
@@ -216,16 +217,16 @@ static notrace void marker_probe_cb_noarg(const struct marker *mdata,
 		/*
 		 * Read mdata->ptype before mdata->multi.
 		 */
-		smp_rmb();
+		cmm_smp_rmb();
 		multi = mdata->multi;
 		/*
 		 * multi points to an array, therefore accessing the array
 		 * depends on reading multi. However, even in this case,
 		 * we must insure that the pointer is read _before_ the array
-		 * data. Same as rcu_dereference, but we need a full smp_rmb()
-		 * in the fast path, so put the explicit barrier here.
+		 * data. Same as rcu_dereference, but we need a full cmm_smp_rmb()
+		 * in the fast path, so put the explicit cmm_barrier here.
 		 */
-		smp_read_barrier_depends();
+		cmm_smp_read_barrier_depends();
 		for (i = 0; multi[i].func; i++)
 			multi[i].func(mdata, multi[i].probe_private, regs,
 				call_private, mdata->format, &args);
@@ -239,7 +240,7 @@ static void free_old_closure(struct rcu_head *head)
 		struct marker_entry, rcu);
 	free(entry->oldptr);
 	/* Make sure we free the data before setting the pending flag to 0 */
-	smp_wmb();
+	cmm_smp_wmb();
 	entry->rcu_pending = 0;
 }
 
@@ -386,8 +387,8 @@ marker_entry_remove_probe(struct marker_entry *entry,
  */
 static struct marker_entry *get_marker(const char *channel, const char *name)
 {
-	struct hlist_head *head;
-	struct hlist_node *node;
+	struct cds_hlist_head *head;
+	struct cds_hlist_node *node;
 	struct marker_entry *e;
 	size_t channel_len = strlen(channel) + 1;
 	size_t name_len = strlen(name) + 1;
@@ -395,7 +396,7 @@ static struct marker_entry *get_marker(const char *channel, const char *name)
 
 	hash = jhash(channel, channel_len-1, 0) ^ jhash(name, name_len-1, 0);
 	head = &marker_table[hash & ((1 << MARKER_HASH_BITS)-1)];
-	hlist_for_each_entry(e, node, head, hlist) {
+	cds_hlist_for_each_entry(e, node, head, hlist) {
 		if (!strcmp(channel, e->channel) && !strcmp(name, e->name))
 			return e;
 	}
@@ -409,8 +410,8 @@ static struct marker_entry *get_marker(const char *channel, const char *name)
 static struct marker_entry *add_marker(const char *channel, const char *name,
 		const char *format)
 {
-	struct hlist_head *head;
-	struct hlist_node *node;
+	struct cds_hlist_head *head;
+	struct cds_hlist_node *node;
 	struct marker_entry *e;
 	size_t channel_len = strlen(channel) + 1;
 	size_t name_len = strlen(name) + 1;
@@ -421,7 +422,7 @@ static struct marker_entry *add_marker(const char *channel, const char *name,
 	if (format)
 		format_len = strlen(format) + 1;
 	head = &marker_table[hash & ((1 << MARKER_HASH_BITS)-1)];
-	hlist_for_each_entry(e, node, head, hlist) {
+	cds_hlist_for_each_entry(e, node, head, hlist) {
 		if (!strcmp(channel, e->channel) && !strcmp(name, e->name)) {
 			DBG("Marker %s.%s busy", channel, name);
 			return ERR_PTR(-EBUSY);	/* Already there */
@@ -459,7 +460,7 @@ static struct marker_entry *add_marker(const char *channel, const char *name,
 	e->format_allocated = 0;
 	e->refcount = 0;
 	e->rcu_pending = 0;
-	hlist_add_head(&e->hlist, head);
+	cds_hlist_add_head(&e->hlist, head);
 	return e;
 }
 
@@ -469,8 +470,8 @@ static struct marker_entry *add_marker(const char *channel, const char *name,
  */
 static int remove_marker(const char *channel, const char *name)
 {
-	struct hlist_head *head;
-	struct hlist_node *node;
+	struct cds_hlist_head *head;
+	struct cds_hlist_node *node;
 	struct marker_entry *e;
 	int found = 0;
 	size_t channel_len = strlen(channel) + 1;
@@ -480,7 +481,7 @@ static int remove_marker(const char *channel, const char *name)
 
 	hash = jhash(channel, channel_len-1, 0) ^ jhash(name, name_len-1, 0);
 	head = &marker_table[hash & ((1 << MARKER_HASH_BITS)-1)];
-	hlist_for_each_entry(e, node, head, hlist) {
+	cds_hlist_for_each_entry(e, node, head, hlist) {
 		if (!strcmp(channel, e->channel) && !strcmp(name, e->name)) {
 			found = 1;
 			break;
@@ -490,14 +491,14 @@ static int remove_marker(const char *channel, const char *name)
 		return -ENOENT;
 	if (e->single.func != __mark_empty_function)
 		return -EBUSY;
-	hlist_del(&e->hlist);
+	cds_hlist_del(&e->hlist);
 	if (e->format_allocated)
 		free(e->format);
 	ret = ltt_channels_unregister(e->channel);
 	WARN_ON(ret);
 	/* Make sure the call_rcu has been executed */
 //ust//	if (e->rcu_pending)
-//ust//		rcu_barrier_sched();
+//ust//		rcu_cmm_barrier_sched();
 	free(e);
 	return 0;
 }
@@ -563,7 +564,7 @@ static int set_marker(struct marker_entry *entry, struct marker *elem,
 	 * Make sure the private data is valid when we update the
 	 * single probe ptr.
 	 */
-	smp_wmb();
+	cmm_smp_wmb();
 	elem->single.func = entry->single.func;
 	/*
 	 * We also make sure that the new probe callbacks array is consistent
@@ -574,7 +575,7 @@ static int set_marker(struct marker_entry *entry, struct marker *elem,
 	 * Update the function or multi probe array pointer before setting the
 	 * ptype.
 	 */
-	smp_wmb();
+	cmm_smp_wmb();
 	elem->ptype = entry->ptype;
 
 	if (elem->tp_name && (active ^ _imv_read(elem->state))) {
@@ -641,7 +642,7 @@ static void disable_marker(struct marker *elem)
 	elem->state__imv = 0;
 	elem->single.func = __mark_empty_function;
 	/* Update the function before setting the ptype */
-	smp_wmb();
+	cmm_smp_wmb();
 	elem->ptype = 0;	/* single probe */
 	/*
 	 * Leave the private data and channel_id/event_id there, because removal
@@ -716,7 +717,7 @@ static void lib_update_markers(void)
 
 	/* FIXME: we should probably take a mutex here on libs */
 //ust//	pthread_mutex_lock(&module_mutex);
-	list_for_each_entry(lib, &libs, list)
+	cds_list_for_each_entry(lib, &libs, list)
 		marker_update_probe_range(lib->markers_start,
 				lib->markers_start + lib->markers_count);
 //ust//	pthread_mutex_unlock(&module_mutex);
@@ -816,7 +817,7 @@ int marker_probe_register(const char *channel, const char *name,
 	 * make sure it's executed now.
 	 */
 //ust//	if (entry->rcu_pending)
-//ust//		rcu_barrier_sched();
+//ust//		rcu_cmm_barrier_sched();
 	old = marker_entry_add_probe(entry, probe, probe_private);
 	if (IS_ERR(old)) {
 		ret = PTR_ERR(old);
@@ -835,11 +836,11 @@ int marker_probe_register(const char *channel, const char *name,
 	if (!entry)
 		goto end;
 //ust//	if (entry->rcu_pending)
-//ust//		rcu_barrier_sched();
+//ust//		rcu_cmm_barrier_sched();
 	entry->oldptr = old;
 	entry->rcu_pending = 1;
 	/* write rcu_pending before calling the RCU callback */
-	smp_wmb();
+	cmm_smp_wmb();
 //ust//	call_rcu_sched(&entry->rcu, free_old_closure);
 	synchronize_rcu(); free_old_closure(&entry->rcu);
 	goto end;
@@ -881,7 +882,7 @@ int marker_probe_unregister(const char *channel, const char *name,
 	if (!entry)
 		goto end;
 //ust//	if (entry->rcu_pending)
-//ust//		rcu_barrier_sched();
+//ust//		rcu_cmm_barrier_sched();
 	old = marker_entry_remove_probe(entry, probe, probe_private);
 	pthread_mutex_unlock(&markers_mutex);
 
@@ -892,11 +893,11 @@ int marker_probe_unregister(const char *channel, const char *name,
 	if (!entry)
 		goto end;
 //ust//	if (entry->rcu_pending)
-//ust//		rcu_barrier_sched();
+//ust//		rcu_cmm_barrier_sched();
 	entry->oldptr = old;
 	entry->rcu_pending = 1;
 	/* write rcu_pending before calling the RCU callback */
-	smp_wmb();
+	cmm_smp_wmb();
 //ust//	call_rcu_sched(&entry->rcu, free_old_closure);
 	synchronize_rcu(); free_old_closure(&entry->rcu);
 	remove_marker(channel, name);	/* Ignore busy error message */
@@ -912,12 +913,12 @@ get_marker_from_private_data(marker_probe_func *probe, void *probe_private)
 {
 	struct marker_entry *entry;
 	unsigned int i;
-	struct hlist_head *head;
-	struct hlist_node *node;
+	struct cds_hlist_head *head;
+	struct cds_hlist_node *node;
 
 	for (i = 0; i < MARKER_TABLE_SIZE; i++) {
 		head = &marker_table[i];
-		hlist_for_each_entry(entry, node, head, hlist) {
+		cds_hlist_for_each_entry(entry, node, head, hlist) {
 			if (!entry->ptype) {
 				if (entry->single.func == probe
 						&& entry->single.probe_private
@@ -966,7 +967,7 @@ int marker_probe_unregister_private_data(marker_probe_func *probe,
 		goto end;
 	}
 //ust//	if (entry->rcu_pending)
-//ust//		rcu_barrier_sched();
+//ust//		rcu_cmm_barrier_sched();
 	old = marker_entry_remove_probe(entry, NULL, probe_private);
 	channel = strdup(entry->channel);
 	name = strdup(entry->name);
@@ -979,11 +980,11 @@ int marker_probe_unregister_private_data(marker_probe_func *probe,
 	if (!entry)
 		goto end;
 //ust//	if (entry->rcu_pending)
-//ust//		rcu_barrier_sched();
+//ust//		rcu_cmm_barrier_sched();
 	entry->oldptr = old;
 	entry->rcu_pending = 1;
 	/* write rcu_pending before calling the RCU callback */
-	smp_wmb();
+	cmm_smp_wmb();
 //ust//	call_rcu_sched(&entry->rcu, free_old_closure);
 	synchronize_rcu(); free_old_closure(&entry->rcu);
 	/* Ignore busy error message */
@@ -1013,8 +1014,8 @@ end:
 void *marker_get_private_data(const char *channel, const char *name,
 			      marker_probe_func *probe, int num)
 {
-	struct hlist_head *head;
-	struct hlist_node *node;
+	struct cds_hlist_head *head;
+	struct cds_hlist_node *node;
 	struct marker_entry *e;
 	size_t channel_len = strlen(channel) + 1;
 	size_t name_len = strlen(name) + 1;
@@ -1023,7 +1024,7 @@ void *marker_get_private_data(const char *channel, const char *name,
 
 	hash = jhash(channel, channel_len-1, 0) ^ jhash(name, name_len-1, 0);
 	head = &marker_table[hash & ((1 << MARKER_HASH_BITS)-1)];
-	hlist_for_each_entry(e, node, head, hlist) {
+	cds_hlist_for_each_entry(e, node, head, hlist) {
 		if (!strcmp(channel, e->channel) && !strcmp(name, e->name)) {
 			if (!e->ptype) {
 				if (num == 0 && e->single.func == probe)
@@ -1086,7 +1087,7 @@ int lib_get_iter_markers(struct marker_iter *iter)
 	int found = 0;
 
 //ust//	pthread_mutex_lock(&module_mutex);
-	list_for_each_entry(iter_lib, &libs, list) {
+	cds_list_for_each_entry(iter_lib, &libs, list) {
 		if (iter_lib < iter->lib)
 			continue;
 		else if (iter_lib > iter->lib)
@@ -1178,14 +1179,14 @@ void marker_iter_reset(struct marker_iter *iter)
 /*
  * must be called with current->user_markers_mutex held
  */
-static void free_user_marker(char __user *state, struct hlist_head *head)
+static void free_user_marker(char __user *state, struct cds_hlist_head *head)
 {
 	struct user_marker *umark;
-	struct hlist_node *pos, *n;
+	struct cds_hlist_node *pos, *n;
 
-	hlist_for_each_entry_safe(umark, pos, n, head, hlist) {
+	cds_hlist_for_each_entry_safe(umark, pos, n, head, hlist) {
 		if (umark->state == state) {
-			hlist_del(&umark->hlist);
+			cds_hlist_del(&umark->hlist);
 			free(umark);
 		}
 	}
@@ -1243,12 +1244,12 @@ static void free_user_marker(char __user *state, struct hlist_head *head)
 void exit_user_markers(struct task_struct *p)
 {
 	struct user_marker *umark;
-	struct hlist_node *pos, *n;
+	struct cds_hlist_node *pos, *n;
 
 	if (thread_group_leader(p)) {
 		pthread_mutex_lock(&markers_mutex);
 		pthread_mutex_lock(&p->user_markers_mutex);
-		hlist_for_each_entry_safe(umark, pos, n, &p->user_markers,
+		cds_hlist_for_each_entry_safe(umark, pos, n, &p->user_markers,
 			hlist)
 		    free(umark);
 		INIT_HLIST_HEAD(&p->user_markers);
@@ -1306,8 +1307,8 @@ void ltt_dump_marker_state(struct ust_trace *trace)
 {
 	struct marker_entry *entry;
 	struct ltt_probe_private_data call_data;
-	struct hlist_head *head;
-	struct hlist_node *node;
+	struct cds_hlist_head *head;
+	struct cds_hlist_node *node;
 	unsigned int i;
 
 	pthread_mutex_lock(&markers_mutex);
@@ -1316,7 +1317,7 @@ void ltt_dump_marker_state(struct ust_trace *trace)
 
 	for (i = 0; i < MARKER_TABLE_SIZE; i++) {
 		head = &marker_table[i];
-		hlist_for_each_entry(entry, node, head, hlist) {
+		cds_hlist_for_each_entry(entry, node, head, hlist) {
 			__trace_mark(0, metadata, core_marker_id,
 				&call_data,
 				"channel %s name %s event_id %hu "
@@ -1370,7 +1371,7 @@ int marker_register_lib(struct marker *markers_start, int markers_count)
 
 	/* FIXME: maybe protect this with its own mutex? */
 	lock_markers();
-	list_add(&pl->list, &libs);
+	cds_list_add(&pl->list, &libs);
 	unlock_markers();
 
 	new_markers(markers_start, markers_start + markers_count);
@@ -1394,10 +1395,10 @@ int marker_unregister_lib(struct marker *markers_start)
 
 	/* FIXME: we should probably take a mutex here on libs */
 //ust//	pthread_mutex_lock(&module_mutex);
-	list_for_each_entry(lib, &libs, list) {
+	cds_list_for_each_entry(lib, &libs, list) {
 		if(lib->markers_start == markers_start) {
 			struct lib *lib2free = lib;
-			list_del(&lib->list);
+			cds_list_del(&lib->list);
 			free(lib2free);
 			break;
 		}
