@@ -1,3 +1,17 @@
+ust (0.9-1) unstable; urgency=low
+
+  * [013eef] New upstream version 0.9 (Closes: #604955)
+  * [2e5bbe] Depend on no less than version 0.5.2 of liburcu
+  * [74b922] Do not build info document, included upstream
+  * [d29261] Update html document path to new location
+  * [2f6fea] Convert patches to git-buldpackage's patch queue format
+  * [abcfff] Update libust0 dependency for info documents
+  * [84cbbe] Remove s390 and s390x from architecture list, not supported
+    (Closes: #575407)
+  * [e79820] Add patch to fix compilation error on ppc
+
+ -- Jon Bernard <jbernard@debian.org>  Mon, 06 Dec 2010 21:16:07 -0500
+
 ust (0.8-1) unstable; urgency=low
 
   * [e3e73f] Imported Upstream version 0.8
