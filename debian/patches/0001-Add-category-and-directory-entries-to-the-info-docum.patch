@@ -1,0 +1,33 @@
+From: Jon Bernard <jbernard@debian.org>
+Date: Mon, 6 Dec 2010 19:49:31 -0500
+Subject: [PATCH] Add category and directory entries to the info document
+To: ltt-dev@lists.casi.polymtl.ca
+
+Debian uses install-info to install info documentation onto the target
+system. It uses @dircategory to determine the section into which the
+info page should be put and @direntry is copied into the dir file in
+/usr/share/info.
+
+Signed-off-by: Jon Bernard <jbernard@debian.org>
+---
+ doc/info/ust.texi |    6 ++++++
+ 1 files changed, 6 insertions(+), 0 deletions(-)
+
+diff --git a/doc/info/ust.texi b/doc/info/ust.texi
+index e0565f3..453d620 100644
+--- a/doc/info/ust.texi
++++ b/doc/info/ust.texi
+@@ -4,6 +4,12 @@
+ @settitle LTTng Userspace Tracer (UST) Manual
+ @c %**end of header
+ 
++@dircategory Individual utilities
++
++@direntry
++* ust: (ust).                LTTng Userspace Tracer.
++@end direntry
++
+ @copying
+ This manual is for program, version version.
+ 
+-- 
