@@ -16,3 +16,4 @@ usr/lib/libustcmd.la
 usr/lib/libustd.so.0.0.0
 usr/lib/libustd.so.0
 usr/lib/libustd.la
+usr/share/info
