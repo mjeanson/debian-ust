@@ -4,4 +4,4 @@
 
 override_dh_auto_build:
 	dh_auto_build
-	makeinfo --html --no-split doc/manual/manual.texinfo -o debian/ust.html
+	makeinfo --html --no-split doc/info/ust.texi -o debian/ust.html
