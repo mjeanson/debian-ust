@@ -10,7 +10,7 @@ Homepage: http://lttng.org/
 
 Package: libust0
 Architecture: i386 amd64 powerpc ppc64 s390 s390x
-Depends: ${shlibs:Depends}, ${misc:Depends}, liburcu0 (>= 0.5.2)
+Depends: ${shlibs:Depends}, ${misc:Depends}, liburcu0 (>= 0.5.2), dpkg (>= 1.15.4) | install-info
 Description: LTTng Userspace Tracer (runtime)
  The userspace tracer is designed to provide detailed information about
  userspace activity. Like the kernel tracer, performance is the main goal.
