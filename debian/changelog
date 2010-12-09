@@ -1,3 +1,10 @@
+ust (0.9-2) unstable; urgency=low
+
+  * [88b622] Add patch to link register test against libpthread
+    (Closes: #604955) - thanks to Angel Abad
+
+ -- Jon Bernard <jbernard@debian.org>  Thu, 09 Dec 2010 14:31:43 -0500
+
 ust (0.9-1) unstable; urgency=low
 
   * [013eef] New upstream version 0.9 (Closes: #604955)
