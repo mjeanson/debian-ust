@@ -1,2 +1,3 @@
 0001-Add-category-and-directory-entries-to-the-info-docum.patch
 0002-Fix-ppc-tracepoint-test-compilation-error.patch
+0003-Link-register-test-against-libpthread-for-binutils-g.patch
