@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([ust], [0.10], [nils dot carlson at ericsson dot com])
+AC_INIT([ust], [0.11], [nils dot carlson at ericsson dot com])
 AC_CONFIG_AUX_DIR([config])
 AC_CANONICAL_TARGET
 AC_CANONICAL_HOST
@@ -62,7 +62,7 @@ This error can also occur when the liburcu package's configure script has not be
 AC_CHECK_LIB([urcu-bp], [synchronize_rcu], [], [AC_MSG_ERROR([Cannot find liburcu-bp lib. Use [LDFLAGS]=-Ldir to specify its location.])])
 
 # urcu - check that URCU lib is at least version 0.5
-AC_CHECK_DECL([cds_list_add(list_t *newp, list_t *head)], [], [AC_MSG_ERROR([liburcu 0.5 or newer is needed, please update your version or use [LDFLAGS]=-Ldir to specify the right location.])], [[#include <urcu/list.h>]])
+AC_CHECK_DECL([cds_list_add(0, 0)], [], [AC_MSG_ERROR([liburcu 0.5 or newer is needed, please update your version or use [LDFLAGS]=-Ldir to specify the right location.])], [[#include <urcu/list.h>]])
 
 
 # Check for various supplementary host information (beyond the
