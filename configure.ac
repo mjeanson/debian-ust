@@ -1,8 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-#AC_PREREQ([2.63])
-AC_INIT([ust], [0.9], [pierre-marc dot fournier at polymtl dot ca])
+AC_INIT([ust], [0.10], [nils dot carlson at ericsson dot com])
 AC_CONFIG_AUX_DIR([config])
 AC_CANONICAL_TARGET
 AC_CANONICAL_HOST
@@ -61,6 +60,10 @@ This error can also occur when the liburcu package's configure script has not be
 
 # urcu - check that URCU lib is available to compilation
 AC_CHECK_LIB([urcu-bp], [synchronize_rcu], [], [AC_MSG_ERROR([Cannot find liburcu-bp lib. Use [LDFLAGS]=-Ldir to specify its location.])])
+
+# urcu - check that URCU lib is at least version 0.5
+AC_CHECK_DECL([cds_list_add(list_t *newp, list_t *head)], [], [AC_MSG_ERROR([liburcu 0.5 or newer is needed, please update your version or use [LDFLAGS]=-Ldir to specify the right location.])], [[#include <urcu/list.h>]])
+
 
 # Check for various supplementary host information (beyond the
 # triplet) which might affect the library format choices.  E.g., we
@@ -129,8 +132,8 @@ AC_CONFIG_FILES([
 	tests/ustcmd_function_tests/Makefile
 	libustinstr-malloc/Makefile
 	libustfork/Makefile
-	libustd/Makefile
-	ustd/Makefile
+	libustconsumer/Makefile
+	ust-consumerd/Makefile
 	ustctl/Makefile
 	libustcomm/Makefile
 	libustcmd/Makefile

@@ -1,4 +1,5 @@
-This is ust.info, produced by makeinfo version 4.13 from ust.texi.
+This is ../../../ust/doc/info/ust.info, produced by makeinfo version
+4.13 from ../../../ust/doc/info/ust.texi.
 
 This manual is for program, version version.
 
@@ -12,7 +13,7 @@ File: ust.info,  Node: Top,  Next: Overview,  Up: (dir)
 LTTng Userspace Tracer
 **********************
 
-This manual is for UST 0.5.
+This manual is for UST 0.10.
 
 * Menu:
 
@@ -80,7 +81,7 @@ LGPL.
 
    * libustcmd
 
-   * ustd
+   * ust-consumerd
 
 
 File: ust.info,  Node: Supported platforms,  Prev: License,  Up: Overview
@@ -103,8 +104,8 @@ The LTTng userspace tracer is a library and a set of userspace tools.
 
    * ust
 
-     This contains the tracing library, the ustd daemon, trace control
-     tools and other helper tools.
+     This contains the tracing library, the ust-consumerd daemon, trace
+     control tools and other helper tools.
 
      Repository: `http://git.dorsal.polymtl.ca'
 
@@ -365,11 +366,11 @@ running process.
      # Make sure the directory for the communication sockets exists.
      $ mkdir /tmp/ustsocks
 
-     # Make sure the directory where ustd will write the trace exists.
+     # Make sure the directory where ust-consumerd will write the trace exists.
      $ mkdir /tmp/trace
 
      # Start the daemon
-     $ ustd
+     $ ust-consumerd
 
      # We assume the program we want to trace is already running and that
      # it has pid 1234.
@@ -550,7 +551,7 @@ libust.
 before the `main()' function of the application starts. This
 constructor creates a thread called the _listener thread_.  The
 listener thread initializes a named socket and waits for connections
-for ustd or ustctl.
+for ust-consumerd or ustctl.
 
    Libust-specific code may:
    * use `malloc()' and `free()'
@@ -637,29 +638,29 @@ GDB mailing list.
 
 
 Tag Table:
-Node: Top185
-Node: Overview558
-Node: What is UST?722
-Node: License1302
-Node: Supported platforms1803
-Node: Installation2037
-Node: Quick start3010
-Node: Instrumenting an application3931
-Node: Markers4930
-Node: Tracepoints6107
-Node: Recording a trace7882
-Node: Using `usttrace'8257
-Node: Setting up the recording manually9453
-Node: Using early tracing10660
-Node: Crash recovery11457
-Node: Tracing across `fork()' and `clone()'11922
-Node: Tracing programs and libraries that were not linked to libust12968
-Node: Performance14226
-Node: Viewing traces14356
-Node: Viewing multiple traces14666
-Node: Combined kernel-userspace tracing15014
-Node: Resource Usage15693
-Node: List of environment variables detected by libust17124
-Node: GDB integration18217
+Node: Top229
+Node: Overview603
+Node: What is UST?767
+Node: License1347
+Node: Supported platforms1857
+Node: Installation2091
+Node: Quick start3073
+Node: Instrumenting an application3994
+Node: Markers4993
+Node: Tracepoints6170
+Node: Recording a trace7945
+Node: Using `usttrace'8320
+Node: Setting up the recording manually9516
+Node: Using early tracing10741
+Node: Crash recovery11538
+Node: Tracing across `fork()' and `clone()'12003
+Node: Tracing programs and libraries that were not linked to libust13049
+Node: Performance14307
+Node: Viewing traces14437
+Node: Viewing multiple traces14747
+Node: Combined kernel-userspace tracing15095
+Node: Resource Usage15774
+Node: List of environment variables detected by libust17214
+Node: GDB integration18307
 
 End Tag Table

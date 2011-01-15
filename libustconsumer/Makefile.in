@@ -35,7 +35,7 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
-subdir = libustd
+subdir = libustconsumer
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/config/libtool.m4 \
@@ -72,16 +72,19 @@ am__base_list = \
   sed '$$!N;$$!N;$$!N;$$!N;s/\n/ /g'
 am__installdirs = "$(DESTDIR)$(libdir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
-libustd_la_DEPENDENCIES = $(top_builddir)/snprintf/libustsnprintf.la \
+libustconsumer_la_DEPENDENCIES =  \
+	$(top_builddir)/snprintf/libustsnprintf.la \
 	$(top_builddir)/libustcomm/libustcomm.la
-am_libustd_la_OBJECTS = libustd_la-libustd.lo libustd_la-lowlevel.lo
-libustd_la_OBJECTS = $(am_libustd_la_OBJECTS)
+am_libustconsumer_la_OBJECTS = libustconsumer_la-libustconsumer.lo \
+	libustconsumer_la-lowlevel.lo
+libustconsumer_la_OBJECTS = $(am_libustconsumer_la_OBJECTS)
 AM_V_lt = $(am__v_lt_$(V))
 am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
 am__v_lt_0 = --silent
-libustd_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
-	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(libustd_la_CFLAGS) \
-	$(CFLAGS) $(libustd_la_LDFLAGS) $(LDFLAGS) -o $@
+libustconsumer_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
+	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
+	$(libustconsumer_la_CFLAGS) $(CFLAGS) \
+	$(libustconsumer_la_LDFLAGS) $(LDFLAGS) -o $@
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/config/depcomp
 am__depfiles_maybe = depfiles
@@ -108,8 +111,8 @@ am__v_CCLD_0 = @echo "  CCLD  " $@;
 AM_V_GEN = $(am__v_GEN_$(V))
 am__v_GEN_ = $(am__v_GEN_$(AM_DEFAULT_VERBOSITY))
 am__v_GEN_0 = @echo "  GEN   " $@;
-SOURCES = $(libustd_la_SOURCES)
-DIST_SOURCES = $(libustd_la_SOURCES)
+SOURCES = $(libustconsumer_la_SOURCES)
+DIST_SOURCES = $(libustconsumer_la_SOURCES)
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -234,15 +237,15 @@ AM_CPPFLAGS = -I$(top_srcdir)/libust -I$(top_srcdir)/libustcomm \
 	-I$(top_srcdir)/include
 
 AM_CFLAGS = -fno-strict-aliasing
-lib_LTLIBRARIES = libustd.la
-libustd_la_SOURCES = libustd.c lowlevel.c lowlevel.h
-libustd_la_LDFLAGS = -no-undefined -version-info 0:0:0
-libustd_la_LIBADD = \
+lib_LTLIBRARIES = libustconsumer.la
+libustconsumer_la_SOURCES = libustconsumer.c lowlevel.c lowlevel.h
+libustconsumer_la_LDFLAGS = -no-undefined -version-info 0:0:0
+libustconsumer_la_LIBADD = \
 	-lpthread \
 	$(top_builddir)/snprintf/libustsnprintf.la \
 	$(top_builddir)/libustcomm/libustcomm.la
 
-libustd_la_CFLAGS = -fno-strict-aliasing
+libustconsumer_la_CFLAGS = -fno-strict-aliasing
 all: all-am
 
 .SUFFIXES:
@@ -256,9 +259,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign libustd/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign libustconsumer/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --foreign libustd/Makefile
+	  $(AUTOMAKE) --foreign libustconsumer/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
@@ -308,8 +311,8 @@ clean-libLTLIBRARIES:
 	  echo "rm -f \"$${dir}/so_locations\""; \
 	  rm -f "$${dir}/so_locations"; \
 	done
-libustd.la: $(libustd_la_OBJECTS) $(libustd_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(libustd_la_LINK) -rpath $(libdir) $(libustd_la_OBJECTS) $(libustd_la_LIBADD) $(LIBS)
+libustconsumer.la: $(libustconsumer_la_OBJECTS) $(libustconsumer_la_DEPENDENCIES) 
+	$(AM_V_CCLD)$(libustconsumer_la_LINK) -rpath $(libdir) $(libustconsumer_la_OBJECTS) $(libustconsumer_la_LIBADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -317,8 +320,8 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libustd_la-libustd.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libustd_la-lowlevel.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libustconsumer_la-libustconsumer.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libustconsumer_la-lowlevel.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -344,21 +347,21 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LTCOMPILE) -c -o $@ $<
 
-libustd_la-libustd.lo: libustd.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustd_la_CFLAGS) $(CFLAGS) -MT libustd_la-libustd.lo -MD -MP -MF $(DEPDIR)/libustd_la-libustd.Tpo -c -o libustd_la-libustd.lo `test -f 'libustd.c' || echo '$(srcdir)/'`libustd.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libustd_la-libustd.Tpo $(DEPDIR)/libustd_la-libustd.Plo
+libustconsumer_la-libustconsumer.lo: libustconsumer.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustconsumer_la_CFLAGS) $(CFLAGS) -MT libustconsumer_la-libustconsumer.lo -MD -MP -MF $(DEPDIR)/libustconsumer_la-libustconsumer.Tpo -c -o libustconsumer_la-libustconsumer.lo `test -f 'libustconsumer.c' || echo '$(srcdir)/'`libustconsumer.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libustconsumer_la-libustconsumer.Tpo $(DEPDIR)/libustconsumer_la-libustconsumer.Plo
 @am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='libustd.c' object='libustd_la-libustd.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='libustconsumer.c' object='libustconsumer_la-libustconsumer.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustd_la_CFLAGS) $(CFLAGS) -c -o libustd_la-libustd.lo `test -f 'libustd.c' || echo '$(srcdir)/'`libustd.c
+@am__fastdepCC_FALSE@	$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustconsumer_la_CFLAGS) $(CFLAGS) -c -o libustconsumer_la-libustconsumer.lo `test -f 'libustconsumer.c' || echo '$(srcdir)/'`libustconsumer.c
 
-libustd_la-lowlevel.lo: lowlevel.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustd_la_CFLAGS) $(CFLAGS) -MT libustd_la-lowlevel.lo -MD -MP -MF $(DEPDIR)/libustd_la-lowlevel.Tpo -c -o libustd_la-lowlevel.lo `test -f 'lowlevel.c' || echo '$(srcdir)/'`lowlevel.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libustd_la-lowlevel.Tpo $(DEPDIR)/libustd_la-lowlevel.Plo
+libustconsumer_la-lowlevel.lo: lowlevel.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustconsumer_la_CFLAGS) $(CFLAGS) -MT libustconsumer_la-lowlevel.lo -MD -MP -MF $(DEPDIR)/libustconsumer_la-lowlevel.Tpo -c -o libustconsumer_la-lowlevel.lo `test -f 'lowlevel.c' || echo '$(srcdir)/'`lowlevel.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libustconsumer_la-lowlevel.Tpo $(DEPDIR)/libustconsumer_la-lowlevel.Plo
 @am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='lowlevel.c' object='libustd_la-lowlevel.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='lowlevel.c' object='libustconsumer_la-lowlevel.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustd_la_CFLAGS) $(CFLAGS) -c -o libustd_la-lowlevel.lo `test -f 'lowlevel.c' || echo '$(srcdir)/'`lowlevel.c
+@am__fastdepCC_FALSE@	$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustconsumer_la_CFLAGS) $(CFLAGS) -c -o libustconsumer_la-lowlevel.lo `test -f 'lowlevel.c' || echo '$(srcdir)/'`lowlevel.c
 
 mostlyclean-libtool:
 	-rm -f *.lo
