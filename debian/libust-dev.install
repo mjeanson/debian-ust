@@ -10,5 +10,5 @@ usr/lib/libust.a
 usr/lib/libust.so
 usr/lib/libustcmd.so
 usr/lib/libustcmd.a
-usr/lib/libustd.so
-usr/lib/libustd.a
+usr/lib/libustconsumer.so
+usr/lib/libustconsumer.a

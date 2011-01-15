@@ -13,7 +13,7 @@ usr/lib/libust.la
 usr/lib/libustcmd.so.0.0.0
 usr/lib/libustcmd.so.0
 usr/lib/libustcmd.la
-usr/lib/libustd.so.0.0.0
-usr/lib/libustd.so.0
-usr/lib/libustd.la
+usr/lib/libustconsumer.so.0.0.0
+usr/lib/libustconsumer.so.0
+usr/lib/libustconsumer.la
 usr/share/info
