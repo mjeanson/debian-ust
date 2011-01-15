@@ -35,8 +35,8 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
-bin_PROGRAMS = ustd$(EXEEXT)
-subdir = ustd
+bin_PROGRAMS = ust-consumerd$(EXEEXT)
+subdir = ust-consumerd
 DIST_COMMON = README $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/config/libtool.m4 \
@@ -52,17 +52,18 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_ustd_OBJECTS = ustd-ustd.$(OBJEXT)
-ustd_OBJECTS = $(am_ustd_OBJECTS)
-ustd_DEPENDENCIES = $(top_builddir)/snprintf/libustsnprintf.la \
+am_ust_consumerd_OBJECTS = ust_consumerd-ust-consumerd.$(OBJEXT)
+ust_consumerd_OBJECTS = $(am_ust_consumerd_OBJECTS)
+ust_consumerd_DEPENDENCIES =  \
+	$(top_builddir)/snprintf/libustsnprintf.la \
 	$(top_builddir)/libustcomm/libustcomm.la \
-	$(top_builddir)/libustd/libustd.la
+	$(top_builddir)/libustconsumer/libustconsumer.la
 AM_V_lt = $(am__v_lt_$(V))
 am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
 am__v_lt_0 = --silent
-ustd_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
-	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(ustd_CFLAGS) $(CFLAGS) \
-	$(AM_LDFLAGS) $(LDFLAGS) -o $@
+ust_consumerd_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(ust_consumerd_CFLAGS) \
+	$(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/config/depcomp
 am__depfiles_maybe = depfiles
@@ -89,8 +90,8 @@ am__v_CCLD_0 = @echo "  CCLD  " $@;
 AM_V_GEN = $(am__v_GEN_$(V))
 am__v_GEN_ = $(am__v_GEN_$(AM_DEFAULT_VERBOSITY))
 am__v_GEN_0 = @echo "  GEN   " $@;
-SOURCES = $(ustd_SOURCES)
-DIST_SOURCES = $(ustd_SOURCES)
+SOURCES = $(ust_consumerd_SOURCES)
+DIST_SOURCES = $(ust_consumerd_SOURCES)
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -212,16 +213,16 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AM_CPPFLAGS = -I$(top_srcdir)/libust -I$(top_srcdir)/libustcomm \
-	-I$(top_srcdir)/include -I$(top_srcdir)/libustd
+	-I$(top_srcdir)/include -I$(top_srcdir)/libustconsumer
 
 AM_CFLAGS = -fno-strict-aliasing
-ustd_SOURCES = ustd.c
-ustd_LDADD = \
+ust_consumerd_SOURCES = ust-consumerd.c
+ust_consumerd_LDADD = \
 	$(top_builddir)/snprintf/libustsnprintf.la \
 	$(top_builddir)/libustcomm/libustcomm.la \
-	$(top_builddir)/libustd/libustd.la
+	$(top_builddir)/libustconsumer/libustconsumer.la
 
-ustd_CFLAGS = -DUST_COMPONENT=ustd -fno-strict-aliasing
+ust_consumerd_CFLAGS = -DUST_COMPONENT=ust-consumerd -fno-strict-aliasing
 all: all-am
 
 .SUFFIXES:
@@ -235,9 +236,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign ustd/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign ust-consumerd/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --foreign ustd/Makefile
+	  $(AUTOMAKE) --foreign ust-consumerd/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
@@ -299,9 +300,9 @@ clean-binPROGRAMS:
 	list=`for p in $$list; do echo "$$p"; done | sed 's/$(EXEEXT)$$//'`; \
 	echo " rm -f" $$list; \
 	rm -f $$list
-ustd$(EXEEXT): $(ustd_OBJECTS) $(ustd_DEPENDENCIES) 
-	@rm -f ustd$(EXEEXT)
-	$(AM_V_CCLD)$(ustd_LINK) $(ustd_OBJECTS) $(ustd_LDADD) $(LIBS)
+ust-consumerd$(EXEEXT): $(ust_consumerd_OBJECTS) $(ust_consumerd_DEPENDENCIES) 
+	@rm -f ust-consumerd$(EXEEXT)
+	$(AM_V_CCLD)$(ust_consumerd_LINK) $(ust_consumerd_OBJECTS) $(ust_consumerd_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -309,7 +310,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ustd-ustd.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ust_consumerd-ust-consumerd.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -335,21 +336,21 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LTCOMPILE) -c -o $@ $<
 
-ustd-ustd.o: ustd.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustd_CFLAGS) $(CFLAGS) -MT ustd-ustd.o -MD -MP -MF $(DEPDIR)/ustd-ustd.Tpo -c -o ustd-ustd.o `test -f 'ustd.c' || echo '$(srcdir)/'`ustd.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ustd-ustd.Tpo $(DEPDIR)/ustd-ustd.Po
+ust_consumerd-ust-consumerd.o: ust-consumerd.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ust_consumerd_CFLAGS) $(CFLAGS) -MT ust_consumerd-ust-consumerd.o -MD -MP -MF $(DEPDIR)/ust_consumerd-ust-consumerd.Tpo -c -o ust_consumerd-ust-consumerd.o `test -f 'ust-consumerd.c' || echo '$(srcdir)/'`ust-consumerd.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ust_consumerd-ust-consumerd.Tpo $(DEPDIR)/ust_consumerd-ust-consumerd.Po
 @am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='ustd.c' object='ustd-ustd.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='ust-consumerd.c' object='ust_consumerd-ust-consumerd.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustd_CFLAGS) $(CFLAGS) -c -o ustd-ustd.o `test -f 'ustd.c' || echo '$(srcdir)/'`ustd.c
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ust_consumerd_CFLAGS) $(CFLAGS) -c -o ust_consumerd-ust-consumerd.o `test -f 'ust-consumerd.c' || echo '$(srcdir)/'`ust-consumerd.c
 
-ustd-ustd.obj: ustd.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustd_CFLAGS) $(CFLAGS) -MT ustd-ustd.obj -MD -MP -MF $(DEPDIR)/ustd-ustd.Tpo -c -o ustd-ustd.obj `if test -f 'ustd.c'; then $(CYGPATH_W) 'ustd.c'; else $(CYGPATH_W) '$(srcdir)/ustd.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ustd-ustd.Tpo $(DEPDIR)/ustd-ustd.Po
+ust_consumerd-ust-consumerd.obj: ust-consumerd.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ust_consumerd_CFLAGS) $(CFLAGS) -MT ust_consumerd-ust-consumerd.obj -MD -MP -MF $(DEPDIR)/ust_consumerd-ust-consumerd.Tpo -c -o ust_consumerd-ust-consumerd.obj `if test -f 'ust-consumerd.c'; then $(CYGPATH_W) 'ust-consumerd.c'; else $(CYGPATH_W) '$(srcdir)/ust-consumerd.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ust_consumerd-ust-consumerd.Tpo $(DEPDIR)/ust_consumerd-ust-consumerd.Po
 @am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='ustd.c' object='ustd-ustd.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='ust-consumerd.c' object='ust_consumerd-ust-consumerd.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustd_CFLAGS) $(CFLAGS) -c -o ustd-ustd.obj `if test -f 'ustd.c'; then $(CYGPATH_W) 'ustd.c'; else $(CYGPATH_W) '$(srcdir)/ustd.c'; fi`
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ust_consumerd_CFLAGS) $(CFLAGS) -c -o ust_consumerd-ust-consumerd.obj `if test -f 'ust-consumerd.c'; then $(CYGPATH_W) 'ust-consumerd.c'; else $(CYGPATH_W) '$(srcdir)/ust-consumerd.c'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

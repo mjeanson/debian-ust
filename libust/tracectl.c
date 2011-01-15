@@ -39,6 +39,7 @@
 #include <ust/marker.h>
 #include <ust/tracepoint.h>
 #include <ust/tracectl.h>
+#include <ust/clock.h>
 #include "tracer.h"
 #include "usterr.h"
 #include "ustcomm.h"
@@ -122,10 +123,10 @@ static void print_trace_events(FILE *fp)
 	unlock_trace_events();
 }
 
-static int connect_ustd(void)
+static int connect_ustconsumer(void)
 {
 	int result, fd;
-	char default_daemon_path[] = SOCK_DIR "/ustd";
+	char default_daemon_path[] = SOCK_DIR "/ustconsumer";
 	char *explicit_daemon_path, *daemon_path;
 
 	explicit_daemon_path = getenv("UST_DAEMON_SOCKET");
@@ -139,7 +140,7 @@ static int connect_ustd(void)
 
 	result = ustcomm_connect_path(daemon_path, &fd);
 	if (result < 0) {
-		WARN("connect_ustd failed, daemon_path: %s",
+		WARN("connect_ustconsumer failed, daemon_path: %s",
 		     daemon_path);
 		return result;
 	}
@@ -194,12 +195,12 @@ static void inform_consumer_daemon(const char *trace_name)
 	struct ust_trace *trace;
 	const char *ch_name;
 
-	sock = connect_ustd();
+	sock = connect_ustconsumer();
 	if (sock < 0) {
 		return;
 	}
 
-	DBG("Connected to ustd");
+	DBG("Connected to ustconsumer");
 
 	ltt_lock_traces();
 
@@ -548,20 +549,18 @@ static void force_subbuf_switch()
 /* Simple commands are those which need only respond with a return value. */
 static int process_simple_client_cmd(int command, char *recv_buf)
 {
+	int result;
+
 	switch(command) {
 	case SET_SOCK_PATH:
 	{
-		struct ustcomm_sock_path *sock_msg;
-		sock_msg = (struct ustcomm_sock_path *)recv_buf;
-		sock_msg->sock_path =
-			ustcomm_restore_ptr(sock_msg->sock_path,
-					    sock_msg->data,
-					    sizeof(sock_msg->data));
-		if (!sock_msg->sock_path) {
-
-			return -EINVAL;
+		struct ustcomm_single_field *sock_msg;
+		sock_msg = (struct ustcomm_single_field *)recv_buf;
+		result = ustcomm_unpack_single_field(sock_msg);
+		if (result < 0) {
+			return result;
 		}
-		return setenv("UST_DAEMON_SOCKET", sock_msg->sock_path, 1);
+		return setenv("UST_DAEMON_SOCKET", sock_msg->field, 1);
 	}
 
 	case FORCE_SUBBUF_SWITCH:
@@ -999,22 +998,22 @@ static void process_client_cmd(struct ustcomm_header *recv_header,
 	}
 	case GET_SOCK_PATH:
 	{
-		struct ustcomm_sock_path *sock_msg;
+		struct ustcomm_single_field *sock_msg;
 		char *sock_path_env;
 
-		sock_msg = (struct ustcomm_sock_path *)send_buf;
+		sock_msg = (struct ustcomm_single_field *)send_buf;
 
 		sock_path_env = getenv("UST_DAEMON_SOCKET");
 
 		if (!sock_path_env) {
-			result = ustcomm_pack_sock_path(reply_header,
-							sock_msg,
-							SOCK_DIR "/ustd");
+			result = ustcomm_pack_single_field(reply_header,
+							   sock_msg,
+							   SOCK_DIR "/ustconsumer");
 
 		} else {
-			result = ustcomm_pack_sock_path(reply_header,
-							sock_msg,
-							sock_path_env);
+			result = ustcomm_pack_single_field(reply_header,
+							   sock_msg,
+							   sock_path_env);
 		}
 		reply_header->result = result;
 
@@ -1028,10 +1027,10 @@ static void process_client_cmd(struct ustcomm_header *recv_header,
 	case STOP_TRACE:
 	case DESTROY_TRACE:
 	{
-		struct ustcomm_trace_info *trace_inf =
-			(struct ustcomm_trace_info *)recv_buf;
+		struct ustcomm_single_field *trace_inf =
+			(struct ustcomm_single_field *)recv_buf;
 
-		result = ustcomm_unpack_trace_info(trace_inf);
+		result = ustcomm_unpack_single_field(trace_inf);
 		if (result < 0) {
 			ERR("couldn't unpack trace info");
 			reply_header->result = -EINVAL;
@@ -1040,7 +1039,7 @@ static void process_client_cmd(struct ustcomm_header *recv_header,
 
 		reply_header->result =
 			process_trace_cmd(recv_header->command,
-					  trace_inf->trace);
+					  trace_inf->field);
 		goto send_response;
 
 	}
@@ -1263,6 +1262,15 @@ static void __attribute__((constructor)) init()
 	}
 
 	create_listener();
+
+	/* Get clock the clock source type */
+	struct timespec ts;
+	/* Default clock source */
+	ust_clock_source = CLOCK_TRACE;
+	if (clock_gettime(ust_clock_source, &ts) != 0) {
+		ust_clock_source = CLOCK_MONOTONIC;
+		DBG("UST traces will not be synchronized with LTTng traces");
+	}
 
 	autoprobe_val = getenv("UST_AUTOPROBE");
 	if (autoprobe_val) {
@@ -1498,7 +1506,7 @@ static void stop_listener(void)
 }
 
 /* This destructor keeps the process alive for a few seconds in order
- * to leave time to ustd to connect to its buffers. This is necessary
+ * to leave time for ustconsumer to connect to its buffers. This is necessary
  * for programs whose execution is very short. It is also useful in all
  * programs when tracing is started close to the end of the program
  * execution.
