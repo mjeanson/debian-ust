@@ -1,5 +1,4 @@
-This is ../../../ust/doc/info/ust.info, produced by makeinfo version
-4.13 from ../../../ust/doc/info/ust.texi.
+This is ust.info, produced by makeinfo version 4.13 from ust.texi.
 
 This manual is for program, version version.
 
@@ -13,7 +12,7 @@ File: ust.info,  Node: Top,  Next: Overview,  Up: (dir)
 LTTng Userspace Tracer
 **********************
 
-This manual is for UST 0.10.
+This manual is for UST 0.11.
 
 * Menu:
 
@@ -638,29 +637,29 @@ GDB mailing list.
 
 
 Tag Table:
-Node: Top229
-Node: Overview603
-Node: What is UST?767
-Node: License1347
-Node: Supported platforms1857
-Node: Installation2091
-Node: Quick start3073
-Node: Instrumenting an application3994
-Node: Markers4993
-Node: Tracepoints6170
-Node: Recording a trace7945
-Node: Using `usttrace'8320
-Node: Setting up the recording manually9516
-Node: Using early tracing10741
-Node: Crash recovery11538
-Node: Tracing across `fork()' and `clone()'12003
-Node: Tracing programs and libraries that were not linked to libust13049
-Node: Performance14307
-Node: Viewing traces14437
-Node: Viewing multiple traces14747
-Node: Combined kernel-userspace tracing15095
-Node: Resource Usage15774
-Node: List of environment variables detected by libust17214
-Node: GDB integration18307
+Node: Top185
+Node: Overview559
+Node: What is UST?723
+Node: License1303
+Node: Supported platforms1813
+Node: Installation2047
+Node: Quick start3029
+Node: Instrumenting an application3950
+Node: Markers4949
+Node: Tracepoints6126
+Node: Recording a trace7901
+Node: Using `usttrace'8276
+Node: Setting up the recording manually9472
+Node: Using early tracing10697
+Node: Crash recovery11494
+Node: Tracing across `fork()' and `clone()'11959
+Node: Tracing programs and libraries that were not linked to libust13005
+Node: Performance14263
+Node: Viewing traces14393
+Node: Viewing multiple traces14703
+Node: Combined kernel-userspace tracing15051
+Node: Resource Usage15730
+Node: List of environment variables detected by libust17170
+Node: GDB integration18263
 
 End Tag Table
