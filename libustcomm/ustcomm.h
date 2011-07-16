@@ -25,6 +25,9 @@
 #include <ust/kcompat/kcompat.h>
 
 #define SOCK_DIR "/tmp/ust-app-socks"
+#define USER_TMP_DIR "/tmp"
+#define USER_SOCK_DIR_BASE "ust-socks-"
+#define USER_SOCK_DIR USER_TMP_DIR "/" USER_SOCK_DIR_BASE
 
 struct ustcomm_sock {
 	struct cds_list_head list;
@@ -102,10 +105,10 @@ struct ustcomm_buffer_info {
 	char data[USTCOMM_DATA_SIZE];
 };
 
-struct ustcomm_marker_info {
+struct ustcomm_ust_marker_info {
 	char *trace;
 	char *channel;
-	char *marker;
+	char *ust_marker;
 	char data[USTCOMM_DATA_SIZE];
 };
 
@@ -118,7 +121,7 @@ struct ustcomm_notify_buf_mapped {
 };
 
 /* Ensure directory existence, usefull for unix sockets */
-extern int ensure_dir_exists(const char *dir);
+extern int ensure_dir_exists(const char *dir, mode_t mode);
 
 /* Create and delete sockets */
 extern struct ustcomm_sock * ustcomm_init_sock(int fd, int epoll_fd,
@@ -156,6 +159,16 @@ extern int ustcomm_req(int sock,
 		       char *res_data);
 
 extern int ustcomm_request_consumer(pid_t pid, const char *channel);
+
+/* Returns the current users socket directory, must be freed */
+extern char *ustcomm_user_sock_dir(void);
+
+/* Get the st_m_time from proc*/
+extern time_t ustcomm_pid_st_mtime(pid_t pid);
+
+/* Check that a socket is live */
+extern int ustcomm_is_socket_live(char *sock_name, pid_t *read_pid);
+
 extern int ustcomm_connect_app(pid_t pid, int *app_fd);
 extern int ustcomm_connect_path(const char *path, int *connection_fd);
 
@@ -196,12 +209,12 @@ extern int ustcomm_pack_buffer_info(struct ustcomm_header *header,
 
 extern int ustcomm_unpack_buffer_info(struct ustcomm_buffer_info *buf_inf);
 
-extern int ustcomm_pack_marker_info(struct ustcomm_header *header,
-				    struct ustcomm_marker_info *marker_inf,
+extern int ustcomm_pack_ust_marker_info(struct ustcomm_header *header,
+				    struct ustcomm_ust_marker_info *ust_marker_inf,
 				    const char *trace,
 				    const char *channel,
-				    const char *marker);
+				    const char *ust_marker);
 
-extern int ustcomm_unpack_marker_info(struct ustcomm_marker_info *marker_inf);
+extern int ustcomm_unpack_ust_marker_info(struct ustcomm_ust_marker_info *ust_marker_inf);
 
 #endif /* USTCOMM_H */

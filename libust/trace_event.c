@@ -3,8 +3,8 @@
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
+ * License as published by the Free Software Foundation;
+ * version 2.1 of the License.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,14 +17,14 @@
  *
  */
 
+#define _LGPL_SOURCE
 #include <errno.h>
 #include <ust/tracepoint.h>
 #include <ust/core.h>
 #include <ust/kcompat/kcompat.h>
-#include "usterr.h"
-
-#define _LGPL_SOURCE
 #include <urcu-bp.h>
+
+#include "usterr_signal_safe.h"
 
 /* libraries that contain trace_events (struct trace_event_lib) */
 static CDS_LIST_HEAD(libs);

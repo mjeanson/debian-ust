@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include <ust/clock.h>
 
-#define CREATE_TRACE_POINTS
+#define TRACEPOINT_CREATE_PROBES
 #include "trace_event_test.h"
 
 int main(int argc, char * argv[])
@@ -25,7 +25,7 @@ int main(int argc, char * argv[])
 	static unsigned long time, i;
 	for (i=0; i<10; i++) {
 		time=trace_clock_read64();
-		trace_test(time, i);
+		tracepoint(test, time, i);
 	}
 	return 0;
 }

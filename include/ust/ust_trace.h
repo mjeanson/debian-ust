@@ -1,11 +1,12 @@
 /*
  * Copyright (C) 2009     Steven Rostedt <srostedt@redhat.com>
  * Copyright (C) 2010     Nils Carlson <nils.carlson@ericsson.com>
+ * Copyright (C) 2011     Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
+ * License as published by the Free Software Foundation;
+ * version 2.1 of the License.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -15,11 +16,10 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
- *
  */
 
 /*
- * This whole file is currently a dummy, mapping a TRACE_EVENT
+ * This whole file is currently a dummy, mapping a TRACEPOINT_EVENT
  * to a printf
  */
 
@@ -29,15 +29,15 @@
  * Stage 1. Create a struct and a printf calling function
  * that is connected to the tracepoint at load time.
  */
-#undef TRACE_EVENT
-#define TRACE_EVENT(name, proto, args, tstruct, assign, print)		\
-	DECLARE_TRACE_EVENT_CLASS(name,					\
-				  PARAMS(proto),			\
-				  PARAMS(args),				\
-				  PARAMS(tstruct),			\
-				  PARAMS(assign),			\
-				  PARAMS(print));			\
-	DEFINE_TRACE_EVENT(name, name, PARAMS(proto), PARAMS(args));
+#undef TRACEPOINT_EVENT
+#define TRACEPOINT_EVENT(name, proto, args, tstruct, assign, print)	\
+	DECLARE_TRACEPOINT_EVENT_CLASS(name,				\
+				  TP_PARAMS(proto),			\
+				  TP_PARAMS(args),			\
+				  TP_PARAMS(tstruct),			\
+				  TP_PARAMS(assign),			\
+				  TP_PARAMS(print));			\
+	DEFINE_TRACEPOINT_EVENT(name, name, TP_PARAMS(proto), TP_PARAMS(args));
 
 #undef __field
 #define __field(type, item)		type	item;
@@ -51,12 +51,12 @@
 #undef TP_fast_assign
 #define TP_fast_assign(args...) args
 
-#undef DEFINE_TRACE_EVENT
-#define DEFINE_TRACE_EVENT(template, name, proto, args)
+#undef DEFINE_TRACEPOINT_EVENT
+#define DEFINE_TRACEPOINT_EVENT(template, name, proto, args)
 
 
-#undef DECLARE_TRACE_EVENT_CLASS
-#define DECLARE_TRACE_EVENT_CLASS(name, proto, args, tstruct, assign, print)	\
+#undef DECLARE_TRACEPOINT_EVENT_CLASS
+#define DECLARE_TRACEPOINT_EVENT_CLASS(name, proto, args, tstruct, assign, print)	\
 	struct trace_raw_##name {					\
 		tstruct							\
 	};								\
@@ -70,11 +70,11 @@
 	}								\
 	static inline int register_event_##name(void *data)		\
 	{								\
-		return register_trace_##name(trace_printf_##name, data); \
+		return register_tracepoint(name, trace_printf_##name, data); \
 	}								\
 	static inline int unregister_event_##name(void *data)		\
 	{								\
-		return unregister_trace_##name(trace_printf_##name, data); \
+		return unregister_tracepoint(name, trace_printf_##name, data); \
 	}								\
 	struct trace_event __event_##name = {				\
 		__tpstrtab_##name,					\
@@ -88,7 +88,7 @@
 	static void __attribute__((constructor)) init_##name()		\
 	{								\
 		void *dummy = NULL;					\
-		register_trace_##name(trace_printf_##name, dummy);	\
+		register_tracepoint(name, trace_printf_##name, dummy);	\
 	}
 
 

@@ -22,6 +22,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <string.h>
 
 #include <ust/marker.h>
 #include <ust/ustctl.h>
@@ -33,7 +34,7 @@ static void ustctl_function_tests(pid_t pid)
 	int result, sock;
 	unsigned int subbuf_size, subbuf_num;
 	unsigned int new_subbuf_size, new_subbuf_num;
-	struct marker_status *marker_status, *ms_ptr;
+	struct ust_marker_status *marker_status, *ms_ptr;
 	char *old_socket_path, *new_socket_path;
 	char *tmp_ustd_socket = "/tmp/tmp_ustd_socket";
 	char *trace = "auto";
@@ -50,7 +51,7 @@ static void ustctl_function_tests(pid_t pid)
 	result = 0;
 	for (ms_ptr = marker_status; ms_ptr->channel; ms_ptr++) {
 		if (!strcmp(ms_ptr->channel, "ust") &&
-		    !strcmp(ms_ptr->marker, "bar")) {
+		    !strcmp(ms_ptr->ust_marker, "bar")) {
 			result = 1;
 		}
 	}
@@ -81,8 +82,8 @@ static void ustctl_function_tests(pid_t pid)
 	free(old_socket_path);
 
 	/* Enable, disable markers */
-	tap_ok(!ustctl_set_marker_state(sock, trace, "ust", "bar", 1),
-	       "ustctl_set_marker_state - existing marker ust bar");
+	tap_ok(!ustctl_set_ust_marker_state(sock, trace, "ust", "bar", 1),
+	       "ustctl_set_ust_marker_state - existing marker ust bar");
 
 	/* Create and allocate a trace */
 	tap_ok(!ustctl_create_trace(sock, trace), "ustctl_create_trace");
@@ -144,13 +145,13 @@ static void ustctl_function_tests(pid_t pid)
 	 * Activate a non-existent marker, this should be possible as the marker
 	 * can be loaded at a later time.
 	 */
-	tap_ok(ustctl_set_marker_state(sock, trace, "ustl", "blar", 1) == 0,
+	tap_ok(ustctl_set_ust_marker_state(sock, trace, "ustl", "blar", 1) == 0,
 	       "Enable non-existent marker ustl blar");
 
 	printf("##### Tests that definetly should work are completed #####\n");
 	printf("############## Start expected failure cases ##############\n");
 
-	tap_ok(ustctl_set_marker_state(sock, trace, "ust","bar", 1),
+	tap_ok(ustctl_set_ust_marker_state(sock, trace, "ust","bar", 1),
 	       "Enable already enabled marker ust/bar");
 
 	tap_ok(EEXIST == errno,
@@ -179,8 +180,8 @@ int main(int argc, char **argv)
 	child_pid = fork();
 	if (child_pid) {
 		for(i=0; i<10; i++) {
-			trace_mark(ust, bar, "str %s", "FOOBAZ");
-			trace_mark(ust, bar2, "number1 %d number2 %d", 53, 9800);
+			ust_marker(bar, "str %s", "FOOBAZ");
+			ust_marker(bar2, "number1 %d number2 %d", 53, 9800);
 			usleep(100000);
 		}
 

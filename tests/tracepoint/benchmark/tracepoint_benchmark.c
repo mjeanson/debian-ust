@@ -18,7 +18,7 @@
  */
 
 /*
- * This test is aimed at testing tracepoint *with* trace_mark :
+ * This test is aimed at testing tracepoint *with* ust_marker :
  *
  * 1) tracepoint named : "ust_event"
  * 	-) Probe 1 registered and recording the value 42
@@ -30,31 +30,31 @@
 
 #define NR_EVENTS	10000000
 
-DEFINE_TRACE(ust_event);
+DEFINE_TRACEPOINT(ust_event);
 
 void tp_probe(void *data, unsigned int p1);
 
-DEFINE_MARKER_TP(ust, event, ust_event, tp_probe, "p1 %u");
+DEFINE_UST_MARKER_TP(event, ust_event, tp_probe, "p1 %u");
 
 /*
  * Probe 1 --> ust_event
  */
 void tp_probe(void *data, unsigned int p1)
 {
-	struct marker *marker;
+	struct ust_marker *marker;
 
-	marker = &GET_MARKER(ust, event);
+	marker = &GET_UST_MARKER(event);
 	ltt_specialized_trace(marker, data, &p1, sizeof(p1), sizeof(p1));
 }
 
 static void __attribute__((constructor)) init()
 {
-	register_trace_ust_event(tp_probe, NULL);
+	register_tracepoint(ust_event, tp_probe, NULL);
 }
 
 void single_trace(unsigned int v)
 {
-	trace_ust_event(v);
+	tracepoint(ust_event, v);
 }
 
 void do_trace(void)

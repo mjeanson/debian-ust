@@ -88,75 +88,190 @@ int ustctl_connect_pid(pid_t pid)
 	return sock;
 }
 
-pid_t *ustctl_get_online_pids(void)
+static int realloc_pid_list(pid_t **pid_list, unsigned int *pid_list_size)
 {
-	struct dirent *dirent;
-	DIR *dir;
-	unsigned int ret_size = 1 * sizeof(pid_t), i = 0;
+	pid_t *new_pid_list;
+	unsigned int new_pid_list_size = 2 * *pid_list_size;
 
-	dir = opendir(SOCK_DIR);
-	if (!dir) {
-		return NULL;
+	new_pid_list = realloc(*pid_list,
+			       new_pid_list_size * sizeof(pid_t));
+	if (!*new_pid_list) {
+		return -1;
 	}
 
-	pid_t *ret = (pid_t *) malloc(ret_size);
+	*pid_list = new_pid_list;
+	*pid_list_size = new_pid_list_size;
+
+	return 0;
+}
+
+static int get_pids_in_dir(DIR *dir, pid_t **pid_list,
+			    unsigned int *pid_list_index,
+			    unsigned int *pid_list_size)
+{
+	struct dirent *dirent;
+	pid_t read_pid;
 
 	while ((dirent = readdir(dir))) {
 		if (!strcmp(dirent->d_name, ".") ||
-		    !strcmp(dirent->d_name, "..")) {
+		    !strcmp(dirent->d_name, "..") ||
+		    !strcmp(dirent->d_name, "ust-consumer") ||
+		    dirent->d_type == DT_DIR) {
 
 			continue;
 		}
 
-		if (dirent->d_type != DT_DIR &&
-		    !!strcmp(dirent->d_name, "ust-consumer")) {
+		if (ustcomm_is_socket_live(dirent->d_name, &read_pid)) {
 
-			sscanf(dirent->d_name, "%u", (unsigned int *) &ret[i]);
-			/* FIXME: Here we previously called pid_is_online, which
-			 * always returned 1, now I replaced it with just 1.
-			 * We need to figure out an intelligent way of solving
-			 * this, maybe connect-disconnect.
-			 */
-			if (1) {
-				ret_size += sizeof(pid_t);
-				ret = (pid_t *) realloc(ret, ret_size);
-				++i;
+			(*pid_list)[(*pid_list_index)++] = (long) read_pid;
+
+			if (*pid_list_index == *pid_list_size) {
+				if (realloc_pid_list(pid_list, pid_list_size)) {
+					return -1;
+				}
 			}
 		}
 	}
 
-	ret[i] = 0; /* Array end */
+	(*pid_list)[*pid_list_index] = 0; /* Array end */
 
-	if (ret[0] == 0) {
-		/* No PID at all */
-		free(ret);
+	return 0;
+}
+
+static pid_t *get_pids_non_root(void)
+{
+	char *dir_name;
+	DIR *dir;
+	unsigned int pid_list_index = 0, pid_list_size = 1;
+	pid_t *pid_list = NULL;
+
+	dir_name = ustcomm_user_sock_dir();
+	if (!dir_name) {
 		return NULL;
 	}
 
+	dir = opendir(dir_name);
+	if (!dir) {
+		goto free_dir_name;
+	}
+
+	pid_list = malloc(pid_list_size * sizeof(pid_t));
+	if (!pid_list) {
+		goto close_dir;
+	}
+
+	if (get_pids_in_dir(dir, &pid_list, &pid_list_index, &pid_list_size)) {
+		/* if any errors are encountered, force freeing of the list */
+		pid_list[0] = 0;
+	}
+
+close_dir:
 	closedir(dir);
-	return ret;
+
+free_dir_name:
+	free(dir_name);
+
+	return pid_list;
+}
+
+static pid_t *get_pids_root(void)
+{
+	char *dir_name;
+	DIR *tmp_dir, *dir;
+	unsigned int pid_list_index = 0, pid_list_size = 1;
+	pid_t *pid_list = NULL;
+	struct dirent *dirent;
+	int result;
+
+	tmp_dir = opendir(USER_TMP_DIR);
+	if (!tmp_dir) {
+		return NULL;
+	}
+
+	pid_list = malloc(pid_list_size * sizeof(pid_t));
+	if (!pid_list) {
+		goto close_tmp_dir;
+	}
+
+	while ((dirent = readdir(tmp_dir))) {
+		/* Compare the dir to check for the USER_SOCK_DIR_BASE prefix */
+		if (!strncmp(dirent->d_name, USER_SOCK_DIR_BASE,
+			     strlen(USER_SOCK_DIR_BASE))) {
+
+			if (asprintf(&dir_name, USER_TMP_DIR "/%s",
+				     dirent->d_name) < 0) {
+				goto close_tmp_dir;
+			}
+
+			dir = opendir(dir_name);
+
+			free(dir_name);
+
+			if (!dir) {
+				continue;
+			}
+
+			result = get_pids_in_dir(dir, &pid_list, &pid_list_index,
+						 &pid_list_size);
+
+			closedir(dir);
+
+			if (result) {
+				/*
+				 * if any errors are encountered,
+				 * force freeing of the list
+				 */
+				pid_list[0] = 0;
+				break;
+			}
+		}
+	}
+
+close_tmp_dir:
+	closedir(tmp_dir);
+
+	return pid_list;
+}
+
+pid_t *ustctl_get_online_pids(void)
+{
+	pid_t *pid_list;
+
+	if (geteuid()) {
+		pid_list = get_pids_non_root();
+	} else {
+		pid_list = get_pids_root();
+	}
+
+	if (pid_list && pid_list[0] == 0) {
+		/* No PID at all */
+		free(pid_list);
+		pid_list = NULL;
+	}
+
+	return pid_list;
 }
 
 /**
- * Sets marker state (USTCTL_MS_ON or USTCTL_MS_OFF).
+ * Sets ust_marker state (USTCTL_MS_ON or USTCTL_MS_OFF).
  *
  * @param mn	Marker name
  * @param state	Marker's new state
  * @param pid	Traced process ID
  * @return	0 if successful, or errors {USTCTL_ERR_GEN, USTCTL_ERR_ARG}
  */
-int ustctl_set_marker_state(int sock, const char *trace, const char *channel,
-			    const char *marker, int state)
+int ustctl_set_ust_marker_state(int sock, const char *trace, const char *channel,
+			    const char *ust_marker, int state)
 {
 	struct ustcomm_header req_header, res_header;
-	struct ustcomm_marker_info marker_inf;
+	struct ustcomm_ust_marker_info ust_marker_inf;
 	int result;
 
-	result = ustcomm_pack_marker_info(&req_header,
-					  &marker_inf,
+	result = ustcomm_pack_ust_marker_info(&req_header,
+					  &ust_marker_inf,
 					  trace,
 					  channel,
-					  marker);
+					  ust_marker);
 	if (result < 0) {
 		errno = -result;
 		return -1;
@@ -164,7 +279,7 @@ int ustctl_set_marker_state(int sock, const char *trace, const char *channel,
 
 	req_header.command = state ? ENABLE_MARKER : DISABLE_MARKER;
 
-	return do_cmd(sock, &req_header, (char *)&marker_inf,
+	return do_cmd(sock, &req_header, (char *)&ust_marker_inf,
 		      &res_header, NULL);
 }
 
@@ -422,7 +537,7 @@ unsigned int ustctl_count_nl(const char *str)
  * @param cmsf	CMSF array to free
  * @return	0 if successful, or error USTCTL_ERR_ARG
  */
-int ustctl_free_cmsf(struct marker_status *cmsf)
+int ustctl_free_cmsf(struct ust_marker_status *cmsf)
 {
 	if (cmsf == NULL) {
 		return USTCTL_ERR_ARG;
@@ -431,7 +546,7 @@ int ustctl_free_cmsf(struct marker_status *cmsf)
 	unsigned int i = 0;
 	while (cmsf[i].channel != NULL) {
 		free(cmsf[i].channel);
-		free(cmsf[i].marker);
+		free(cmsf[i].ust_marker);
 		free(cmsf[i].fs);
 		++i;
 	}
@@ -441,19 +556,19 @@ int ustctl_free_cmsf(struct marker_status *cmsf)
 }
 
 /**
- * Gets channel/marker/state/format string for a given PID.
+ * Gets channel/ust_marker/state/format string for a given PID.
  *
  * @param cmsf	Pointer to CMSF array to be filled (callee allocates, caller
  *		frees with `ustctl_free_cmsf')
  * @param pid	Targeted PID
  * @return	0 if successful, or -1 on error
  */
-int ustctl_get_cmsf(int sock, struct marker_status **cmsf)
+int ustctl_get_cmsf(int sock, struct ust_marker_status **cmsf)
 {
 	struct ustcomm_header req_header, res_header;
 	char *big_str = NULL;
 	int result;
-	struct marker_status *tmp_cmsf = NULL;
+	struct ust_marker_status *tmp_cmsf = NULL;
 	unsigned int i = 0, cmsf_ind = 0;
 
 	if (cmsf == NULL) {
@@ -465,17 +580,17 @@ int ustctl_get_cmsf(int sock, struct marker_status **cmsf)
 
 	result = ustcomm_send(sock, &req_header, NULL);
 	if (result <= 0) {
-		PERROR("error while requesting markers list");
+		PERROR("error while requesting ust_marker list");
 		return -1;
 	}
 
 	result = ustcomm_recv_alloc(sock, &res_header, &big_str);
 	if (result <= 0) {
-		ERR("error while receiving markers list");
+		ERR("error while receiving ust_marker list");
 		return -1;
 	}
 
-	tmp_cmsf = (struct marker_status *) zmalloc(sizeof(struct marker_status) *
+	tmp_cmsf = (struct ust_marker_status *) zmalloc(sizeof(struct ust_marker_status) *
 						    (ustctl_count_nl(big_str) + 1));
 	if (tmp_cmsf == NULL) {
 		ERR("Failed to allocate CMSF array");
@@ -486,9 +601,9 @@ int ustctl_get_cmsf(int sock, struct marker_status **cmsf)
 	while (big_str[i] != '\0') {
 		char state;
 
-		sscanf(big_str + i, "marker: %a[^/]/%a[^ ] %c %a[^\n]",
+		sscanf(big_str + i, "ust_marker: %a[^/]/%a[^ ] %c %a[^\n]",
 		       &tmp_cmsf[cmsf_ind].channel,
-		       &tmp_cmsf[cmsf_ind].marker,
+		       &tmp_cmsf[cmsf_ind].ust_marker,
 		       &state,
 		       &tmp_cmsf[cmsf_ind].fs);
 		tmp_cmsf[cmsf_ind].state = (state == USTCTL_MS_CHR_ON ?
@@ -501,7 +616,7 @@ int ustctl_get_cmsf(int sock, struct marker_status **cmsf)
 		++cmsf_ind;
 	}
 	tmp_cmsf[cmsf_ind].channel = NULL;
-	tmp_cmsf[cmsf_ind].marker = NULL;
+	tmp_cmsf[cmsf_ind].ust_marker = NULL;
 	tmp_cmsf[cmsf_ind].fs = NULL;
 
 	*cmsf = tmp_cmsf;
@@ -563,7 +678,7 @@ int ustctl_get_tes(int sock, struct trace_event_status **tes)
 
 	result = ustcomm_recv_alloc(sock, &res_header, &big_str);
 	if (result != 1) {
-		ERR("error while receiving markers list");
+		ERR("error while receiving ust_marker list");
 		return -1;
 	}
 

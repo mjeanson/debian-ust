@@ -1,5 +1,4 @@
 nobase_include_HEADERS = \
-	ust/immediate.h \
 	ust/marker.h \
 	ust/tracepoint.h \
 	ust/define_trace.h \
@@ -8,6 +7,7 @@ nobase_include_HEADERS = \
 	ust/probe.h \
 	ust/ust.h \
 	ust/tracectl.h \
+	ust/config.h \
 	ust/core.h \
 	ust/clock.h \
 	ust/type-serializer.h \
@@ -20,4 +20,4 @@ nobase_include_HEADERS = \
 	ust/ustctl.h \
 	ust/ustconsumer.h
 
-noinst_HEADERS = share.h usterr.h ust_snprintf.h
+noinst_HEADERS = share.h usterr.h ust_snprintf.h usterr_signal_safe.h

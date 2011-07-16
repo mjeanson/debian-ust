@@ -18,9 +18,11 @@
 /* API used by UST components to communicate with each other via sockets. */
 
 #define _GNU_SOURCE
+#include <dirent.h>
 #include <sys/types.h>
 #include <signal.h>
 #include <errno.h>
+#include <limits.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -533,6 +535,142 @@ close_sock:
 	return -1;
 }
 
+/* Returns the current users socket directory, must be freed */
+char *ustcomm_user_sock_dir(void)
+{
+	int result;
+	char *sock_dir = NULL;
+
+	result = asprintf(&sock_dir, "%s%s", USER_SOCK_DIR,
+			  cuserid(NULL));
+	if (result < 0) {
+		ERR("string overflow allocating directory name");
+		return NULL;
+	}
+
+	return sock_dir;
+}
+
+static int time_and_pid_from_socket_name(char *sock_name, unsigned long *time,
+					 pid_t *pid)
+{
+	char *saveptr, *pid_m_time_str;
+	char *sock_basename = strdup(basename(sock_name));
+
+	if (!sock_basename) {
+		return -1;
+	}
+
+	/* This is the pid */
+	pid_m_time_str = strtok_r(sock_basename, ".", &saveptr);
+	if (!pid_m_time_str) {
+		goto out_err;
+	}
+
+	errno = 0;
+	*pid = (pid_t)strtoul(pid_m_time_str, NULL, 10);
+	if (errno) {
+		goto out_err;
+	}
+
+	/* This should be the time-stamp */
+	pid_m_time_str = strtok_r(NULL, ".", &saveptr);
+	if (!pid_m_time_str) {
+		goto out_err;
+	}
+
+	errno = 0;
+	*time = strtoul(pid_m_time_str, NULL, 10);
+	if (errno) {
+		goto out_err;
+	}
+
+	return 0;
+
+out_err:
+	free(sock_basename);
+	return -1;
+}
+
+time_t ustcomm_pid_st_mtime(pid_t pid)
+{
+	struct stat proc_stat;
+	char proc_name[PATH_MAX];
+
+	if (snprintf(proc_name, PATH_MAX - 1, "/proc/%ld", (long) pid) < 0) {
+		return 0;
+	}
+
+	if (stat(proc_name, &proc_stat)) {
+		return 0;
+	}
+
+	return proc_stat.st_mtime;
+}
+
+int ustcomm_is_socket_live(char *sock_name, pid_t *read_pid)
+{
+	time_t time_from_pid;
+	unsigned long time_from_sock;
+	pid_t pid;
+
+	if (time_and_pid_from_socket_name(sock_name, &time_from_sock, &pid)) {
+		return 0;
+	}
+
+	if (read_pid) {
+		*read_pid = pid;
+	}
+
+	time_from_pid = ustcomm_pid_st_mtime(pid);
+	if (!time_from_pid) {
+		return 0;
+	}
+
+	if ((unsigned long) time_from_pid == time_from_sock) {
+		return 1;
+	}
+
+	return 0;
+}
+
+#define MAX_SOCK_PATH_BASE_LEN 100
+
+static int ustcomm_get_sock_name(char *dir_name, pid_t pid, char *sock_name)
+{
+	struct dirent *dirent;
+	char sock_path_base[MAX_SOCK_PATH_BASE_LEN];
+	int len;
+	DIR *dir = opendir(dir_name);
+
+	snprintf(sock_path_base, MAX_SOCK_PATH_BASE_LEN - 1,
+		 "%ld.", (long) pid);
+	len = strlen(sock_path_base);
+
+	while ((dirent = readdir(dir))) {
+		if (!strcmp(dirent->d_name, ".") ||
+		    !strcmp(dirent->d_name, "..") ||
+		    !strcmp(dirent->d_name, "ust-consumer") ||
+		    dirent->d_type == DT_DIR ||
+		    strncmp(dirent->d_name, sock_path_base, len)) {
+			continue;
+		}
+
+		if (ustcomm_is_socket_live(dirent->d_name, NULL)) {
+			if (snprintf(sock_name, PATH_MAX - 1, "%s/%s",
+				     dir_name, dirent->d_name) < 0) {
+				PERROR("path longer than PATH_MAX?");
+				goto out_err;
+			}
+			closedir(dir);
+			return 0;
+		}
+	}
+
+out_err:
+	closedir(dir);
+	return -1;
+}
 
 /* Open a connection to a traceable app.
  *
@@ -541,50 +679,115 @@ close_sock:
  * -1: error
  */
 
-int ustcomm_connect_app(pid_t pid, int *app_fd)
+static int connect_app_non_root(pid_t pid, int *app_fd)
 {
 	int result;
 	int retval = 0;
-	char *name;
+	char *dir_name;
+	char sock_name[PATH_MAX];
 
-	result = asprintf(&name, "%s/%d", SOCK_DIR, pid);
-	if (result < 0) {
-		ERR("failed to allocate socket name");
-		return -1;
+	dir_name = ustcomm_user_sock_dir();
+	if (!dir_name)
+		return -ENOMEM;
+
+	if (ustcomm_get_sock_name(dir_name, pid, sock_name)) {
+		retval = -ENOENT;
+		goto free_dir_name;
 	}
 
-	result = ustcomm_connect_path(name, app_fd);
+	result = ustcomm_connect_path(sock_name, app_fd);
 	if (result < 0) {
 		ERR("failed to connect to app");
 		retval = -1;
+		goto free_dir_name;
 	}
 
-	free(name);
+free_dir_name:
+	free(dir_name);
 
 	return retval;
 }
 
-int ensure_dir_exists(const char *dir)
+
+
+static int connect_app_root(pid_t pid, int *app_fd)
+{
+	DIR *tmp_dir;
+	struct dirent *dirent;
+	char dir_name[PATH_MAX], sock_name[PATH_MAX];
+	int result = -1;
+
+	tmp_dir = opendir(USER_TMP_DIR);
+	if (!tmp_dir) {
+		return -1;
+	}
+
+	while ((dirent = readdir(tmp_dir))) {
+		if (!strncmp(dirent->d_name, USER_SOCK_DIR_BASE,
+			     strlen(USER_SOCK_DIR_BASE))) {
+
+			if (snprintf(dir_name, PATH_MAX - 1, "%s/%s", USER_TMP_DIR,
+				     dirent->d_name) < 0) {
+				continue;
+			}
+
+			if (ustcomm_get_sock_name(dir_name, pid, sock_name)) {
+				continue;
+			}
+
+			result = ustcomm_connect_path(sock_name, app_fd);
+
+			if (result == 0) {
+				goto close_tmp_dir;
+			}
+		}
+	}
+
+close_tmp_dir:
+	closedir(tmp_dir);
+
+	return result;
+}
+
+int ustcomm_connect_app(pid_t pid, int *app_fd)
+{
+	*app_fd = 0;
+
+	if (geteuid()) {
+		return connect_app_non_root(pid, app_fd);
+	} else {
+		return connect_app_root(pid, app_fd);
+	}
+
+}
+
+int ensure_dir_exists(const char *dir, mode_t mode)
 {
 	struct stat st;
 	int result;
 
-	if(!strcmp(dir, ""))
+	if (!strcmp(dir, ""))
 		return -1;
 
 	result = stat(dir, &st);
-	if(result == -1 && errno != ENOENT) {
+	if (result < 0 && errno != ENOENT) {
 		return -1;
-	}
-	else if(result == -1) {
+	} else if (result < 0) {
 		/* ENOENT */
 		int result;
 
-		/* mkdir mode to 0777 */
-		result = mkdir_p(dir, S_IRWXU | S_IRWXG | S_IRWXO);
+		result = mkdir_p(dir, mode);
 		if(result != 0) {
 			ERR("executing in recursive creation of directory %s", dir);
 			return -1;
+		}
+	} else {
+		if (st.st_mode != mode) {
+			result = chmod(dir, mode);
+			if (result < 0) {
+				ERR("couldn't set directory mode on %s", dir);
+				return -1;
+			}
 		}
 	}
 
@@ -756,68 +959,68 @@ int ustcomm_unpack_buffer_info(struct ustcomm_buffer_info *buf_inf)
 	return 0;
 }
 
-int ustcomm_pack_marker_info(struct ustcomm_header *header,
-			     struct ustcomm_marker_info *marker_inf,
+int ustcomm_pack_ust_marker_info(struct ustcomm_header *header,
+			     struct ustcomm_ust_marker_info *ust_marker_inf,
 			     const char *trace,
 			     const char *channel,
-			     const char *marker)
+			     const char *ust_marker)
 {
 	int offset = 0;
 
-	marker_inf->trace = ustcomm_print_data(marker_inf->data,
-					       sizeof(marker_inf->data),
+	ust_marker_inf->trace = ustcomm_print_data(ust_marker_inf->data,
+					       sizeof(ust_marker_inf->data),
 					       &offset,
 					       trace);
 
-	if (marker_inf->trace == USTCOMM_POISON_PTR) {
+	if (ust_marker_inf->trace == USTCOMM_POISON_PTR) {
 		return -ENOMEM;
 	}
 
 
-	marker_inf->channel = ustcomm_print_data(marker_inf->data,
-						 sizeof(marker_inf->data),
+	ust_marker_inf->channel = ustcomm_print_data(ust_marker_inf->data,
+						 sizeof(ust_marker_inf->data),
 						 &offset,
 						 channel);
 
-	if (marker_inf->channel == USTCOMM_POISON_PTR) {
+	if (ust_marker_inf->channel == USTCOMM_POISON_PTR) {
 		return -ENOMEM;
 	}
 
 
-	marker_inf->marker = ustcomm_print_data(marker_inf->data,
-						 sizeof(marker_inf->data),
+	ust_marker_inf->ust_marker = ustcomm_print_data(ust_marker_inf->data,
+						 sizeof(ust_marker_inf->data),
 						 &offset,
-						 marker);
+						 ust_marker);
 
-	if (marker_inf->marker == USTCOMM_POISON_PTR) {
+	if (ust_marker_inf->ust_marker == USTCOMM_POISON_PTR) {
 		return -ENOMEM;
 	}
 
-	header->size = COMPUTE_MSG_SIZE(marker_inf, offset);
+	header->size = COMPUTE_MSG_SIZE(ust_marker_inf, offset);
 
 	return 0;
 }
 
-int ustcomm_unpack_marker_info(struct ustcomm_marker_info *marker_inf)
+int ustcomm_unpack_ust_marker_info(struct ustcomm_ust_marker_info *ust_marker_inf)
 {
-	marker_inf->trace = ustcomm_restore_ptr(marker_inf->trace,
-						marker_inf->data,
-						sizeof(marker_inf->data));
-	if (!marker_inf->trace) {
+	ust_marker_inf->trace = ustcomm_restore_ptr(ust_marker_inf->trace,
+						ust_marker_inf->data,
+						sizeof(ust_marker_inf->data));
+	if (!ust_marker_inf->trace) {
 		return -EINVAL;
 	}
 
-	marker_inf->channel = ustcomm_restore_ptr(marker_inf->channel,
-						  marker_inf->data,
-						  sizeof(marker_inf->data));
-	if (!marker_inf->channel) {
+	ust_marker_inf->channel = ustcomm_restore_ptr(ust_marker_inf->channel,
+						  ust_marker_inf->data,
+						  sizeof(ust_marker_inf->data));
+	if (!ust_marker_inf->channel) {
 		return -EINVAL;
 	}
 
-	marker_inf->marker = ustcomm_restore_ptr(marker_inf->marker,
-						 marker_inf->data,
-						 sizeof(marker_inf->data));
-	if (!marker_inf->marker) {
+	ust_marker_inf->ust_marker = ustcomm_restore_ptr(ust_marker_inf->ust_marker,
+						 ust_marker_inf->data,
+						 sizeof(ust_marker_inf->data));
+	if (!ust_marker_inf->ust_marker) {
 		return -EINVAL;
 	}
 

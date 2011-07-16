@@ -150,10 +150,10 @@ First, instrument a program with a marker.
      	/* ... set values of v and st ... */
 
      	/* a marker: */
-     	trace_mark(ust, myevent, "firstarg %d secondarg %s", v, st);
+     	ust_marker(myevent, "firstarg %d secondarg %s", v, st);
 
      	/* a marker without arguments: */
-     	trace_mark(ust, myotherevent, MARK_NOARGS);
+     	ust_marker(myotherevent, MARK_NOARGS);
 
      	return 0;
      }
@@ -222,21 +222,19 @@ Adding a marker is simply a matter of inserting one line in the program.
      	/* ... set values of v and st ... */
 
      	/* a marker: */
-     	trace_mark(main, myevent, "firstarg %d secondarg %s", v, st);
+     	ust_marker(myevent, "firstarg %d secondarg %s", v, st);
 
      	/* another marker without arguments: */
-     	trace_mark(main, myotherevent, MARK_NOARGS);
+     	ust_marker(myotherevent, MARK_NOARGS);
 
      	return 0;
      }
 
-   The invocation of the trace_mark() macro requires at least 3
-arguments. The first, here "main", is the name of the event category.
-It is also the name of the channel the event will go in. The second,
-here "myevent" is the name of the event. The third is a format string
-that announces the names and the types of the event arguments. Its
-format resembles that of a printf() format string; it is described
-thoroughly in Appendix x.
+   The invocation of the ust_marker() macro requires at least 2
+arguments. The first, "myevent", is the name of the event. The second
+is a format string that announces the names and the types of the event
+arguments. Its format resembles that of a printf() format string; it is
+described thoroughly in Appendix x.
 
    A given Marker may appear more than once in the same program. Other
 Markers may have the same name and a different format string, although
@@ -254,16 +252,13 @@ the Tracepoints API provides more thorough type checking and discharges
 from the need to insert format strings directly in the code and to have
 format strings appear more than once if a given marker is reused.
 
-     Note: Although this example uses _mychannel_ as the channel, the
-     only channel name currently supported with early tracing is *ust*.
-     The `usttrace' tool always uses the early tracing mode. When using
-     manual mode without early tracing, any channel name may be used.
+     Note: The `usttrace' tool always uses the early tracing mode.
 
    A function instrumented with a tracepoint looks like this:
 
      #include "tp.h"
 
-     void function()
+     void function(void)
      {
      	int v;
      	char *st;
@@ -271,31 +266,31 @@ format strings appear more than once if a given marker is reused.
      	/* ... set values of v and st ... */
 
      	/* a tracepoint: */
-     	trace_mychannel_myevent(v, st);
+     	trace_myevent(v, st);
      }
 
    Another file, here tp.h, contains declarations for the tracepoint.
 
      #include <ust/tracepoint.h>
 
-     DECLARE_TRACE(mychannel_myevent, TP_PROTO(int v, char *st),
-     	      TP_ARGS(v, st));
+     DECLARE_TRACEPOINT(myevent, TP_PROTO(int v, char *st),
+     		   TP_ARGS(v, st));
 
    A third file, here tp.c, contains definitions for the tracepoint.
 
      #include <ust/marker.h>
      #include "tp.h"
 
-     DEFINE_TRACE(mychannel_myevent);
+     DEFINE_TRACEPOINT(myevent);
 
-     void mychannel_myevent_probe(int v, char *st)
+     void myevent_probe(int v, char *st)
      {
-     	trace_mark(mychannel, myevent, "v %d st %s", v, st);
+     	ust_marker(myevent, "v %d st %s", v, st);
      }
 
      static void __attribute__((constructor)) init()
      {
-     	register_trace_mychannel_myevent(mychannel_myevent_probe);
+     	register_trace_myevent(myevent_probe);
      }
 
    Here, tp.h and tp.c could contain declarations and definitions for
@@ -617,22 +612,8 @@ Appendix B GDB integration
 GDB, the GNU Debugger, can use UST markers as GDB tracepoints (note GDB
 has its own concept of tracepoint). This feature is called GDB Static
 Tracepoints. When a GDB tracepoint is hit, GDB collects the marker
-arguments, as well as the state of the registers.
-
-   In UST, support for GDB integration is not compiled in by default
-because of the cost of saving registers when a marker is hit. To enable
-it, run the `./configure' script with the
-`-DCONFIG_UST_GDB_INTEGRATION' flag in the `CFLAGS' environment
-variable. For example:
-
-
-     CFLAGS=-DCONFIG_UST_GDB_INTEGRATION ./configure
-
-   As of this writing, GDB Static Tracepoints have been submitted
-(`http://sourceware.org/ml/gdb-patches/2010-06/msg00592.html') to the
-GDB mailing list.
-
-   GDB integration is currently only supported on x86-32 and x86-64.
+arguments, as well as the state of the registers. Support for GDB is
+currently work in progress.
 
 
 
@@ -644,22 +625,22 @@ Node: License1303
 Node: Supported platforms1813
 Node: Installation2047
 Node: Quick start3029
-Node: Instrumenting an application3950
-Node: Markers4949
-Node: Tracepoints6126
-Node: Recording a trace7901
-Node: Using `usttrace'8276
-Node: Setting up the recording manually9472
-Node: Using early tracing10710
-Node: Crash recovery11507
-Node: Tracing across `fork()' and `clone()'11972
-Node: Tracing programs and libraries that were not linked to libust13018
-Node: Performance14276
-Node: Viewing traces14406
-Node: Viewing multiple traces14716
-Node: Combined kernel-userspace tracing15064
-Node: Resource Usage15743
-Node: List of environment variables detected by libust17183
-Node: GDB integration18276
+Node: Instrumenting an application3940
+Node: Markers4939
+Node: Tracepoints5984
+Node: Recording a trace7483
+Node: Using `usttrace'7858
+Node: Setting up the recording manually9054
+Node: Using early tracing10292
+Node: Crash recovery11089
+Node: Tracing across `fork()' and `clone()'11554
+Node: Tracing programs and libraries that were not linked to libust12600
+Node: Performance13858
+Node: Viewing traces13988
+Node: Viewing multiple traces14298
+Node: Combined kernel-userspace tracing14646
+Node: Resource Usage15325
+Node: List of environment variables detected by libust16765
+Node: GDB integration17858
 
 End Tag Table
