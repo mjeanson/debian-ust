@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([ust], [0.11], [nils dot carlson at ericsson dot com])
+AC_INIT([ust], [0.12], [nils dot carlson at ericsson dot com])
 AC_CONFIG_AUX_DIR([config])
 AC_CANONICAL_TARGET
 AC_CANONICAL_HOST
@@ -52,6 +52,8 @@ AC_C_INLINE
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([gettimeofday munmap socket strerror strtol])
 
+CFLAGS="-Wall $CFLAGS"
+
 # URCU
 
 # urcu - check if we just find the headers it out of the box.
@@ -61,8 +63,12 @@ This error can also occur when the liburcu package's configure script has not be
 # urcu - check that URCU lib is available to compilation
 AC_CHECK_LIB([urcu-bp], [synchronize_rcu], [], [AC_MSG_ERROR([Cannot find liburcu-bp lib. Use [LDFLAGS]=-Ldir to specify its location.])])
 
+# urcu - check that URCU lib is at least version 0.5.4
+AC_CHECK_LIB([urcu-bp], [rcu_bp_before_fork], [], [AC_MSG_ERROR([liburcu 0.5.4 or newer is needed, please update your version or use [LDFLAGS]=-Ldir to specify the right location.])])
+
 # urcu - check that URCU lib is at least version 0.5
 AC_CHECK_DECL([cds_list_add(0, 0)], [], [AC_MSG_ERROR([liburcu 0.5 or newer is needed, please update your version or use [LDFLAGS]=-Ldir to specify the right location.])], [[#include <urcu/list.h>]])
+
 
 
 # Check for various supplementary host information (beyond the
@@ -102,6 +108,7 @@ changequote([,])dnl
 	ppc64) LIBFORMAT="elf64-powerpc" ;;
 	s390) LIBFORMAT="elf32-s390" ;;
 	s390x) LIBFORMAT="elf64-s390" ;;
+	arm) LIBFORMAT="elf32-littlearm" ;;
 	*) AC_MSG_ERROR([unable to detect library format (unsupported architecture ($host_cpu)?)]) ;;
 esac
 AC_SUBST(LIBFORMAT)
@@ -128,15 +135,16 @@ AC_CONFIG_FILES([
 	tests/same_line_marker/Makefile
 	tests/trace_event/Makefile
 	tests/tracepoint/Makefile
+	tests/tracepoint/benchmark/Makefile
 	tests/register_test/Makefile
-	tests/ustcmd_function_tests/Makefile
+	tests/libustctl_function_tests/Makefile
 	libustinstr-malloc/Makefile
 	libustfork/Makefile
 	libustconsumer/Makefile
 	ust-consumerd/Makefile
 	ustctl/Makefile
 	libustcomm/Makefile
-	libustcmd/Makefile
+	libustctl/Makefile
 	snprintf/Makefile
 ])
 AC_OUTPUT

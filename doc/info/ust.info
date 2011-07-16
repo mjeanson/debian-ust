@@ -78,7 +78,7 @@ LGPL.
    Components licensed as GPL v2:
    * ustctl
 
-   * libustcmd
+   * libustctl
 
    * ust-consumerd
 
@@ -375,25 +375,25 @@ running process.
      # it has pid 1234.
 
      # List the available markers
-     $ ustctl --list-markers 1234
+     $ ustctl list-markers 1234
      # A column indicates 0 for an inactive marker and 1 for an active marker.
 
      # Enable a marker
-     $ ustctl --enable-marker ust/mymark 1234
+     $ ustctl enable-marker 1234 auto ust/mymark
 
      # Create a trace
-     $ ustctl --create-trace 1234
+     $ ustctl create-trace 1234 auto
 
      # Start tracing
-     $ ustctl --start-trace 1234
+     $ ustctl start-trace 1234 auto
 
      # Do things...
 
      # Stop tracing
-     $ ustctl --stop-trace 1234
+     $ ustctl stop-trace 1234 auto
 
      # Destroy the trace
-     $ ustctl --destroy-trace 1234
+     $ ustctl destroy-trace 1234 auto
 
    For more information about the manual mode, see the ustctl(1) man
 page.
@@ -650,16 +650,16 @@ Node: Tracepoints6126
 Node: Recording a trace7901
 Node: Using `usttrace'8276
 Node: Setting up the recording manually9472
-Node: Using early tracing10697
-Node: Crash recovery11494
-Node: Tracing across `fork()' and `clone()'11959
-Node: Tracing programs and libraries that were not linked to libust13005
-Node: Performance14263
-Node: Viewing traces14393
-Node: Viewing multiple traces14703
-Node: Combined kernel-userspace tracing15051
-Node: Resource Usage15730
-Node: List of environment variables detected by libust17170
-Node: GDB integration18263
+Node: Using early tracing10710
+Node: Crash recovery11507
+Node: Tracing across `fork()' and `clone()'11972
+Node: Tracing programs and libraries that were not linked to libust13018
+Node: Performance14276
+Node: Viewing traces14406
+Node: Viewing multiple traces14716
+Node: Combined kernel-userspace tracing15064
+Node: Resource Usage15743
+Node: List of environment variables detected by libust17183
+Node: GDB integration18276
 
 End Tag Table

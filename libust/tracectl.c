@@ -63,11 +63,19 @@ static char receive_buffer[USTCOMM_BUFFER_SIZE];
 static char send_buffer[USTCOMM_BUFFER_SIZE];
 
 static int epoll_fd;
+
+/*
+ * Listener thread data vs fork() protection mechanism. Ensures that no listener
+ * thread mutexes and data structures are being concurrently modified or held by
+ * other threads when fork() is executed.
+ */
+static pthread_mutex_t listener_thread_data_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* Mutex protecting listen_sock. Nests inside listener_thread_data_mutex. */
+static pthread_mutex_t listen_sock_mutex = PTHREAD_MUTEX_INITIALIZER;
 static struct ustcomm_sock *listen_sock;
 
 extern struct chan_info_struct chan_infos[];
-
-static struct cds_list_head open_buffers_list = CDS_LIST_HEAD_INIT(open_buffers_list);
 
 static struct cds_list_head ust_socks = CDS_LIST_HEAD_INIT(ust_socks);
 
@@ -100,11 +108,11 @@ static void print_markers(FILE *fp)
 
 	while (iter.marker) {
 		fprintf(fp, "marker: %s/%s %d \"%s\" %p\n",
-			iter.marker->channel,
-			iter.marker->name,
-			(int)imv_read(iter.marker->state),
-			iter.marker->format,
-			iter.marker->location);
+			(*iter.marker)->channel,
+			(*iter.marker)->name,
+			(int)imv_read((*iter.marker)->state),
+			(*iter.marker)->format,
+			(*iter.marker)->location);
 		marker_iter_next(&iter);
 	}
 	unlock_markers();
@@ -119,7 +127,7 @@ static void print_trace_events(FILE *fp)
 	trace_event_iter_start(&iter);
 
 	while (iter.trace_event) {
-		fprintf(fp, "trace_event: %s\n", iter.trace_event->name);
+		fprintf(fp, "trace_event: %s\n", (*iter.trace_event)->name);
 		trace_event_iter_next(&iter);
 	}
 	unlock_trace_events();
@@ -355,7 +363,7 @@ static int set_subbuf_size(const char *trace_name, const char *ch_name,
 	}
 
 	channel->subbuf_size = power;
-	DBG("the set_subbuf_size for the requested channel is %u", channel->subbuf_size);
+	DBG("the set_subbuf_size for the requested channel is %zu", channel->subbuf_size);
 
 unlock_traces:
 	ltt_unlock_traces();
@@ -393,7 +401,7 @@ static int set_subbuf_num(const char *trace_name, const char *ch_name,
 	}
 
 	channel->subbuf_cnt = num;
-	DBG("the set_subbuf_cnt for the requested channel is %zd", channel->subbuf_cnt);
+	DBG("the set_subbuf_cnt for the requested channel is %u", channel->subbuf_cnt);
 
 unlock_traces:
 	ltt_unlock_traces();
@@ -479,11 +487,6 @@ static int notify_buffer_mapped(const char *trace_name,
 		CMM_STORE_SHARED(buffers_to_export, CMM_LOAD_SHARED(buffers_to_export)-1);
 	}
 
-	/* The buffer has been exported, ergo, we can add it to the
-	 * list of open buffers
-	 */
-	cds_list_add(&buf->open_buffers_list, &open_buffers_list);
-
 unlock_traces:
 	ltt_unlock_traces();
 
@@ -533,51 +536,46 @@ unlock_traces:
 	return retval;
 }
 
+static void release_listener_mutex(void *ptr)
+{
+	pthread_mutex_unlock(&listener_thread_data_mutex);
+}
+
 static void listener_cleanup(void *ptr)
 {
-	ustcomm_del_named_sock(listen_sock, 0);
-}
-
-static void force_subbuf_switch()
-{
-	struct ust_buffer *buf;
-
-	cds_list_for_each_entry(buf, &open_buffers_list,
-			    open_buffers_list) {
-		ltt_force_switch(buf, FORCE_FLUSH);
+	pthread_mutex_lock(&listen_sock_mutex);
+	if (listen_sock) {
+		ustcomm_del_named_sock(listen_sock, 0);
+		listen_sock = NULL;
 	}
+	pthread_mutex_unlock(&listen_sock_mutex);
 }
 
-/* Simple commands are those which need only respond with a return value. */
-static int process_simple_client_cmd(int command, char *recv_buf)
+static int force_subbuf_switch(const char *trace_name)
 {
-	int result;
+	struct ust_trace *trace;
+	int i, j, retval = 0;
 
-	switch(command) {
-	case SET_SOCK_PATH:
-	{
-		struct ustcomm_single_field *sock_msg;
-		sock_msg = (struct ustcomm_single_field *)recv_buf;
-		result = ustcomm_unpack_single_field(sock_msg);
-		if (result < 0) {
-			return result;
+	ltt_lock_traces();
+	trace = _ltt_trace_find(trace_name);
+	if (!trace) {
+                retval = -ENODATA;
+                DBG("Cannot find trace. It was likely destroyed by the user.");
+                goto unlock_traces;
+        }
+
+	for (i = 0; i < trace->nr_channels; i++) {
+		for (j = 0; j < trace->channels[i].n_cpus; j++) {
+			ltt_force_switch(trace->channels[i].buf[j],
+					 FORCE_FLUSH);
 		}
-		return setenv("UST_DAEMON_SOCKET", sock_msg->field, 1);
 	}
 
-	case FORCE_SUBBUF_SWITCH:
-		/* FIXME: return codes? */
-		force_subbuf_switch();
+unlock_traces:
+	ltt_unlock_traces();
 
-		break;
-
-	default:
-		return -EINVAL;
-	}
-
-	return 0;
+	return retval;
 }
-
 
 static int process_trace_cmd(int command, char *trace_name)
 {
@@ -693,6 +691,15 @@ static int process_trace_cmd(int command, char *trace_name)
 		result = ltt_trace_destroy(trace_name, 0);
 		if (result < 0) {
 			ERR("ltt_trace_destroy failed");
+			return result;
+		}
+		return 0;
+	case FORCE_SUBBUF_SWITCH:
+		DBG("force switch");
+
+		result = force_subbuf_switch(trace_name);
+		if (result < 0) {
+			ERR("force_subbuf_switch failed");
 			return result;
 		}
 		return 0;
@@ -828,7 +835,7 @@ static void process_marker_cmd(int sock, int command,
 {
 	struct ustcomm_header _reply_header;
 	struct ustcomm_header *reply_header = &_reply_header;
-	int result;
+	int result = 0;
 
 	memset(reply_header, 0, sizeof(*reply_header));
 
@@ -937,7 +944,7 @@ static void process_client_cmd(struct ustcomm_header *recv_header,
 		print_markers(fp);
 		fclose(fp);
 
-		reply_header->size = size;
+		reply_header->size = size + 1;	/* Include final \0 */
 
 		result = ustcomm_send(sock, reply_header, ptr);
 
@@ -963,7 +970,7 @@ static void process_client_cmd(struct ustcomm_header *recv_header,
 		print_trace_events(fp);
 		fclose(fp);
 
-		reply_header->size = size;
+		reply_header->size = size + 1;	/* Include final \0 */
 
 		result = ustcomm_send(sock, reply_header, ptr);
 
@@ -1021,6 +1028,21 @@ static void process_client_cmd(struct ustcomm_header *recv_header,
 
 		goto send_response;
 	}
+	case SET_SOCK_PATH:
+	{
+		struct ustcomm_single_field *sock_msg;
+		sock_msg = (struct ustcomm_single_field *)recv_buf;
+		result = ustcomm_unpack_single_field(sock_msg);
+		if (result < 0) {
+			reply_header->result = -EINVAL;
+			goto send_response;
+		}
+
+		reply_header->result = setenv("UST_DAEMON_SOCKET",
+					      sock_msg->field, 1);
+
+		goto send_response;
+	}
 	case START:
 	case SETUP_TRACE:
 	case ALLOC_TRACE:
@@ -1028,6 +1050,7 @@ static void process_client_cmd(struct ustcomm_header *recv_header,
 	case START_TRACE:
 	case STOP_TRACE:
 	case DESTROY_TRACE:
+	case FORCE_SUBBUF_SWITCH:
 	{
 		struct ustcomm_single_field *trace_inf =
 			(struct ustcomm_single_field *)recv_buf;
@@ -1046,11 +1069,9 @@ static void process_client_cmd(struct ustcomm_header *recv_header,
 
 	}
 	default:
-		reply_header->result =
-			process_simple_client_cmd(recv_header->command,
-						  recv_buf);
-		goto send_response;
+		reply_header->result = -EINVAL;
 
+		goto send_response;
 	}
 
 	return;
@@ -1080,6 +1101,8 @@ void *listener_main(void *p)
 		}
 
 		for (i = 0; i < nfds; i++) {
+			pthread_mutex_lock(&listener_thread_data_mutex);
+			pthread_cleanup_push(release_listener_mutex, NULL);
 			epoll_sock = (struct ustcomm_sock *)events[i].data.ptr;
 			if (epoll_sock == listen_sock) {
 				addr_size = sizeof(struct sockaddr);
@@ -1108,6 +1131,7 @@ void *listener_main(void *p)
 							   epoll_sock->fd);
 				}
 			}
+			pthread_cleanup_pop(1);	/* release listener mutex */
 		}
 	}
 
@@ -1314,8 +1338,8 @@ static void __attribute__((constructor)) init()
 
 		DBG("now iterating on markers already registered");
 		while (iter.marker) {
-			DBG("now iterating on marker %s", iter.marker->name);
-			auto_probe_connect(iter.marker);
+			DBG("now iterating on marker %s", (*iter.marker)->name);
+			auto_probe_connect(*iter.marker);
 			marker_iter_next(&iter);
 		}
 	}
@@ -1567,8 +1591,8 @@ void ust_potential_exec(void)
 
 static void ust_fork(void)
 {
-	struct ust_buffer *buf, *buf_tmp;
 	struct ustcomm_sock *sock, *sock_tmp;
+	struct ust_trace *trace, *trace_tmp;
 	int result;
 
 	/* FIXME: technically, the locks could have been taken before the fork */
@@ -1577,32 +1601,32 @@ static void ust_fork(void)
 	/* Get the pid of the new process */
 	processpid = getpid();
 
-	/* break lock if necessary */
-	ltt_unlock_traces();
+	/*
+	 * FIXME: This could be prettier, we loop over the list twice and
+	 * following good locking practice should lock around the loop
+	 */
+	cds_list_for_each_entry_safe(trace, trace_tmp, &ltt_traces.head, list) {
+		ltt_trace_stop(trace->trace_name);
+	}
 
-	ltt_trace_stop("auto");
-	ltt_trace_destroy("auto", 1);
 	/* Delete all active connections, but leave them in the epoll set */
 	cds_list_for_each_entry_safe(sock, sock_tmp, &ust_socks, list) {
 		ustcomm_del_sock(sock, 1);
 	}
 
-	/* Delete all blocked consumers */
-	cds_list_for_each_entry_safe(buf, buf_tmp, &open_buffers_list,
-				 open_buffers_list) {
-		result = close(buf->data_ready_fd_read);
-		if (result == -1) {
-			PERROR("close");
-		}
-		result = close(buf->data_ready_fd_write);
-		if (result == -1) {
-			PERROR("close");
-		}
-		cds_list_del(&buf->open_buffers_list);
+	/*
+	 * FIXME: This could be prettier, we loop over the list twice and
+	 * following good locking practice should lock around the loop
+	 */
+	cds_list_for_each_entry_safe(trace, trace_tmp, &ltt_traces.head, list) {
+		ltt_trace_destroy(trace->trace_name, 1);
 	}
 
-	/* Clean up the listener socket and epoll, keeping the scoket file */
-	ustcomm_del_named_sock(listen_sock, 1);
+	/* Clean up the listener socket and epoll, keeping the socket file */
+	if (listen_sock) {
+		ustcomm_del_named_sock(listen_sock, 1);
+		listen_sock = NULL;
+	}
 	close(epoll_fd);
 
 	/* Re-start the launch sequence */
@@ -1657,12 +1681,26 @@ void ust_before_fork(ust_fork_info_t *fork_info)
                 PERROR("sigprocmask");
                 return;
         }
+
+	/*
+	 * Take the fork lock to make sure we are not in the middle of
+	 * something in the listener thread.
+	 */
+	pthread_mutex_lock(&listener_thread_data_mutex);
+	/*
+	 * Hold listen_sock_mutex to protect from listen_sock teardown.
+	 */
+	pthread_mutex_lock(&listen_sock_mutex);
+	rcu_bp_before_fork();
 }
 
 /* Don't call this function directly in a traced program */
 static void ust_after_fork_common(ust_fork_info_t *fork_info)
 {
 	int result;
+
+	pthread_mutex_unlock(&listen_sock_mutex);
+	pthread_mutex_unlock(&listener_thread_data_mutex);
 
         /* Restore signals */
         result = sigprocmask(SIG_SETMASK, &fork_info->orig_sigs, NULL);
@@ -1674,16 +1712,20 @@ static void ust_after_fork_common(ust_fork_info_t *fork_info)
 
 void ust_after_fork_parent(ust_fork_info_t *fork_info)
 {
-	/* Reenable signals */
+	rcu_bp_after_fork_parent();
+	/* Release mutexes and reenable signals */
 	ust_after_fork_common(fork_info);
 }
 
 void ust_after_fork_child(ust_fork_info_t *fork_info)
 {
-	/* First sanitize the child */
+	/* Release urcu mutexes */
+	rcu_bp_after_fork_child();
+
+	/* Sanitize the child */
 	ust_fork();
 
-	/* Then reenable interrupts */
+	/* Then release mutexes and reenable signals */
 	ust_after_fork_common(fork_info);
 }
 

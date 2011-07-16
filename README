@@ -16,7 +16,7 @@ PREREQUISITES:
   - liburcu
     Userspace RCU library, by Mathieu Desnoyers and Paul E. McKenney
 
-    -> This release was tested with liburcu v0.4.6
+    -> This release was tested with liburcu v0.5.4
 
       * Debian/Ubuntu package: liburcu-dev
       * Website:  http://lttng.org/urcu
@@ -79,11 +79,11 @@ PACKAGE CONTENTS:
     calls in order to trace across these calls. It _has_ to be LD_PRELOAD'ed
     in order to hijack calls. In contrast, libust may be linked at build time.
 
-  - libustcmd
+  - libustctl
     A library to control tracing in other processes. Used by ustctl.
 
   - libustcomm
-    A static library shared between libust, ust-consumerd and libustcmd, that
+    A static library shared between libust, ust-consumerd and libustctl, that
     provides functions that allow these components to communicate together.
 
   - libustconsumer

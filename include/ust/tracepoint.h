@@ -42,12 +42,7 @@ struct tracepoint {
 	const char *name;		/* Tracepoint name */
 	DEFINE_IMV(char, state);	/* State. */
 	struct probe *probes;
-} __attribute__((aligned(32)));		/*
-					 * Aligned on 32 bytes because it is
-					 * globally visible and gcc happily
-					 * align these on the structure size.
-					 * Keep in sync with vmlinux.lds.h.
-					 */
+};
 
 #define PARAMS(args...) args
 
@@ -128,18 +123,21 @@ struct tracepoint {
 						   data);		\
 	}
 
-#define DEFINE_TRACE_FN(name, reg, unreg)					\
+#define DEFINE_TRACE_FN(name, reg, unreg)				\
 	static const char __tpstrtab_##name[]				\
 	__attribute__((section("__tracepoints_strings"))) = #name;	\
 	struct tracepoint __tracepoint_##name				\
-	__attribute__((section("__tracepoints"), aligned(32))) =	\
-		{ __tpstrtab_##name, 0, NULL }
+	__attribute__((section("__tracepoints"))) =			\
+		{ __tpstrtab_##name, 0, NULL };				\
+	static struct tracepoint * const __tracepoint_ptr_##name	\
+	__attribute__((used, section("__tracepoints_ptrs"))) =		\
+		&__tracepoint_##name;
 
 #define DEFINE_TRACE(name)						\
-	DEFINE_TRACE_FN(name, NULL, NULL);
+	DEFINE_TRACE_FN(name, NULL, NULL)
 
-extern void tracepoint_update_probe_range(struct tracepoint *begin,
-	struct tracepoint *end);
+extern void tracepoint_update_probe_range(struct tracepoint * const *begin,
+	struct tracepoint * const *end);
 
 #else /* !CONFIG_TRACEPOINTS */
 #define __DECLARE_TRACE(name, proto, args)				\
@@ -147,11 +145,11 @@ extern void tracepoint_update_probe_range(struct tracepoint *begin,
 	{ }								\
 	static inline void _trace_##name(proto)				\
 	{ }								\
-	static inline int register_trace_##name(void (*probe)(proto))	\
+	static inline int register_trace_##name(void (*probe)(proto), void *data)	\
 	{								\
 		return -ENOSYS;						\
 	}								\
-	static inline int unregister_trace_##name(void (*probe)(proto))	\
+	static inline int unregister_trace_##name(void (*probe)(proto), void *data)	\
 	{								\
 		return -ENOSYS;						\
 	}
@@ -191,15 +189,15 @@ extern void tracepoint_probe_update_all(void);
 struct tracepoint_iter {
 //ust//	struct module *module;
 	struct tracepoint_lib *lib;
-	struct tracepoint *tracepoint;
+	struct tracepoint * const *tracepoint;
 };
 
 extern void tracepoint_iter_start(struct tracepoint_iter *iter);
 extern void tracepoint_iter_next(struct tracepoint_iter *iter);
 extern void tracepoint_iter_stop(struct tracepoint_iter *iter);
 extern void tracepoint_iter_reset(struct tracepoint_iter *iter);
-extern int tracepoint_get_iter_range(struct tracepoint **tracepoint,
-	struct tracepoint *begin, struct tracepoint *end);
+extern int tracepoint_get_iter_range(struct tracepoint * const **tracepoint,
+	struct tracepoint * const *begin, struct tracepoint * const *end);
 
 /*
  * tracepoint_synchronize_unregister must be called between the last tracepoint
@@ -212,27 +210,30 @@ static inline void tracepoint_synchronize_unregister(void)
 }
 
 struct tracepoint_lib {
-	struct tracepoint *tracepoints_start;
+	struct tracepoint * const *tracepoints_start;
 	int tracepoints_count;
 	struct cds_list_head list;
 };
 
-extern int tracepoint_register_lib(struct tracepoint *tracepoints_start,
+extern int tracepoint_register_lib(struct tracepoint * const *tracepoints_start,
 				   int tracepoints_count);
-extern int tracepoint_unregister_lib(struct tracepoint *tracepoints_start);
+extern int tracepoint_unregister_lib(struct tracepoint * const *tracepoints_start);
 
 #define TRACEPOINT_LIB							\
-	extern struct tracepoint __start___tracepoints[] __attribute__((weak, visibility("hidden"))); \
-	extern struct tracepoint __stop___tracepoints[] __attribute__((weak, visibility("hidden"))); \
-	static void __attribute__((constructor)) __tracepoints__init(void) \
-	{								\
-		tracepoint_register_lib(__start___tracepoints,		\
-					(((long)__stop___tracepoints)-((long)__start___tracepoints))/sizeof(struct tracepoint)); \
-	} \
-	\
-	static void __attribute__((destructor)) __tracepoints__destroy(void) \
-	{								\
-		tracepoint_unregister_lib(__start___tracepoints); \
+	extern struct tracepoint * const __start___tracepoints_ptrs[] __attribute__((weak, visibility("hidden"))); \
+	extern struct tracepoint * const __stop___tracepoints_ptrs[] __attribute__((weak, visibility("hidden"))); \
+	static struct tracepoint * const __tracepoint_ptr_dummy		\
+	__attribute__((used, section("__tracepoints_ptrs"))) = NULL;	\
+	static void __attribute__((constructor)) __tracepoints__init(void)	\
+	{									\
+		tracepoint_register_lib(__start___tracepoints_ptrs,			\
+					__stop___tracepoints_ptrs -			\
+					__start___tracepoints_ptrs);			\
+	}									\
+										\
+	static void __attribute__((destructor)) __tracepoints__destroy(void)	\
+	{									\
+		tracepoint_unregister_lib(__start___tracepoints_ptrs);		\
 	}
 
 
@@ -341,17 +342,17 @@ struct trace_event {
 	const char *name;
 	int (*regfunc)(void *data);
 	int (*unregfunc)(void *data);
-} __attribute__((aligned(32)));
+};
 
 struct trace_event_lib {
-	struct trace_event *trace_events_start;
+	struct trace_event * const *trace_events_start;
 	int trace_events_count;
 	struct cds_list_head list;
 };
 
 struct trace_event_iter {
 	struct trace_event_lib *lib;
-	struct trace_event *trace_event;
+	struct trace_event * const *trace_event;
 };
 
 extern void lock_trace_events(void);
@@ -361,37 +362,37 @@ extern void trace_event_iter_start(struct trace_event_iter *iter);
 extern void trace_event_iter_next(struct trace_event_iter *iter);
 extern void trace_event_iter_reset(struct trace_event_iter *iter);
 
-extern int trace_event_get_iter_range(struct trace_event **trace_event,
-				      struct trace_event *begin,
-				      struct trace_event *end);
+extern int trace_event_get_iter_range(struct trace_event * const **trace_event,
+				      struct trace_event * const *begin,
+				      struct trace_event * const *end);
 
 extern void trace_event_update_process(void);
 extern int is_trace_event_enabled(const char *channel, const char *name);
 
-extern int trace_event_register_lib(struct trace_event *start_trace_events,
+extern int trace_event_register_lib(struct trace_event * const *start_trace_events,
 				    int trace_event_count);
 
-extern int trace_event_unregister_lib(struct trace_event *start_trace_events);
+extern int trace_event_unregister_lib(struct trace_event * const *start_trace_events);
 
 #define TRACE_EVENT_LIB							\
-	extern struct trace_event __start___trace_events[]		\
+	extern struct trace_event * const __start___trace_events_ptrs[]	\
 	__attribute__((weak, visibility("hidden")));			\
-	extern struct trace_event __stop___trace_events[]		\
+	extern struct trace_event * const __stop___trace_events_ptrs[]	\
 	__attribute__((weak, visibility("hidden")));			\
+	static struct trace_event * const __event_ptrs_dummy		\
+	__attribute__((used, section("__trace_events_ptrs"))) =	NULL;	\
 	static void __attribute__((constructor))			\
 	__trace_events__init(void)					\
 	{								\
-		long trace_event_count =((long)__stop___trace_events-	\
-					 (long)__start___trace_events)	\
-			/sizeof(struct trace_event);			\
-		trace_event_register_lib(__start___trace_events,	\
-					 trace_event_count);		\
+		trace_event_register_lib(__start___trace_events_ptrs,	\
+					 __stop___trace_events_ptrs -	\
+					 __start___trace_events_ptrs);	\
 	}								\
 									\
 	static void __attribute__((destructor))				\
 	__trace_event__destroy(void)					\
 	{								\
-		trace_event_unregister_lib(__start___trace_events);	\
+		trace_event_unregister_lib(__start___trace_events_ptrs);\
 	}
 
 #define DECLARE_TRACE_EVENT_CLASS(name, proto, args, tstruct, assign, print)

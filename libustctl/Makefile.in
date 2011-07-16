@@ -35,8 +35,8 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
-subdir = libustfork
-DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
+subdir = libustctl
+DIST_COMMON = README $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/config/libtool.m4 \
 	$(top_srcdir)/config/ltoptions.m4 \
@@ -72,12 +72,15 @@ am__base_list = \
   sed '$$!N;$$!N;$$!N;$$!N;s/\n/ /g'
 am__installdirs = "$(DESTDIR)$(libdir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
-libustfork_la_DEPENDENCIES = $(top_builddir)/libust/libust.la
-am_libustfork_la_OBJECTS = ustfork.lo
-libustfork_la_OBJECTS = $(am_libustfork_la_OBJECTS)
+libustctl_la_DEPENDENCIES = $(top_builddir)/libustcomm/libustcomm.la
+am_libustctl_la_OBJECTS = libustctl_la-libustctl.lo
+libustctl_la_OBJECTS = $(am_libustctl_la_OBJECTS)
 AM_V_lt = $(am__v_lt_$(V))
 am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
 am__v_lt_0 = --silent
+libustctl_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(libustctl_la_CFLAGS) \
+	$(CFLAGS) $(libustctl_la_LDFLAGS) $(LDFLAGS) -o $@
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/config/depcomp
 am__depfiles_maybe = depfiles
@@ -104,8 +107,8 @@ am__v_CCLD_0 = @echo "  CCLD  " $@;
 AM_V_GEN = $(am__v_GEN_$(V))
 am__v_GEN_ = $(am__v_GEN_$(AM_DEFAULT_VERBOSITY))
 am__v_GEN_0 = @echo "  GEN   " $@;
-SOURCES = $(libustfork_la_SOURCES)
-DIST_SOURCES = $(libustfork_la_SOURCES)
+SOURCES = $(libustctl_la_SOURCES)
+DIST_SOURCES = $(libustctl_la_SOURCES)
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -226,15 +229,17 @@ target_vendor = @target_vendor@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-AM_CPPFLAGS = -I$(top_srcdir)/include
+AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/libustcomm
 AM_CFLAGS = -fno-strict-aliasing
-lib_LTLIBRARIES = libustfork.la
-libustfork_la_SOURCES = ustfork.c
-libustfork_la_LIBADD = \
-	-ldl \
-	$(top_builddir)/libust/libust.la
+lib_LTLIBRARIES = libustctl.la
+libustctl_la_SOURCES = \
+	libustctl.c
 
-libustfork_CFLAGS = -DUST_COMPONENT=libustfork -fno-strict-aliasing
+libustctl_la_LDFLAGS = -no-undefined -version-info 0:0:0
+libustctl_la_LIBADD = \
+	$(top_builddir)/libustcomm/libustcomm.la
+
+libustctl_la_CFLAGS = -DUST_COMPONENT="libustctl" -fno-strict-aliasing
 all: all-am
 
 .SUFFIXES:
@@ -248,9 +253,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign libustfork/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign libustctl/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --foreign libustfork/Makefile
+	  $(AUTOMAKE) --foreign libustctl/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
@@ -300,8 +305,8 @@ clean-libLTLIBRARIES:
 	  echo "rm -f \"$${dir}/so_locations\""; \
 	  rm -f "$${dir}/so_locations"; \
 	done
-libustfork.la: $(libustfork_la_OBJECTS) $(libustfork_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(LINK) -rpath $(libdir) $(libustfork_la_OBJECTS) $(libustfork_la_LIBADD) $(LIBS)
+libustctl.la: $(libustctl_la_OBJECTS) $(libustctl_la_DEPENDENCIES) 
+	$(AM_V_CCLD)$(libustctl_la_LINK) -rpath $(libdir) $(libustctl_la_OBJECTS) $(libustctl_la_LIBADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -309,7 +314,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ustfork.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libustctl_la-libustctl.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -334,6 +339,14 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LTCOMPILE) -c -o $@ $<
+
+libustctl_la-libustctl.lo: libustctl.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustctl_la_CFLAGS) $(CFLAGS) -MT libustctl_la-libustctl.lo -MD -MP -MF $(DEPDIR)/libustctl_la-libustctl.Tpo -c -o libustctl_la-libustctl.lo `test -f 'libustctl.c' || echo '$(srcdir)/'`libustctl.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libustctl_la-libustctl.Tpo $(DEPDIR)/libustctl_la-libustctl.Plo
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='libustctl.c' object='libustctl_la-libustctl.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustctl_la_CFLAGS) $(CFLAGS) -c -o libustctl_la-libustctl.lo `test -f 'libustctl.c' || echo '$(srcdir)/'`libustctl.c
 
 mostlyclean-libtool:
 	-rm -f *.lo

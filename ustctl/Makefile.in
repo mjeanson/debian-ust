@@ -52,11 +52,14 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_ustctl_OBJECTS = ustctl-ustctl.$(OBJEXT)
+am_ustctl_OBJECTS = ustctl-ustctl.$(OBJEXT) \
+	ustctl-marker_cmds.$(OBJEXT) ustctl-trace_cmds.$(OBJEXT) \
+	ustctl-channel_cmds.$(OBJEXT) ustctl-cli.$(OBJEXT) \
+	ustctl-scanning_functions.$(OBJEXT)
 ustctl_OBJECTS = $(am_ustctl_OBJECTS)
 ustctl_DEPENDENCIES = $(top_builddir)/snprintf/libustsnprintf.la \
 	$(top_builddir)/libustcomm/libustcomm.la \
-	$(top_builddir)/libustcmd/libustcmd.la
+	$(top_builddir)/libustctl/libustctl.la
 AM_V_lt = $(am__v_lt_$(V))
 am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
 am__v_lt_0 = --silent
@@ -212,17 +215,17 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/libustcomm \
-	-I$(top_srcdir)/libustcmd $(KCOMPAT_CFLAGS)
+	-I$(top_srcdir)/libustctl $(KCOMPAT_CFLAGS)
 
 AM_CFLAGS = -fno-strict-aliasing
 ustctl_SOURCES = \
-	ustctl.c
+	ustctl.c marker_cmds.c trace_cmds.c channel_cmds.c cli.c cli.h scanning_functions.c scanning_functions.h
 
 ustctl_CFLAGS = -DUST_COMPONENT=ustctl -fno-strict-aliasing
 ustctl_LDADD = \
 	$(top_builddir)/snprintf/libustsnprintf.la \
 	$(top_builddir)/libustcomm/libustcomm.la \
-	$(top_builddir)/libustcmd/libustcmd.la
+	$(top_builddir)/libustctl/libustctl.la
 
 all: all-am
 
@@ -311,6 +314,11 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ustctl-channel_cmds.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ustctl-cli.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ustctl-marker_cmds.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ustctl-scanning_functions.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ustctl-trace_cmds.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ustctl-ustctl.Po@am__quote@
 
 .c.o:
@@ -352,6 +360,86 @@ ustctl-ustctl.obj: ustctl.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='ustctl.c' object='ustctl-ustctl.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -c -o ustctl-ustctl.obj `if test -f 'ustctl.c'; then $(CYGPATH_W) 'ustctl.c'; else $(CYGPATH_W) '$(srcdir)/ustctl.c'; fi`
+
+ustctl-marker_cmds.o: marker_cmds.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -MT ustctl-marker_cmds.o -MD -MP -MF $(DEPDIR)/ustctl-marker_cmds.Tpo -c -o ustctl-marker_cmds.o `test -f 'marker_cmds.c' || echo '$(srcdir)/'`marker_cmds.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ustctl-marker_cmds.Tpo $(DEPDIR)/ustctl-marker_cmds.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='marker_cmds.c' object='ustctl-marker_cmds.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -c -o ustctl-marker_cmds.o `test -f 'marker_cmds.c' || echo '$(srcdir)/'`marker_cmds.c
+
+ustctl-marker_cmds.obj: marker_cmds.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -MT ustctl-marker_cmds.obj -MD -MP -MF $(DEPDIR)/ustctl-marker_cmds.Tpo -c -o ustctl-marker_cmds.obj `if test -f 'marker_cmds.c'; then $(CYGPATH_W) 'marker_cmds.c'; else $(CYGPATH_W) '$(srcdir)/marker_cmds.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ustctl-marker_cmds.Tpo $(DEPDIR)/ustctl-marker_cmds.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='marker_cmds.c' object='ustctl-marker_cmds.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -c -o ustctl-marker_cmds.obj `if test -f 'marker_cmds.c'; then $(CYGPATH_W) 'marker_cmds.c'; else $(CYGPATH_W) '$(srcdir)/marker_cmds.c'; fi`
+
+ustctl-trace_cmds.o: trace_cmds.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -MT ustctl-trace_cmds.o -MD -MP -MF $(DEPDIR)/ustctl-trace_cmds.Tpo -c -o ustctl-trace_cmds.o `test -f 'trace_cmds.c' || echo '$(srcdir)/'`trace_cmds.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ustctl-trace_cmds.Tpo $(DEPDIR)/ustctl-trace_cmds.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='trace_cmds.c' object='ustctl-trace_cmds.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -c -o ustctl-trace_cmds.o `test -f 'trace_cmds.c' || echo '$(srcdir)/'`trace_cmds.c
+
+ustctl-trace_cmds.obj: trace_cmds.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -MT ustctl-trace_cmds.obj -MD -MP -MF $(DEPDIR)/ustctl-trace_cmds.Tpo -c -o ustctl-trace_cmds.obj `if test -f 'trace_cmds.c'; then $(CYGPATH_W) 'trace_cmds.c'; else $(CYGPATH_W) '$(srcdir)/trace_cmds.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ustctl-trace_cmds.Tpo $(DEPDIR)/ustctl-trace_cmds.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='trace_cmds.c' object='ustctl-trace_cmds.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -c -o ustctl-trace_cmds.obj `if test -f 'trace_cmds.c'; then $(CYGPATH_W) 'trace_cmds.c'; else $(CYGPATH_W) '$(srcdir)/trace_cmds.c'; fi`
+
+ustctl-channel_cmds.o: channel_cmds.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -MT ustctl-channel_cmds.o -MD -MP -MF $(DEPDIR)/ustctl-channel_cmds.Tpo -c -o ustctl-channel_cmds.o `test -f 'channel_cmds.c' || echo '$(srcdir)/'`channel_cmds.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ustctl-channel_cmds.Tpo $(DEPDIR)/ustctl-channel_cmds.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='channel_cmds.c' object='ustctl-channel_cmds.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -c -o ustctl-channel_cmds.o `test -f 'channel_cmds.c' || echo '$(srcdir)/'`channel_cmds.c
+
+ustctl-channel_cmds.obj: channel_cmds.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -MT ustctl-channel_cmds.obj -MD -MP -MF $(DEPDIR)/ustctl-channel_cmds.Tpo -c -o ustctl-channel_cmds.obj `if test -f 'channel_cmds.c'; then $(CYGPATH_W) 'channel_cmds.c'; else $(CYGPATH_W) '$(srcdir)/channel_cmds.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ustctl-channel_cmds.Tpo $(DEPDIR)/ustctl-channel_cmds.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='channel_cmds.c' object='ustctl-channel_cmds.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -c -o ustctl-channel_cmds.obj `if test -f 'channel_cmds.c'; then $(CYGPATH_W) 'channel_cmds.c'; else $(CYGPATH_W) '$(srcdir)/channel_cmds.c'; fi`
+
+ustctl-cli.o: cli.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -MT ustctl-cli.o -MD -MP -MF $(DEPDIR)/ustctl-cli.Tpo -c -o ustctl-cli.o `test -f 'cli.c' || echo '$(srcdir)/'`cli.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ustctl-cli.Tpo $(DEPDIR)/ustctl-cli.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='cli.c' object='ustctl-cli.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -c -o ustctl-cli.o `test -f 'cli.c' || echo '$(srcdir)/'`cli.c
+
+ustctl-cli.obj: cli.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -MT ustctl-cli.obj -MD -MP -MF $(DEPDIR)/ustctl-cli.Tpo -c -o ustctl-cli.obj `if test -f 'cli.c'; then $(CYGPATH_W) 'cli.c'; else $(CYGPATH_W) '$(srcdir)/cli.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ustctl-cli.Tpo $(DEPDIR)/ustctl-cli.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='cli.c' object='ustctl-cli.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -c -o ustctl-cli.obj `if test -f 'cli.c'; then $(CYGPATH_W) 'cli.c'; else $(CYGPATH_W) '$(srcdir)/cli.c'; fi`
+
+ustctl-scanning_functions.o: scanning_functions.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -MT ustctl-scanning_functions.o -MD -MP -MF $(DEPDIR)/ustctl-scanning_functions.Tpo -c -o ustctl-scanning_functions.o `test -f 'scanning_functions.c' || echo '$(srcdir)/'`scanning_functions.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ustctl-scanning_functions.Tpo $(DEPDIR)/ustctl-scanning_functions.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='scanning_functions.c' object='ustctl-scanning_functions.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -c -o ustctl-scanning_functions.o `test -f 'scanning_functions.c' || echo '$(srcdir)/'`scanning_functions.c
+
+ustctl-scanning_functions.obj: scanning_functions.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -MT ustctl-scanning_functions.obj -MD -MP -MF $(DEPDIR)/ustctl-scanning_functions.Tpo -c -o ustctl-scanning_functions.obj `if test -f 'scanning_functions.c'; then $(CYGPATH_W) 'scanning_functions.c'; else $(CYGPATH_W) '$(srcdir)/scanning_functions.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/ustctl-scanning_functions.Tpo $(DEPDIR)/ustctl-scanning_functions.Po
+@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='scanning_functions.c' object='ustctl-scanning_functions.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(ustctl_CFLAGS) $(CFLAGS) -c -o ustctl-scanning_functions.obj `if test -f 'scanning_functions.c'; then $(CYGPATH_W) 'scanning_functions.c'; else $(CYGPATH_W) '$(srcdir)/scanning_functions.c'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

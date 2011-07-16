@@ -208,7 +208,7 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/libust
 register_test_SOURCES = register_test.c tp.h
-register_test_LDADD = $(top_builddir)/libust/libust.la $(top_builddir)/libust-initializer.o
+register_test_LDADD = $(top_builddir)/libust/libust.la $(top_builddir)/libust-initializer.o -lpthread
 all: all-am
 
 .SUFFIXES:

@@ -146,7 +146,13 @@ static void ltt_buffer_begin(struct ust_buffer *buf,
 	header->cycle_count_begin = tsc;
 	header->data_size = 0xFFFFFFFF; /* for recognizing crashed buffers */
 	header->sb_size = 0xFFFFFFFF; /* for recognizing crashed buffers */
-	/* FIXME: add memory barrier? */
+	/*
+	 * No memory barrier needed to order data_data/sb_size vs commit count
+	 * update, because commit count update contains a compiler barrier that
+	 * ensures the order of the writes are OK from a program POV. It only
+	 * matters for crash dump recovery which is not executed concurrently,
+	 * so memory write order does not matter.
+	 */
 	ltt_write_trace_header(channel->trace, header);
 }
 
@@ -254,20 +260,14 @@ unmap_buf:
 	return -1;
 }
 
-static void ltt_relay_print_buffer_errors(struct ust_channel *chan, int cpu);
-
 static void close_buf(struct ust_buffer *buf)
 {
-	struct ust_channel *chan = buf->chan;
-	int cpu = buf->cpu;
 	int result;
 
 	result = shmdt(buf->buf_data);
 	if (result < 0) {
 		PERROR("shmdt");
 	}
-
-	free(buf->commit_count);
 
 	result = close(buf->data_ready_fd_read);
 	if (result < 0) {
@@ -278,9 +278,6 @@ static void close_buf(struct ust_buffer *buf)
 	if (result < 0 && errno != EBADF) {
 		PERROR("close");
 	}
-
-	/* FIXME: This spews out errors, are they real?:
-	 * ltt_relay_print_buffer_errors(chan, cpu); */
 }
 
 
@@ -319,13 +316,10 @@ static int open_channel(struct ust_channel *chan, size_t subbuf_size,
 
 	return 0;
 
-	/* Jump directly inside the loop to close the buffers that were already
-	 * opened. */
-	for(; i>=0; i--) {
-		close_buf(chan->buf[i]);
+	/* Error handling */
 error:
-		do {} while(0);
-	}
+	for(i--; i >= 0; i--)
+		close_buf(chan->buf[i]);
 
 	pthread_mutex_unlock(&ust_buffers_channels_mutex);
 	return -1;
@@ -368,7 +362,6 @@ static notrace void ltt_buffer_end(struct ust_buffer *buf,
 				subbuf_idx * buf->chan->subbuf_size);
 	u32 data_size = SUBBUF_OFFSET(offset - 1, buf->chan) + 1;
 
-	header->data_size = data_size;
 	header->sb_size = PAGE_ALIGN(data_size);
 	header->cycle_count_end = tsc;
 	header->events_lost = uatomic_read(&buf->events_lost);
@@ -376,6 +369,13 @@ static notrace void ltt_buffer_end(struct ust_buffer *buf,
 	if(unlikely(header->events_lost > 0)) {
 		DBG("Some events (%d) were lost in %s_%d", header->events_lost, buf->chan->channel_name, buf->cpu);
 	}
+	/*
+	 * Makes sure data_size write happens after write of the rest of the
+	 * buffer end data, because data_size is used to identify a completely
+	 * written subbuffer in a crash dump.
+	 */
+	cmm_barrier();
+	header->data_size = data_size;
 }
 
 /*
@@ -520,78 +520,6 @@ int ust_buffers_put_subbuf(struct ust_buffer *buf, unsigned long uconsumed_old)
 	return 0;
 }
 
-static void ltt_relay_print_subbuffer_errors(
-		struct ust_channel *channel,
-		long cons_off, int cpu)
-{
-	struct ust_buffer *ltt_buf = channel->buf[cpu];
-	long cons_idx, commit_count, commit_count_sb, write_offset;
-
-	cons_idx = SUBBUF_INDEX(cons_off, channel);
-	commit_count = uatomic_read(&ltt_buf->commit_count[cons_idx].cc);
-	commit_count_sb = uatomic_read(&ltt_buf->commit_count[cons_idx].cc_sb);
-
-	/*
-	 * No need to order commit_count and write_offset reads because we
-	 * execute after trace is stopped when there are no readers left.
-	 */
-	write_offset = uatomic_read(&ltt_buf->offset);
-	WARN( "LTT : unread channel %s offset is %ld "
-		"and cons_off : %ld (cpu %d)\n",
-		channel->channel_name, write_offset, cons_off, cpu);
-	/* Check each sub-buffer for non filled commit count */
-	if (((commit_count - channel->subbuf_size) & channel->commit_count_mask)
-	    - (BUFFER_TRUNC(cons_off, channel) >> channel->n_subbufs_order) != 0) {
-		ERR("LTT : %s : subbuffer %lu has non filled "
-			"commit count [cc, cc_sb] [%lu,%lu].\n",
-			channel->channel_name, cons_idx, commit_count, commit_count_sb);
-	}
-	ERR("LTT : %s : commit count : %lu, subbuf size %zd\n",
-			channel->channel_name, commit_count,
-			channel->subbuf_size);
-}
-
-static void ltt_relay_print_errors(struct ust_trace *trace,
-		struct ust_channel *channel, int cpu)
-{
-	struct ust_buffer *ltt_buf = channel->buf[cpu];
-	long cons_off;
-
-	/*
-	 * Can be called in the error path of allocation when
-	 * trans_channel_data is not yet set.
-	 */
-	if (!channel)
-	        return;
-
-//ust//	for (cons_off = 0; cons_off < rchan->alloc_size;
-//ust//	     cons_off = SUBBUF_ALIGN(cons_off, rchan))
-//ust//		ust_buffers_print_written(ltt_chan, cons_off, cpu);
-	for (cons_off = uatomic_read(&ltt_buf->consumed);
-			(SUBBUF_TRUNC(uatomic_read(&ltt_buf->offset),
-				      channel)
-			 - cons_off) > 0;
-			cons_off = SUBBUF_ALIGN(cons_off, channel))
-		ltt_relay_print_subbuffer_errors(channel, cons_off, cpu);
-}
-
-static void ltt_relay_print_buffer_errors(struct ust_channel *channel, int cpu)
-{
-	struct ust_trace *trace = channel->trace;
-	struct ust_buffer *ltt_buf = channel->buf[cpu];
-
-	if (uatomic_read(&ltt_buf->events_lost))
-		ERR("channel %s: %ld events lost (cpu %d)",
-			channel->channel_name,
-			uatomic_read(&ltt_buf->events_lost), cpu);
-	if (uatomic_read(&ltt_buf->corrupted_subbuffers))
-		ERR("channel %s : %ld corrupted subbuffers (cpu %d)",
-			channel->channel_name,
-			uatomic_read(&ltt_buf->corrupted_subbuffers), cpu);
-
-	ltt_relay_print_errors(trace, channel, cpu);
-}
-
 static int map_buf_structs(struct ust_channel *chan)
 {
 	void *ptr;
@@ -655,6 +583,7 @@ static int unmap_buf_structs(struct ust_channel *chan)
 			PERROR("shmdt");
 		}
 	}
+	return 0;
 }
 
 /*
@@ -723,7 +652,6 @@ static void remove_channel(struct ust_channel *chan)
 	free(chan->buf_struct_shmids);
 
 	free(chan->buf);
-
 }
 
 static void ltt_relay_async_wakeup_chan(struct ust_channel *ltt_channel)
@@ -1241,6 +1169,10 @@ size_t ltt_write_event_header_slow(struct ust_channel *channel,
 		break;
 	case LTT_RFLAG_ID:
 		header.id_time = 31 << LTT_TSC_BITS;
+		break;
+	default:
+		WARN_ON_ONCE(1);
+		header.id_time = 0;
 		break;
 	}
 
