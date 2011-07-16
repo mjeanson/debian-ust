@@ -127,11 +127,6 @@ struct ust_marker {
 #define ust_marker(name, format, args...) \
 	__ust_marker(ust, name, NULL, format, ## args)
 
-static inline __attribute__((deprecated))
-void __trace_mark_is_deprecated()
-{
-}
-
 /**
  * UST_MARKER_NOARGS - Format string for a marker with no argument.
  */
@@ -196,7 +191,6 @@ int ust_marker_unregister_lib(struct ust_marker * const *ust_marker_start);
  * ust_marker().
  */
 #define trace_mark(channel, name, format, args...)	\
-	__trace_mark_is_deprecated();			\
 	ust_marker(name, format, ## args)
 
 static inline __attribute__((deprecated))
