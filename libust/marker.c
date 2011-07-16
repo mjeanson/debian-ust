@@ -25,6 +25,7 @@
 
 #include <ust/core.h>
 #include <ust/marker.h>
+#include <ust/tracepoint.h>
 
 #include "usterr.h"
 #include "channels.h"
@@ -34,8 +35,8 @@
 __thread long ust_reg_stack[500];
 volatile __thread long *ust_reg_stack_ptr = (long *) 0;
 
-extern struct marker __start___markers[] __attribute__((visibility("hidden")));
-extern struct marker __stop___markers[] __attribute__((visibility("hidden")));
+extern struct marker * const __start___markers_ptrs[] __attribute__((visibility("hidden")));
+extern struct marker * const __stop___markers_ptrs[] __attribute__((visibility("hidden")));
 
 /* Set to 1 to enable marker debug output */
 static const int marker_debug;
@@ -676,36 +677,24 @@ int is_marker_enabled(const char *channel, const char *name)
  *
  * Updates the probe callback corresponding to a range of markers.
  */
-void marker_update_probe_range(struct marker *begin,
-	struct marker *end)
+void marker_update_probe_range(struct marker * const *begin,
+	struct marker * const *end)
 {
-	struct marker *iter;
+	struct marker * const *iter;
 	struct marker_entry *mark_entry;
 
 	pthread_mutex_lock(&markers_mutex);
 	for (iter = begin; iter < end; iter++) {
-		mark_entry = get_marker(iter->channel, iter->name);
+		if (!*iter)
+			continue;	/* skip dummy */
+		mark_entry = get_marker((*iter)->channel, (*iter)->name);
 		if (mark_entry) {
-			set_marker(mark_entry, iter, !!mark_entry->refcount);
+			set_marker(mark_entry, *iter, !!mark_entry->refcount);
 			/*
 			 * ignore error, continue
 			 */
-
-			/* This is added for UST. We emit a core_marker_id event
-			 * for markers that are already registered to a probe
-			 * upon library load. Otherwise, no core_marker_id will
-			 * be generated for these markers. Is this the right thing
-			 * to do?
-			 */
-			trace_mark(metadata, core_marker_id,
-				   "channel %s name %s event_id %hu "
-				   "int #1u%zu long #1u%zu pointer #1u%zu "
-				   "size_t #1u%zu alignment #1u%u",
-				   iter->channel, iter->name, mark_entry->event_id,
-				   sizeof(int), sizeof(long), sizeof(void *),
-				   sizeof(size_t), ltt_get_alignment());
 		} else {
-			disable_marker(iter);
+			disable_marker(*iter);
 		}
 	}
 	pthread_mutex_unlock(&markers_mutex);
@@ -742,10 +731,6 @@ static void lib_update_markers(void)
  */
 static void marker_update_probes(void)
 {
-	/* Core kernel markers */
-//ust//	marker_update_probe_range(__start___markers, __stop___markers);
-	/* Markers in modules. */
-//ust//	module_update_markers();
 	lib_update_markers();
 	tracepoint_probe_update_all();
 	/* Update immediate values */
@@ -1113,15 +1098,18 @@ int lib_get_iter_markers(struct marker_iter *iter)
  * Returns whether a next marker has been found (1) or not (0).
  * Will return the first marker in the range if the input marker is NULL.
  */
-int marker_get_iter_range(struct marker **marker, struct marker *begin,
-	struct marker *end)
+int marker_get_iter_range(struct marker * const **marker,
+	struct marker * const *begin,
+	struct marker * const *end)
 {
-	if (!*marker && begin != end) {
+	if (!*marker && begin != end)
 		*marker = begin;
-		return 1;
+	while (*marker >= begin && *marker < end) {
+		if (!**marker)
+			(*marker)++;	/* skip dummy */
+		else
+			return 1;
 	}
-	if (*marker >= begin && *marker < end)
-		return 1;
 	return 0;
 }
 //ust// EXPORT_SYMBOL_GPL(marker_get_iter_range);
@@ -1130,17 +1118,7 @@ static void marker_get_iter(struct marker_iter *iter)
 {
 	int found = 0;
 
-	/* Core kernel markers */
-	if (!iter->lib) {
-		/* ust FIXME: how come we cannot disable the following line? we shouldn't need core stuff */
-		found = marker_get_iter_range(&iter->marker,
-				__start___markers, __stop___markers);
-		if (found)
-			goto end;
-	}
-	/* Markers in modules. */
 	found = lib_get_iter_markers(iter);
-end:
 	if (!found)
 		marker_iter_reset(iter);
 }
@@ -1350,19 +1328,21 @@ void marker_set_new_marker_cb(void (*cb)(struct marker *))
 	new_marker_cb = cb;
 }
 
-static void new_markers(struct marker *start, struct marker *end)
+static void new_markers(struct marker * const *start, struct marker * const *end)
 {
-	if(new_marker_cb) {
-		struct marker *m;
-		for(m=start; m < end; m++) {
-			new_marker_cb(m);
+	if (new_marker_cb) {
+		struct marker * const *m;
+
+		for(m = start; m < end; m++) {
+			if (*m)
+				new_marker_cb(*m);
 		}
 	}
 }
 
-int marker_register_lib(struct marker *markers_start, int markers_count)
+int marker_register_lib(struct marker * const *markers_start, int markers_count)
 {
-	struct lib *pl;
+	struct lib *pl, *iter;
 
 	pl = (struct lib *) zmalloc(sizeof(struct lib));
 
@@ -1371,7 +1351,21 @@ int marker_register_lib(struct marker *markers_start, int markers_count)
 
 	/* FIXME: maybe protect this with its own mutex? */
 	lock_markers();
+
+	/*
+	 * We sort the libs by struct lib pointer address.
+	 */
+	cds_list_for_each_entry_reverse(iter, &libs, list) {
+		BUG_ON(iter == pl);    /* Should never be in the list twice */
+		if (iter < pl) {
+			/* We belong to the location right after iter. */
+			cds_list_add(&pl->list, &iter->list);
+			goto lib_added;
+		}
+	}
+	/* We should be added at the head of the list */
 	cds_list_add(&pl->list, &libs);
+lib_added:
 	unlock_markers();
 
 	new_markers(markers_start, markers_start + markers_count);
@@ -1379,12 +1373,12 @@ int marker_register_lib(struct marker *markers_start, int markers_count)
 	/* FIXME: update just the loaded lib */
 	lib_update_markers();
 
-	DBG("just registered a markers section from %p and having %d markers", markers_start, markers_count);
+	DBG("just registered a markers section from %p and having %d markers (minus dummy markers)", markers_start, markers_count);
 	
 	return 0;
 }
 
-int marker_unregister_lib(struct marker *markers_start)
+int marker_unregister_lib(struct marker * const *markers_start)
 {
 	struct lib *lib;
 
@@ -1413,13 +1407,15 @@ static int initialized = 0;
 
 void __attribute__((constructor)) init_markers(void)
 {
-	if(!initialized) {
-		marker_register_lib(__start___markers, (((long)__stop___markers)-((long)__start___markers))/sizeof(struct marker));
+	if (!initialized) {
+		marker_register_lib(__start___markers_ptrs,
+			__stop___markers_ptrs
+			- __start___markers_ptrs);
 		initialized = 1;
 	}
 }
 
-void __attribute__((constructor)) destroy_markers(void)
+void __attribute__((destructor)) destroy_markers(void)
 {
-	marker_unregister_lib(__start___markers);
+	marker_unregister_lib(__start___markers_ptrs);
 }

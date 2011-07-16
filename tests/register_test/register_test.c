@@ -21,7 +21,6 @@
 #include <stdarg.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/timerfd.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <pthread.h>
@@ -56,7 +55,7 @@ void tptest_probe(void *data, int anint)
 
 static void * register_thread_main(void *data)
 {
-	int ret, i, j = 0;
+	int i, j = 0;
 
 	struct hello_trace_struct hello[HELLO_LENGTH];
 
@@ -80,10 +79,11 @@ static void * register_thread_main(void *data)
 		}
 		printf("Unregistered all\n");
 	}
+	return NULL;
 }
 
 
-int main()
+int main(int argc, char **argv)
 {
 	pthread_t register_thread;
 	int i;

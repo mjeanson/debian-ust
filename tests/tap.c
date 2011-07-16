@@ -18,6 +18,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
 
 static int tap_planned = -1;
 static int tap_count = 1;
@@ -36,7 +37,7 @@ static void *_tap_comment_stdout(void *_unused)
 		if (strncmp(line, "_TAP", 4)) {
 			fprintf(normal_stdout, "# %s", line);
 		} else {
-			fprintf(normal_stdout, &line[4]);
+			fprintf(normal_stdout, "# %s", &line[4]);
 		}
 	}
 	pthread_exit(0);
@@ -56,6 +57,9 @@ static void tap_comment_stdout(void)
 		perror("# Couldn't create a FILE from the pipe");
 		goto close_pipe;
 	}
+
+	/* Set it before we create the reading thread */
+	setlinebuf(pipe_r_file);
 
 	stdout_fileno = fileno(stdout);
 	if (stdout_fileno < 0) {
@@ -111,7 +115,7 @@ static void tap_comment_stdout(void)
 
 	setlinebuf(stdout);
 	setlinebuf(stderr);
-	setlinebuf(pipe_r_file);
+
 
 	return;
 

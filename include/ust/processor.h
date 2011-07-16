@@ -214,9 +214,7 @@ static inline int fls(int x)
 
 #define _ASM_PTR ".long "
 
-#endif /* below is code for x86-64 */
-
-#ifdef __x86_64
+#elif defined(__x86_64)
 
 struct registers {
 	int padding; /* 4 bytes */
@@ -293,7 +291,7 @@ static inline int fls(int x)
 	     /* Start TLS access of private reg stack pointer */ \
 	     ".byte 0x66\n\t" \
 	     "leaq ust_reg_stack_ptr@tlsgd(%%rip), %%rdi\n\t" \
-	     ".word 0x6666\n\t" \
+	     ".hword 0x6666\n\t" \
 	     "rex64\n\t" \
 	     "call __tls_get_addr@plt\n\t" \
 	     /* --- End TLS access */ \
@@ -305,7 +303,7 @@ static inline int fls(int x)
 	     /* Start TLS access of private reg stack */ \
 	     ".byte 0x66\n\t" \
 	     "leaq ust_reg_stack@tlsgd(%%rip), %%rdi\n\t" \
-	     ".word 0x6666\n\t" \
+	     ".hword 0x6666\n\t" \
 	     "rex64\n\t" \
 	     "call __tls_get_addr@plt\n\t" \
 	     /* --- End TLS access */ \
@@ -425,9 +423,7 @@ static inline int fls(int x)
 
 #define _ASM_PTR ".quad "
 
-#endif /* x86_64 */
-
-#ifdef __PPC__
+#elif defined(__PPC__)
 
 struct registers {
 };
@@ -447,6 +443,52 @@ static __inline__ int fls(unsigned int x)
 #define _ASM_PTR ".long "
 #define save_registers(a)
 
-#endif /* __PPC__ */
+#else /* arch-agnostic */
+
+static __inline__ int fls(unsigned int x)
+{
+	int r = 32;
+
+	if (!x)
+		return 0;
+	if (!(x & 0xFFFF0000U)) {
+		x <<= 16;
+		r -= 16;
+	}
+	if (!(x & 0xFF000000U)) {
+		x <<= 8;
+		r -= 8;
+	}
+	if (!(x & 0xF0000000U)) {
+		x <<= 4;
+		r -= 4;
+	}
+	if (!(x & 0xC0000000U)) {
+		x <<= 2;
+		r -= 2;
+	}
+	if (!(x & 0x80000000U)) {
+		x <<= 1;
+		r -= 1;
+	}
+	return r;
+}
+
+#endif
+
+#ifdef __arm__
+
+struct registers {
+};
+
+#define ARCH_COPY_ADDR(dst) "ldr "dst", =2b\n\t" \
+		"b 55f\n\t" \
+		".ltorg\n\t" \
+		"55:\n\t"
+
+#define _ASM_PTR ".long "
+#define save_registers(a)
+
+#endif /* __arm__ */
 
 #endif /* UST_PROCESSOR_H */

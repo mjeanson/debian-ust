@@ -353,6 +353,10 @@ struct buffer_info *connect_buffer(struct ustconsumer_instance *instance, pid_t 
 		goto close_fifo;
 	}
 
+	/* Set subbuffer's information */
+	buf->subbuf_size_order = get_count_order(buf->subbuf_size);
+	buf->alloc_size = buf->subbuf_size * buf->n_subbufs;
+
 	/* attach memory */
 	buf->mem = shmat(buf->shmid, NULL, 0);
 	if(buf->mem == (void *) 0) {
@@ -422,6 +426,11 @@ static void destroy_buffer(struct ustconsumer_callbacks *callbacks,
 {
 	int result;
 
+	result = close(buf->pipe_fd);
+	if(result == -1) {
+		WARN("problem closing the pipe fd");
+	}
+
 	result = close(buf->app_sock);
 	if(result == -1) {
 		WARN("problem calling ustcomm_close_app");
@@ -445,7 +454,8 @@ static void destroy_buffer(struct ustconsumer_callbacks *callbacks,
 
 int consumer_loop(struct ustconsumer_instance *instance, struct buffer_info *buf)
 {
-	int result, read_result;
+	int result = 0;
+	int read_result;
 	char read_buf;
 
 	pthread_cleanup_push(decrement_active_buffers, instance);
@@ -487,6 +497,7 @@ int consumer_loop(struct ustconsumer_instance *instance, struct buffer_info *buf
 			/* Skip the first subbuffer. We are not sure it is trustable
 			 * because the put_subbuffer() did not complete.
 			 */
+			/* TODO: check on_put_error return value */
 			if(instance->callbacks->on_put_error)
 				instance->callbacks->on_put_error(instance->callbacks, buf);
 
@@ -598,7 +609,7 @@ int start_consuming_buffer(struct ustconsumer_instance *instance, pid_t pid,
 	args->channel_cpu = channel_cpu;
 	args->instance = instance;
 	DBG("beginning2 of start_consuming_buffer: args: pid %d trace %s"
-	    " bufname %s_%d", args->pid, args->channel, args->channel_cpu);
+	    " bufname %s_%d", args->pid, args->trace, args->channel, args->channel_cpu);
 
 	result = pthread_create(&thr, NULL, consumer_thread, args);
 	if(result == -1) {
@@ -611,7 +622,7 @@ int start_consuming_buffer(struct ustconsumer_instance *instance, pid_t pid,
 		return -1;
 	}
 	DBG("end of start_consuming_buffer: args: pid %d trace %s "
-	    "bufname %s_%d", args->pid, args->channel, args->channel_cpu);
+	    "bufname %s_%d", args->pid, args->channel, args->trace, args->channel_cpu);
 
 	return 0;
 }
@@ -619,7 +630,7 @@ static void process_client_cmd(int sock, struct ustcomm_header *req_header,
 			       char *recvbuf, struct ustconsumer_instance *instance)
 {
 	int result;
-	struct ustcomm_header _res_header;
+	struct ustcomm_header _res_header = {0};
 	struct ustcomm_header *res_header = &_res_header;
 	struct ustcomm_buffer_info *buf_inf;
 

@@ -35,8 +35,8 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
-noinst_PROGRAMS = ustcmd_function_tests$(EXEEXT)
-subdir = tests/ustcmd_function_tests
+noinst_PROGRAMS = libustctl_function_tests$(EXEEXT)
+subdir = tests/libustctl_function_tests
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/config/libtool.m4 \
@@ -51,10 +51,13 @@ CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 PROGRAMS = $(noinst_PROGRAMS)
-am_ustcmd_function_tests_OBJECTS = ustcmd_function_tests.$(OBJEXT)
-ustcmd_function_tests_OBJECTS = $(am_ustcmd_function_tests_OBJECTS)
-ustcmd_function_tests_DEPENDENCIES = $(top_builddir)/libust/libust.la \
-	$(top_builddir)/libustcmd/libustcmd.la \
+am_libustctl_function_tests_OBJECTS =  \
+	libustctl_function_tests.$(OBJEXT)
+libustctl_function_tests_OBJECTS =  \
+	$(am_libustctl_function_tests_OBJECTS)
+libustctl_function_tests_DEPENDENCIES =  \
+	$(top_builddir)/libust/libust.la \
+	$(top_builddir)/libustctl/libustctl.la \
 	$(top_builddir)/libust-initializer.o \
 	$(top_builddir)/tests/libtap.la
 AM_V_lt = $(am__v_lt_$(V))
@@ -86,8 +89,8 @@ am__v_CCLD_0 = @echo "  CCLD  " $@;
 AM_V_GEN = $(am__v_GEN_$(V))
 am__v_GEN_ = $(am__v_GEN_$(AM_DEFAULT_VERBOSITY))
 am__v_GEN_0 = @echo "  GEN   " $@;
-SOURCES = $(ustcmd_function_tests_SOURCES)
-DIST_SOURCES = $(ustcmd_function_tests_SOURCES)
+SOURCES = $(libustctl_function_tests_SOURCES)
+DIST_SOURCES = $(libustctl_function_tests_SOURCES)
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -209,9 +212,9 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/tests/
-ustcmd_function_tests_SOURCES = ustcmd_function_tests.c
-ustcmd_function_tests_LDADD = $(top_builddir)/libust/libust.la \
-	$(top_builddir)/libustcmd/libustcmd.la \
+libustctl_function_tests_SOURCES = libustctl_function_tests.c
+libustctl_function_tests_LDADD = $(top_builddir)/libust/libust.la \
+	$(top_builddir)/libustctl/libustctl.la \
 	$(top_builddir)/libust-initializer.o \
 	$(top_builddir)/tests/libtap.la \
 	-lpthread
@@ -229,9 +232,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign tests/ustcmd_function_tests/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign tests/libustctl_function_tests/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --foreign tests/ustcmd_function_tests/Makefile
+	  $(AUTOMAKE) --foreign tests/libustctl_function_tests/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
@@ -259,9 +262,9 @@ clean-noinstPROGRAMS:
 	list=`for p in $$list; do echo "$$p"; done | sed 's/$(EXEEXT)$$//'`; \
 	echo " rm -f" $$list; \
 	rm -f $$list
-ustcmd_function_tests$(EXEEXT): $(ustcmd_function_tests_OBJECTS) $(ustcmd_function_tests_DEPENDENCIES) 
-	@rm -f ustcmd_function_tests$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(ustcmd_function_tests_OBJECTS) $(ustcmd_function_tests_LDADD) $(LIBS)
+libustctl_function_tests$(EXEEXT): $(libustctl_function_tests_OBJECTS) $(libustctl_function_tests_DEPENDENCIES) 
+	@rm -f libustctl_function_tests$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(libustctl_function_tests_OBJECTS) $(libustctl_function_tests_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -269,7 +272,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ustcmd_function_tests.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libustctl_function_tests.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
