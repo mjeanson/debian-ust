@@ -89,6 +89,12 @@
 /* Version number of package */
 #undef VERSION
 
+/* UST major version number */
+#undef VERSION_MAJOR
+
+/* UST minor version number */
+#undef VERSION_MINOR
+
 /* Define to `__inline__' or `__inline' if that's what the C compiler
    calls it, or to nothing if 'inline' is not supported under any name.  */
 #ifndef __cplusplus

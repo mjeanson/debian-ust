@@ -32,9 +32,6 @@
 #include "channels.h"
 #include "tracerconst.h"
 #include "tracercore.h"
-#include "header-inline.h"
-
-/***** FIXME: SHOULD BE REMOVED ***** */
 
 /*
  * BUFFER_TRUNC zeroes the subbuffer offset and the subbuffer number parts of
@@ -57,6 +54,20 @@
 #define UST_CHANNEL_VERSION		8
 
 /**************************************/
+
+/*
+ * TODO: using "long" type for struct ust_buffer (control structure
+ * shared between traced apps and the consumer) is a very bad idea when
+ * we get to systems with mixed 32/64-bit processes.
+ *
+ * But on 64-bit system, we want the full power of 64-bit counters,
+ * which wraps less often. Therefore, it's not as easy as "use 32-bit
+ * types everywhere".
+ *
+ * One way to deal with this is to:
+ * 1) Design 64-bit consumer so it can detect 32-bit and 64-bit apps.
+ * 2) The 32-bit consumer only supports 32-bit apps.
+ */
 
 struct commit_counters {
 	long cc;			/* ATOMIC */
@@ -106,9 +117,9 @@ struct ust_buffer {
 } ____cacheline_aligned;
 
 /*
- * A switch is done during tracing or as a final flush after tracing (so it
- * won't write in the new sub-buffer).
- * FIXME: make this message clearer
+ * A switch is either done during tracing (FORCE_ACTIVE) or as a final
+ * flush after tracing (with FORCE_FLUSH). FORCE_FLUSH ensures we won't
+ * write in the new sub-buffer).
  */
 enum force_switch_mode { FORCE_ACTIVE, FORCE_FLUSH };
 
@@ -122,6 +133,40 @@ extern int ltt_reserve_slot_lockless_slow(struct ust_channel *chan,
 extern void ltt_force_switch_lockless_slow(struct ust_buffer *buf,
 		enum force_switch_mode mode);
 
+#ifndef HAVE_EFFICIENT_UNALIGNED_ACCESS
+
+/*
+ * Calculate the offset needed to align the type.
+ * size_of_type must be non-zero.
+ */
+static inline unsigned int ltt_align(size_t align_drift, size_t size_of_type)
+{
+	size_t alignment = min(sizeof(void *), size_of_type);
+	return (alignment - align_drift) & (alignment - 1);
+}
+/* Default arch alignment */
+#define LTT_ALIGN
+
+static inline int ltt_get_alignment(void)
+{
+	return sizeof(void *);
+}
+
+#else /* HAVE_EFFICIENT_UNALIGNED_ACCESS */
+
+static inline unsigned int ltt_align(size_t align_drift,
+		 size_t size_of_type)
+{
+	return 0;
+}
+
+#define LTT_ALIGN __attribute__((packed))
+
+static inline int ltt_get_alignment(void)
+{
+	return 0;
+}
+#endif /* HAVE_EFFICIENT_UNALIGNED_ACCESS */
 
 static __inline__ void ust_buffers_do_copy(void *dest, const void *src, size_t len)
 {
@@ -193,6 +238,63 @@ static __inline__ int last_tsc_overflow(struct ust_buffer *ltt_buf,
 		return 0;
 }
 #endif
+
+/*
+ * ust_get_header_size
+ *
+ * Calculate alignment offset to 32-bits. This is the alignment offset of the
+ * event header.
+ *
+ * Important note :
+ * The event header must be 32-bits. The total offset calculated here :
+ *
+ * Alignment of header struct on 32 bits (min arch size, header size)
+ * + sizeof(header struct)  (32-bits)
+ * + (opt) u16 (ext. event id)
+ * + (opt) u16 (event_size) (if event_size == 0xFFFFUL, has ext. event size)
+ * + (opt) u32 (ext. event size)
+ * + (opt) u64 full TSC (aligned on min(64-bits, arch size))
+ *
+ * The payload must itself determine its own alignment from the biggest type it
+ * contains.
+ * */
+static __inline__ unsigned char ust_get_header_size(
+		struct ust_channel *channel,
+		size_t offset,
+		size_t data_size,
+		size_t *before_hdr_pad,
+		unsigned int rflags)
+{
+	size_t orig_offset = offset;
+	size_t padding;
+
+	padding = ltt_align(offset, sizeof(struct ltt_event_header));
+	offset += padding;
+	offset += sizeof(struct ltt_event_header);
+
+	if(unlikely(rflags)) {
+		switch (rflags) {
+		case LTT_RFLAG_ID_SIZE_TSC:
+			offset += sizeof(u16) + sizeof(u16);
+			if (data_size >= 0xFFFFU)
+				offset += sizeof(u32);
+			offset += ltt_align(offset, sizeof(u64));
+			offset += sizeof(u64);
+			break;
+		case LTT_RFLAG_ID_SIZE:
+			offset += sizeof(u16) + sizeof(u16);
+			if (data_size >= 0xFFFFU)
+				offset += sizeof(u32);
+			break;
+		case LTT_RFLAG_ID:
+			offset += sizeof(u16);
+			break;
+		}
+	}
+
+	*before_hdr_pad = padding;
+	return offset - orig_offset;
+}
 
 static __inline__ void ltt_reserve_push_reader(
 		struct ust_channel *rchan,
@@ -325,12 +427,6 @@ static __inline__ int ltt_relay_try_reserve(
 
 	*tsc = trace_clock_read64();
 
-//ust// #ifdef CONFIG_LTT_VMCORE
-//ust// 	prefetch(&buf->commit_count[SUBBUF_INDEX(*o_begin, rchan)]);
-//ust// 	prefetch(&buf->commit_seq[SUBBUF_INDEX(*o_begin, rchan)]);
-//ust// #else
-//ust// 	prefetchw(&buf->commit_count[SUBBUF_INDEX(*o_begin, rchan)]);
-//ust// #endif
 	if (last_tsc_overflow(buf, *tsc))
 		*rflags = LTT_RFLAG_ID_SIZE_TSC;
 
@@ -375,7 +471,6 @@ static __inline__ int ltt_reserve_slot(struct ust_channel *chan,
 	/*
 	 * Perform retryable operations.
 	 */
-	/* FIXME: make this really per cpu? */
 	if (unlikely(CMM_LOAD_SHARED(ltt_nesting) > 4)) {
 		DBG("Dropping event because nesting is too deep.");
 		uatomic_inc(&buf->events_lost);
@@ -404,11 +499,6 @@ static __inline__ int ltt_reserve_slot(struct ust_channel *chan,
 	 */
 	ltt_reserve_push_reader(chan, buf, o_end - 1);
 
-	/*
-	 * Clear noref flag for this subbuffer.
-	 */
-//ust//	ltt_clear_noref_flag(chan, buf, SUBBUF_INDEX(o_end - 1, chan));
-
 	*buf_offset = o_begin + before_hdr_pad;
 	return 0;
 slow_path:
@@ -435,7 +525,6 @@ static __inline__ void ltt_force_switch(struct ust_buffer *buf,
  * commit count reaches back the reserve offset (module subbuffer size). It is
  * useful for crash dump.
  */
-//ust// #ifdef CONFIG_LTT_VMCORE
 static __inline__ void ltt_write_commit_counter(struct ust_channel *chan,
 		struct ust_buffer *buf, long idx, long buf_offset,
 		long commit_count, size_t data_size)
@@ -461,12 +550,6 @@ static __inline__ void ltt_write_commit_counter(struct ust_channel *chan,
 
 	DBG("commit_seq for channel %s_%d, subbuf %ld is now %ld", buf->chan->channel_name, buf->cpu, idx, commit_count);
 }
-//ust// #else
-//ust// static __inline__ void ltt_write_commit_counter(struct ust_buffer *buf,
-//ust// 		long idx, long buf_offset, long commit_count, size_t data_size)
-//ust// {
-//ust// }
-//ust// #endif
 
 /*
  * Atomic unordered slot commit. Increments the commit count in the

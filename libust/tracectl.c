@@ -34,11 +34,12 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <regex.h>
-#include <urcu/uatomic_arch.h>
+#include <urcu/uatomic.h>
 #include <urcu/list.h>
 
 #include <ust/marker.h>
 #include <ust/tracepoint.h>
+#include <ust/tracepoint-internal.h>
 #include <ust/tracectl.h>
 #include <ust/clock.h>
 #include "tracer.h"
@@ -103,7 +104,6 @@ static void print_ust_marker(FILE *fp)
 {
 	struct ust_marker_iter iter;
 
-	lock_ust_marker();
 	ust_marker_iter_reset(&iter);
 	ust_marker_iter_start(&iter);
 
@@ -119,14 +119,13 @@ static void print_ust_marker(FILE *fp)
 				 */
 		ust_marker_iter_next(&iter);
 	}
-	unlock_ust_marker();
+	ust_marker_iter_stop(&iter);
 }
 
 static void print_trace_events(FILE *fp)
 {
 	struct trace_event_iter iter;
 
-	lock_trace_events();
 	trace_event_iter_reset(&iter);
 	trace_event_iter_start(&iter);
 
@@ -134,7 +133,7 @@ static void print_trace_events(FILE *fp)
 		fprintf(fp, "trace_event: %s\n", (*iter.trace_event)->name);
 		trace_event_iter_next(&iter);
 	}
-	unlock_trace_events();
+	trace_event_iter_stop(&iter);
 }
 
 static int connect_ustconsumer(void)
@@ -1314,17 +1313,16 @@ static void __attribute__((constructor)) init()
 		DBG("UST traces will not be synchronized with LTTng traces");
 	}
 
+	if (getenv("UST_TRACE") || getenv("UST_AUTOPROBE")) {
+		/* Ensure ust_marker control is initialized */
+		init_ust_marker_control();
+	}
+
 	autoprobe_val = getenv("UST_AUTOPROBE");
 	if (autoprobe_val) {
 		struct ust_marker_iter iter;
 
 		DBG("Autoprobe enabled.");
-
-		/* Ensure ust_marker are initialized */
-		//init_ust_marker();
-
-		/* Ensure ust_marker control is initialized, for the probe */
-		init_ust_marker_control();
 
 		/* first, set the callback that will connect the
 		 * probe on new ust_marker
@@ -1357,6 +1355,7 @@ static void __attribute__((constructor)) init()
 			auto_probe_connect(*iter.ust_marker);
 			ust_marker_iter_next(&iter);
 		}
+		ust_marker_iter_stop(&iter);
 	}
 
 	if (getenv("UST_OVERWRITE")) {
@@ -1399,12 +1398,6 @@ static void __attribute__((constructor)) init()
 		char trace_type[] = "ustrelay";
 
 		DBG("starting early tracing");
-
-		/* Ensure ust_marker control is initialized */
-		init_ust_marker_control();
-
-		/* Ensure ust_marker are initialized */
-		init_ust_marker();
 
 		/* Ensure buffers are initialized, for the transport to be available.
 		 * We are about to set a trace type and it will fail without this.
@@ -1716,7 +1709,6 @@ static void ust_after_fork_common(ust_fork_info_t *fork_info)
 
 	pthread_mutex_unlock(&listen_sock_mutex);
 	pthread_mutex_unlock(&listener_thread_data_mutex);
-
         /* Restore signals */
         result = sigprocmask(SIG_SETMASK, &fork_info->orig_sigs, NULL);
         if (result == -1) {
@@ -1740,7 +1732,7 @@ void ust_after_fork_child(ust_fork_info_t *fork_info)
 	/* Sanitize the child */
 	ust_fork();
 
-	/* Then release mutexes and reenable signals */
+	/* Release mutexes and reenable signals */
 	ust_after_fork_common(fork_info);
 }
 

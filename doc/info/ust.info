@@ -12,7 +12,7 @@ File: ust.info,  Node: Top,  Next: Overview,  Up: (dir)
 LTTng Userspace Tracer
 **********************
 
-This manual is for UST 0.11.
+This manual is for UST 0.14.
 
 * Menu:
 
@@ -106,7 +106,7 @@ The LTTng userspace tracer is a library and a set of userspace tools.
      This contains the tracing library, the ust-consumerd daemon, trace
      control tools and other helper tools.
 
-     Repository: `http://git.dorsal.polymtl.ca'
+     Repository: `http://lttng.org/ust'
 
    * liburcu
 
@@ -246,55 +246,10 @@ File: ust.info,  Node: Tracepoints,  Prev: Markers,  Up: Instrumenting an applic
 4.2 Tracepoints
 ===============
 
-The Tracepoints API uses the Markers, but provides a higher-level
-abstraction.  Whereas the markers API provides limited type checking,
-the Tracepoints API provides more thorough type checking and discharges
-from the need to insert format strings directly in the code and to have
-format strings appear more than once if a given marker is reused.
-
-     Note: The `usttrace' tool always uses the early tracing mode.
-
-   A function instrumented with a tracepoint looks like this:
-
-     #include "tp.h"
-
-     void function(void)
-     {
-     	int v;
-     	char *st;
-
-     	/* ... set values of v and st ... */
-
-     	/* a tracepoint: */
-     	trace_myevent(v, st);
-     }
-
-   Another file, here tp.h, contains declarations for the tracepoint.
-
-     #include <ust/tracepoint.h>
-
-     DECLARE_TRACEPOINT(myevent, TP_PROTO(int v, char *st),
-     		   TP_ARGS(v, st));
-
-   A third file, here tp.c, contains definitions for the tracepoint.
-
-     #include <ust/marker.h>
-     #include "tp.h"
-
-     DEFINE_TRACEPOINT(myevent);
-
-     void myevent_probe(int v, char *st)
-     {
-     	ust_marker(myevent, "v %d st %s", v, st);
-     }
-
-     static void __attribute__((constructor)) init()
-     {
-     	register_trace_myevent(myevent_probe);
-     }
-
-   Here, tp.h and tp.c could contain declarations and definitions for
-other tracepoints. The constructor would contain other register_* calls.
+The Tracepoint API is superseded by TRACEPOINT_EVENT() (which uses the
+Tracepoints internally). At this stage, TRACEPOINT_EVENT() is work in
+progress. While we complete this API, please use the ust_marker() API
+provided by ust/marker.h.
 
 
 File: ust.info,  Node: Recording a trace,  Next: Viewing traces,  Prev: Instrumenting an application,  Up: Top
@@ -624,23 +579,23 @@ Node: What is UST?723
 Node: License1303
 Node: Supported platforms1813
 Node: Installation2047
-Node: Quick start3029
-Node: Instrumenting an application3940
-Node: Markers4939
-Node: Tracepoints5984
-Node: Recording a trace7483
-Node: Using `usttrace'7858
-Node: Setting up the recording manually9054
-Node: Using early tracing10292
-Node: Crash recovery11089
-Node: Tracing across `fork()' and `clone()'11554
-Node: Tracing programs and libraries that were not linked to libust12600
-Node: Performance13858
-Node: Viewing traces13988
-Node: Viewing multiple traces14298
-Node: Combined kernel-userspace tracing14646
-Node: Resource Usage15325
-Node: List of environment variables detected by libust16765
-Node: GDB integration17858
+Node: Quick start3021
+Node: Instrumenting an application3932
+Node: Markers4931
+Node: Tracepoints5976
+Node: Recording a trace6336
+Node: Using `usttrace'6711
+Node: Setting up the recording manually7907
+Node: Using early tracing9145
+Node: Crash recovery9942
+Node: Tracing across `fork()' and `clone()'10407
+Node: Tracing programs and libraries that were not linked to libust11453
+Node: Performance12711
+Node: Viewing traces12841
+Node: Viewing multiple traces13151
+Node: Combined kernel-userspace tracing13499
+Node: Resource Usage14178
+Node: List of environment variables detected by libust15618
+Node: GDB integration16711
 
 End Tag Table

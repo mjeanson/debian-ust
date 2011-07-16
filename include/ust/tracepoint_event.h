@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2009     Steven Rostedt <srostedt@redhat.com>
+ * Copyright (C) 2011     Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -28,7 +29,7 @@
  *
  * TRACE_INCLUDE_PATH if the path is something other than core kernel include/trace
  *     then this macro can define the path to use. Note, the path is relative to
- *     define_trace.h, not the file including it. Full path names for out of tree
+ *     tracepoint_event.h, not the file including it. Full path names for out of tree
  *     modules must be used.
  */
 
@@ -37,28 +38,26 @@
 /* Prevent recursion */
 #undef TRACEPOINT_CREATE_PROBES
 
-#include <ust/kcompat/stringify.h>
+#ifndef __tp_stringify
+#define __tp_stringify_1(x...)	#x
+#define __tp_stringify(x...)	__tp_stringify_1(x)
+#endif
 
 #undef TRACEPOINT_EVENT
-#define TRACEPOINT_EVENT(name, proto, args, tstruct, assign, print)	\
-	DEFINE_TRACEPOINT(name)
+#define TRACEPOINT_EVENT(name, proto, args, fields)		\
+	_DEFINE_TRACEPOINT(name)
 
-#undef TRACEPOINT_EVENT_FN
-#define TRACEPOINT_EVENT_FN(name, proto, args, tstruct,		\
-		assign, print, reg, unreg)			\
-	DEFINE_TRACEPOINT_FN(name, reg, unreg)
+#undef TRACEPOINT_EVENT_INSTANCE
+#define TRACEPOINT_EVENT_INSTANCE(template, name, proto, args)	\
+	_DEFINE_TRACEPOINT(name)
 
-#undef DEFINE_TRACEPOINT_EVENT
-#define DEFINE_TRACEPOINT_EVENT(template, name, proto, args) \
-	DEFINE_TRACEPOINT(name)
+#undef TRACEPOINT_EVENT_NOARGS
+#define TRACEPOINT_EVENT_NOARGS(name, fields)			\
+	_DEFINE_TRACEPOINT(name)
 
-#undef DEFINE_TRACEPOINT_EVENT_PRINT
-#define DEFINE_TRACEPOINT_EVENT_PRINT(template, name, proto, args, print)	\
-	DEFINE_TRACEPOINT(name)
-
-#undef DECLARE_TRACEPOINT
-#define DECLARE_TRACEPOINT(name, proto, args)	\
-	DEFINE_TRACEPOINT(name)
+#undef TRACEPOINT_EVENT_INSTANCE_NOARGS
+#define TRACEPOINT_EVENT_INSTANCE_NOARGS(template, name)	\
+	_DEFINE_TRACEPOINT(name)
 
 #undef TRACE_INCLUDE
 #undef __TRACE_INCLUDE
@@ -72,7 +71,7 @@
 # define __TRACE_INCLUDE(system) <trace/events/system.h>
 # define UNDEF_TRACE_INCLUDE_PATH
 #else
-# define __TRACE_INCLUDE(system) __stringify(TRACE_INCLUDE_PATH/system.h)
+# define __TRACE_INCLUDE(system) __tp_stringify(TRACE_INCLUDE_PATH/system.h)
 #endif
 
 # define TRACE_INCLUDE(system) __TRACE_INCLUDE(system)
@@ -82,21 +81,17 @@
 
 #include TRACE_INCLUDE(TRACE_INCLUDE_FILE)
 
-/* Make all open coded DECLARE_TRACEPOINT nops */
-#undef DECLARE_TRACEPOINT
-#define DECLARE_TRACEPOINT(name, proto, args)
-
 #ifndef CONFIG_NO_EVENT_TRACING
-#include <ust/ust_trace.h>
+#include <ust/probe.h>
 #endif
 
 #undef TRACEPOINT_EVENT
-#undef TRACEPOINT_EVENT_FN
-#undef DECLARE_TRACEPOINT_EVENT_CLASS
-#undef DEFINE_TRACEPOINT_EVENT
-#undef DEFINE_TRACEPOINT_EVENT_PRINT
+#undef TRACEPOINT_EVENT_CLASS
+#undef TRACEPOINT_EVENT_INSTANCE
+#undef TRACEPOINT_EVENT_NOARGS
+#undef TRACEPOINT_EVENT_CLASS_NOARGS
+#undef TRACEPOINT_EVENT_INSTANCE_NOARGS
 #undef TRACE_HEADER_MULTI_READ
-#undef DECLARE_TRACEPOINT
 
 /* Only undef what we defined in this file */
 #ifdef UNDEF_TRACE_INCLUDE_FILE

@@ -25,6 +25,7 @@
 
 #include <stdlib.h>
 #include <ust/marker.h>
+#include <ust/marker-internal.h>
 #include "channels.h"
 #include "usterr_signal_safe.h"
 
@@ -133,7 +134,6 @@ end:
 	pthread_mutex_unlock(&ltt_channel_mutex);
 	return ret;
 }
-//ust// EXPORT_SYMBOL_GPL(ltt_channels_register);
 
 /**
  * ltt_channels_unregister - Unregister a trace channel.
@@ -157,7 +157,6 @@ end:
 	pthread_mutex_unlock(&ltt_channel_mutex);
 	return ret;
 }
-//ust// EXPORT_SYMBOL_GPL(ltt_channels_unregister);
 
 /**
  * ltt_channels_set_default - Set channel default behavior.
@@ -184,7 +183,6 @@ end:
 	pthread_mutex_unlock(&ltt_channel_mutex);
 	return ret;
 }
-//ust// EXPORT_SYMBOL_GPL(ltt_channels_set_default);
 
 /**
  * ltt_channels_get_name_from_index - get channel name from channel index
@@ -202,7 +200,6 @@ const char *ltt_channels_get_name_from_index(unsigned int index)
 			return iter->name;
 	return NULL;
 }
-//ust// EXPORT_SYMBOL_GPL(ltt_channels_get_name_from_index);
 
 static struct ltt_channel_setting *
 ltt_channels_get_setting_from_name(const char *name)
@@ -234,7 +231,6 @@ int ltt_channels_get_index_from_name(const char *name)
 	else
 		return -1;
 }
-//ust// EXPORT_SYMBOL_GPL(ltt_channels_get_index_from_name);
 
 /**
  * ltt_channels_trace_alloc - Allocate channel structures for a trace
@@ -283,7 +279,6 @@ end:
 	pthread_mutex_unlock(&ltt_channel_mutex);
 	return channel;
 }
-//ust// EXPORT_SYMBOL_GPL(ltt_channels_trace_alloc);
 
 /**
  * ltt_channels_trace_free - Free one trace's channels
@@ -301,7 +296,6 @@ void ltt_channels_trace_free(struct ust_channel *channels)
 	pthread_mutex_unlock(&ltt_channel_mutex);
 	unlock_ust_marker();
 }
-//ust// EXPORT_SYMBOL_GPL(ltt_channels_trace_free);
 
 /**
  * _ltt_channels_get_event_id - get next event ID for a marker
@@ -357,7 +351,3 @@ int ltt_channels_get_event_id(const char *channel, const char *name)
 	pthread_mutex_unlock(&ltt_channel_mutex);
 	return ret;
 }
-
-//ust// MODULE_LICENSE("GPL");
-//ust// MODULE_AUTHOR("Mathieu Desnoyers");
-//ust// MODULE_DESCRIPTION("Linux Trace Toolkit Next Generation Channel Management");
