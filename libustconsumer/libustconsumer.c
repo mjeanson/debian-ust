@@ -34,7 +34,7 @@
 
 #include <ust/ustconsumer.h>
 #include "lowlevel.h"
-#include "usterr.h"
+#include "usterr_signal_safe.h"
 #include "ustcomm.h"
 
 #define GET_SUBBUF_OK 1
@@ -477,6 +477,8 @@ int consumer_loop(struct ustconsumer_instance *instance, struct buffer_info *buf
 			DBG("App died while being traced");
 			finish_consuming_dead_subbuffer(instance->callbacks, buf);
 			break;
+		} else if (read_result == -1 && errno == EINTR) {
+			continue;
 		}
 
 		if(instance->callbacks->on_read_subbuffer)
@@ -541,6 +543,10 @@ void *consumer_thread(void *arg)
 	int result;
 	sigset_t sigset;
 
+	pthread_mutex_lock(&args->instance->mutex);
+	args->instance->active_threads++;
+	pthread_mutex_unlock(&args->instance->mutex);
+
 	if(args->instance->callbacks->on_new_thread)
 		args->instance->callbacks->on_new_thread(args->instance->callbacks);
 
@@ -581,6 +587,10 @@ void *consumer_thread(void *arg)
 
 	if(args->instance->callbacks->on_close_thread)
 		args->instance->callbacks->on_close_thread(args->instance->callbacks);
+
+	pthread_mutex_lock(&args->instance->mutex);
+	args->instance->active_threads--;
+	pthread_mutex_unlock(&args->instance->mutex);
 
 	free((void *)args->channel);
 	free(args);
@@ -733,7 +743,7 @@ int ustconsumer_start_instance(struct ustconsumer_instance *instance)
 
 		if (instance->quit_program) {
 			pthread_mutex_lock(&instance->mutex);
-			if(instance->active_buffers == 0) {
+			if (instance->active_buffers == 0 && instance->active_threads == 0) {
 				pthread_mutex_unlock(&instance->mutex);
 				break;
 			}
@@ -783,8 +793,11 @@ int ustconsumer_stop_instance(struct ustconsumer_instance *instance, int send_ms
 
 	struct sockaddr_un addr;
 
+socket_again:
 	result = fd = socket(PF_UNIX, SOCK_STREAM, 0);
 	if(result == -1) {
+		if (errno == EINTR)
+			goto socket_again;
 		PERROR("socket");
 		return 1;
 	}
@@ -794,13 +807,21 @@ int ustconsumer_stop_instance(struct ustconsumer_instance *instance, int send_ms
 	strncpy(addr.sun_path, instance->sock_path, UNIX_PATH_MAX);
 	addr.sun_path[UNIX_PATH_MAX-1] = '\0';
 
+connect_again:
 	result = connect(fd, (struct sockaddr *)&addr, sizeof(addr));
 	if(result == -1) {
+		if (errno == EINTR)
+			goto connect_again;
 		PERROR("connect");
 	}
 
-	while(bytes != sizeof(msg))
-		bytes += send(fd, msg, sizeof(msg), 0);
+	while(bytes != sizeof(msg)) {
+		int inc = send(fd, msg, sizeof(msg), 0);
+		if (inc < 0 && errno != EINTR)
+			break;
+		else
+			bytes += inc;
+	}
 
 	close(fd);
 
@@ -846,7 +867,7 @@ static int init_ustconsumer_socket(struct ustconsumer_instance *instance)
 		int result;
 
 		/* Only check if socket dir exists if we are using the default directory */
-		result = ensure_dir_exists(SOCK_DIR);
+		result = ensure_dir_exists(SOCK_DIR, S_IRWXU | S_IRWXG | S_IRWXO);
 		if (result == -1) {
 			ERR("Unable to create socket directory %s", SOCK_DIR);
 			return -1;

@@ -39,10 +39,11 @@ target_triplet = @target@
 subdir = .
 DIST_COMMON = README $(am__configure_deps) $(dist_bin_SCRIPTS) \
 	$(srcdir)/Makefile.am $(srcdir)/Makefile.in \
-	$(srcdir)/config.h.in $(top_srcdir)/configure COPYING \
-	ChangeLog TODO config/config.guess config/config.sub \
-	config/depcomp config/install-sh config/ltmain.sh \
-	config/missing config/texinfo.tex
+	$(srcdir)/config.h.in $(top_srcdir)/configure \
+	$(top_srcdir)/include/ust/config.h.in COPYING ChangeLog TODO \
+	config/config.guess config/config.sub config/depcomp \
+	config/install-sh config/ltmain.sh config/missing \
+	config/texinfo.tex
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/config/libtool.m4 \
 	$(top_srcdir)/config/ltoptions.m4 \
@@ -54,7 +55,7 @@ am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
  configure.lineno config.status.lineno
 mkinstalldirs = $(install_sh) -d
-CONFIG_HEADER = config.h
+CONFIG_HEADER = config.h $(top_builddir)/include/ust/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
@@ -323,8 +324,18 @@ $(srcdir)/config.h.in:  $(am__configure_deps)
 	rm -f stamp-h1
 	touch $@
 
+include/ust/config.h: include/ust/stamp-h2
+	@if test ! -f $@; then \
+	  rm -f include/ust/stamp-h2; \
+	  $(MAKE) $(AM_MAKEFLAGS) include/ust/stamp-h2; \
+	else :; fi
+
+include/ust/stamp-h2: $(top_srcdir)/include/ust/config.h.in $(top_builddir)/config.status
+	@rm -f include/ust/stamp-h2
+	cd $(top_builddir) && $(SHELL) ./config.status include/ust/config.h
+
 distclean-hdr:
-	-rm -f config.h stamp-h1
+	-rm -f config.h stamp-h1 include/ust/config.h include/ust/stamp-h2
 install-dist_binSCRIPTS: $(dist_bin_SCRIPTS)
 	@$(NORMAL_INSTALL)
 	test -z "$(bindir)" || $(MKDIR_P) "$(DESTDIR)$(bindir)"
@@ -826,7 +837,7 @@ uninstall-am: uninstall-dist_binSCRIPTS uninstall-ldscriptsDATA
 
 
 libust.so: libust.ldscript.in
-	$(SED) -e "s@\@FORMAT\@@$(LIBFORMAT)@" < $< > $@
+	$(SED) -e $(if $(LIBFORMAT),"s@\@FORMAT\@@$(LIBFORMAT)@","s@.*\@FORMAT\@.*@@") < $< > $@
 
 # It is very important to compile the initializer with PIC otherwise we
 # may get obscure errors when linking to shared libraries.

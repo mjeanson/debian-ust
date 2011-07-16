@@ -47,7 +47,8 @@ am__aclocal_m4_deps = $(top_srcdir)/config/libtool.m4 \
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 mkinstalldirs = $(install_sh) -d
-CONFIG_HEADER = $(top_builddir)/config.h
+CONFIG_HEADER = $(top_builddir)/config.h \
+	$(top_builddir)/include/ust/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 AM_V_GEN = $(am__v_GEN_$(V))
@@ -202,7 +203,6 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 nobase_include_HEADERS = \
-	ust/immediate.h \
 	ust/marker.h \
 	ust/tracepoint.h \
 	ust/define_trace.h \
@@ -211,6 +211,7 @@ nobase_include_HEADERS = \
 	ust/probe.h \
 	ust/ust.h \
 	ust/tracectl.h \
+	ust/config.h \
 	ust/core.h \
 	ust/clock.h \
 	ust/type-serializer.h \
@@ -223,7 +224,7 @@ nobase_include_HEADERS = \
 	ust/ustctl.h \
 	ust/ustconsumer.h
 
-noinst_HEADERS = share.h usterr.h ust_snprintf.h
+noinst_HEADERS = share.h usterr.h ust_snprintf.h usterr_signal_safe.h
 all: all-am
 
 .SUFFIXES:

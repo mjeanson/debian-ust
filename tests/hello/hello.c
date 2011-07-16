@@ -25,8 +25,8 @@
 #include <signal.h>
 
 #include <ust/marker.h>
+#include <ust/ustctl.h>
 #include "usterr.h"
-#include "tracer.h"
 #include "tp.h"
 
 void inthandler(int sig)
@@ -71,17 +71,17 @@ int main()
 
 	sleep(1);
 	for(i=0; i<50; i++) {
-		trace_mark(ust, bar, "str %s", "FOOBAZ");
-		trace_mark(ust, bar2, "number1 %d number2 %d", 53, 9800);
-		trace_hello_tptest(i);
+		ust_marker(bar, "str %s", "FOOBAZ");
+		ust_marker(bar2, "number1 %d number2 %d", 53, 9800);
+		tracepoint(hello_tptest, i);
 		usleep(100000);
 	}
 
 	if (scanf("%*s") == EOF)
 		PERROR("scanf failed");
 
-	ltt_trace_stop("auto");
-	ltt_trace_destroy("auto", 0);
+	ustctl_stop_trace(getpid(), "auto");
+	ustctl_destroy_trace(getpid(), "auto");
 
 	DBG("TRACE STOPPED");
 	if (scanf("%*s") == EOF)
