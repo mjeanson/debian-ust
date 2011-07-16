@@ -129,7 +129,9 @@ LIBTOOL = @LIBTOOL@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
+MAJOR_VERSION = @MAJOR_VERSION@
 MAKEINFO = @MAKEINFO@
+MINOR_VERSION = @MINOR_VERSION@
 MKDIR_P = @MKDIR_P@
 NM = @NM@
 NMEDIT = @NMEDIT@
@@ -207,6 +209,7 @@ target_vendor = @target_vendor@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
+AM_CPPFLAGS = -I$(top_srcdir)/include
 prog_SOURCES = prog.c
 prog_LDADD = $(top_builddir)/snprintf/libustsnprintf.la
 all: all-am

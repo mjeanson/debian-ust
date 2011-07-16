@@ -16,7 +16,7 @@ PREREQUISITES:
   - liburcu
     Userspace RCU library, by Mathieu Desnoyers and Paul E. McKenney
 
-    -> This release was tested with liburcu v0.5.4
+    -> This release depends on liburcu v0.6
 
       * Debian/Ubuntu package: liburcu-dev
       * Website:  http://lttng.org/urcu
@@ -44,6 +44,12 @@ TRACE VIEWER:
   http://lttng.org in the Downloads section.
 
   This release has been tested with LTTV 0.12.32.
+
+
+CONTACT:
+
+  Maintainer: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
+  Mailing list: ltt-dev@lists.casi.polymtl.ca
 
 
 PACKAGE CONTENTS:

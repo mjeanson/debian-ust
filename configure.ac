@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([ust], [0.13], [nils dot carlson at ericsson dot com])
+AC_INIT([ust], [0.14], [mathieu dot desnoyers at efficios dot com])
 AC_CONFIG_AUX_DIR([config])
 AC_CANONICAL_TARGET
 AC_CANONICAL_HOST
@@ -11,6 +11,14 @@ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AC_CONFIG_SRCDIR([ustctl/ustctl.c])
 AC_CONFIG_HEADERS([config.h include/ust/config.h])
 AH_TEMPLATE([HAVE_EFFICIENT_UNALIGNED_ACCESS], [Use efficient unaligned access.])
+# Compute minor/major version numbers
+major_version=`echo AC_PACKAGE_VERSION | sed 's/\..*//'`
+minor_version=`echo AC_PACKAGE_VERSION | sed 's/.*\.//' | sed 's/^0//'`
+AC_SUBST([MAJOR_VERSION], [$major_version])
+AC_SUBST([MINOR_VERSION], [$minor_version])
+AC_DEFINE_UNQUOTED([VERSION_MAJOR], $major_version, [UST major version number])
+AC_DEFINE_UNQUOTED([VERSION_MINOR], $minor_version, [UST minor version number])
+
 
 # Checks for programs.
 AC_PROG_CC
@@ -62,14 +70,10 @@ AC_CHECK_HEADERS([urcu-bp.h], [], [AC_MSG_ERROR([Cannot find [URCU] headers (urc
 This error can also occur when the liburcu package's configure script has not been run.])])
 
 # urcu - check that URCU lib is available to compilation
-AC_CHECK_LIB([urcu-bp], [synchronize_rcu], [], [AC_MSG_ERROR([Cannot find liburcu-bp lib. Use [LDFLAGS]=-Ldir to specify its location.])])
+AC_CHECK_LIB([urcu-bp], [synchronize_rcu_bp], [], [AC_MSG_ERROR([Cannot find liburcu-bp lib. Use [LDFLAGS]=-Ldir to specify its location.])])
 
-# urcu - check that URCU lib is at least version 0.5.4
-AC_CHECK_LIB([urcu-bp], [rcu_bp_before_fork], [], [AC_MSG_ERROR([liburcu 0.5.4 or newer is needed, please update your version or use [LDFLAGS]=-Ldir to specify the right location.])])
-
-# urcu - check that URCU lib is at least version 0.5
-AC_CHECK_DECL([cds_list_add(0, 0)], [], [AC_MSG_ERROR([liburcu 0.5 or newer is needed, please update your version or use [LDFLAGS]=-Ldir to specify the right location.])], [[#include <urcu/list.h>]])
-
+# urcu - check that URCU lib is at least version 0.6
+AC_CHECK_LIB([urcu-bp], [call_rcu_bp], [], [AC_MSG_ERROR([liburcu 0.6 or newer is needed, please update your version or use [LDFLAGS]=-Ldir to specify the right location.])])
 
 
 # Check for various supplementary host information (beyond the
@@ -174,5 +178,7 @@ AC_CONFIG_FILES([
 	libustcomm/Makefile
 	libustctl/Makefile
 	snprintf/Makefile
+	ust.pc
+	include/ust/version.h
 ])
 AC_OUTPUT

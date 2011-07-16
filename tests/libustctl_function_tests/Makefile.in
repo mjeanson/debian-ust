@@ -60,7 +60,7 @@ libustctl_function_tests_DEPENDENCIES =  \
 	$(top_builddir)/libust/libust.la \
 	$(top_builddir)/libustctl/libustctl.la \
 	$(top_builddir)/libust-initializer.o \
-	$(top_builddir)/tests/libtap.la
+	$(top_builddir)/tests/libtap.a
 AM_V_lt = $(am__v_lt_$(V))
 am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
 am__v_lt_0 = --silent
@@ -134,7 +134,9 @@ LIBTOOL = @LIBTOOL@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
+MAJOR_VERSION = @MAJOR_VERSION@
 MAKEINFO = @MAKEINFO@
+MINOR_VERSION = @MINOR_VERSION@
 MKDIR_P = @MKDIR_P@
 NM = @NM@
 NMEDIT = @NMEDIT@
@@ -217,7 +219,7 @@ libustctl_function_tests_SOURCES = libustctl_function_tests.c
 libustctl_function_tests_LDADD = $(top_builddir)/libust/libust.la \
 	$(top_builddir)/libustctl/libustctl.la \
 	$(top_builddir)/libust-initializer.o \
-	$(top_builddir)/tests/libtap.la \
+	$(top_builddir)/tests/libtap.a \
 	-lpthread
 
 all: all-am
