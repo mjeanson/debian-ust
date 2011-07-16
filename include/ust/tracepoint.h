@@ -124,6 +124,29 @@ struct tracepoint {
 	{								\
 		return __tracepoint_probe_unregister(#name, (void *)probe, \
 						   data);		\
+	}								\
+	/*								\
+	 * Backward-compatibility API (will be deprecated):		\
+	 * trace_*							\
+	 * register_trace_*						\
+	 * unregister_trace_*						\
+	 */								\
+	static inline void trace_##name(proto)				\
+	{								\
+		__CHECK_TRACE(name, TP_PROTO(proto),			\
+			      TP_ARGS(args));				\
+	}								\
+	static inline int						\
+	register_trace_##name(void (*probe)(proto))			\
+	{								\
+		return __tracepoint_probe_register(#name, (void *)probe,\
+						   NULL);		\
+	}								\
+	static inline int						\
+	unregister_trace_##name(void (*probe)(proto))			\
+	{								\
+		return __tracepoint_probe_unregister(#name, (void *)probe, \
+						     NULL);		\
 	}
 
 /*
@@ -194,6 +217,16 @@ int tracepoint_register_lib(struct tracepoint * const *tracepoints_start,
 extern
 int tracepoint_unregister_lib(struct tracepoint * const *tracepoints_start);
 
+/*
+ * Backward-compatibility API (will be deprecated):
+ * DEFINE_TRACE
+ * DECLARE_TRACE
+ * register_tracepoint
+ * unregister_tracepoint
+ */
+#define DEFINE_TRACE	_DEFINE_TRACEPOINT
+#define DECLARE_TRACE(name, proto, args)	\
+		_DECLARE_TRACEPOINT(name, TP_PARAMS(proto), TP_PARAMS(args))
 
 #ifndef TRACEPOINT_EVENT
 /*

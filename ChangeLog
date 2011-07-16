@@ -1,3 +1,7 @@
+2011-07-15 ust 0.15
+	* Add backward compability for tracepoint API (still planned for
+	  deprecation, but should make the transition smoother).
+
 2011-06-12 ust 0.14
 	* Rename trace_mark() API to ust_marker(). Old macros kept for
 	  slow deprecation.

@@ -1,14 +1,12 @@
-#ifndef _UST_VERSION_H
-#define _UST_VERSION_H
+#ifndef _UST_COMPAT_H
+#define _UST_COMPAT_H
 
 /*
- * ust/version.h.in. Contains the UST versions 
- * 
- * (C) Copyright 2011 Yannick Brosseau <Yannick.Brosseau@polymtl.ca>
+ * Copyright (C) 2011   Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation;
+ * License as published by the Free Software Foundation; either
  * version 2.1 of the License.
  *
  * This library is distributed in the hope that it will be useful,
@@ -21,8 +19,17 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
-#define UST_MAJOR_VERSION 0
-#define UST_MINOR_VERSION 15
-#define UST_VERSION 0.15
+#include <sys/syscall.h>
 
-#endif  /* _UST_VERSION_H */
+#ifdef __UCLIBC__
+#define __getcpu(cpu, node, cache)	syscall(__NR_getcpu, cpu, node, cache)
+static inline
+int sched_getcpu(void)
+{
+	int c, s;
+
+	s = __getcpu(&c, NULL, NULL);
+	return (s == -1) ? s : c;
+}
+#endif	/* __UCLIBC__ */
+#endif /* _UST_COMPAT_H */
