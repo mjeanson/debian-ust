@@ -1,6 +1,4 @@
 usr/include
-usr/lib/libtap.so
-usr/lib/libtap.a
 usr/lib/libustfork.so
 usr/lib/libustfork.a
 usr/lib/libustinstr-malloc.so
