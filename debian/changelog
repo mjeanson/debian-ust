@@ -1,3 +1,15 @@
+ust (0.15-1) unstable; urgency=low
+
+  * [bf5ba54] New upstream version 0.15 (Closes: #634408)
+  * [b5afb5c] Remove unneeded .la files (Closes: #633172)
+  * [889b99e] Remove patch for ppc tracepoint test, fixed upstream
+  * [50870be] Update liburcu version dependency
+  * [07b147e] Bump Standards-Version to 3.9.2, no changes necessary
+  * [e086e89] Rename libustcmd to libustctl
+  * [70f2f68] Remove libtap library, not installed anymore
+
+ -- Jon Bernard <jbernard@debian.org>  Tue, 19 Jul 2011 20:46:09 -0400
+
 ust (0.11-1) unstable; urgency=low
 
   * [c53bcd] New upstream version 0.11
