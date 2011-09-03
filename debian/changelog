@@ -1,3 +1,9 @@
+ust (0.15-2) unstable; urgency=low
+
+  * [0fb2d5c] Update liburcu version dependency (Closes: #637636)
+
+ -- Jon Bernard <jbernard@debian.org>  Sat, 03 Sep 2011 10:20:38 -0400
+
 ust (0.15-1) unstable; urgency=low
 
   * [bf5ba54] New upstream version 0.15 (Closes: #634408)
