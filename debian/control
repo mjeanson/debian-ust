@@ -1,7 +1,7 @@
 Source: ust
 Priority: extra
 Maintainer: Jon Bernard <jbernard@debian.org>
-Build-Depends: debhelper (>= 7.0.50~), autotools-dev, liburcu-dev (>= 0.6.0), texinfo
+Build-Depends: debhelper (>= 7.0.50~), autotools-dev, liburcu-dev (>= 0.6.2), texinfo
 Standards-Version: 3.9.2
 Section: libs
 Vcs-Git: git://git.debian.org/git/collab-maint/ust.git
@@ -10,7 +10,7 @@ Homepage: http://lttng.org/
 
 Package: libust0
 Architecture: i386 amd64 powerpc ppc64
-Depends: ${shlibs:Depends}, ${misc:Depends}, liburcu0 (>= 0.5.2), dpkg (>= 1.15.4) | install-info
+Depends: ${shlibs:Depends}, ${misc:Depends}, liburcu1 (>= 0.6.2), dpkg (>= 1.15.4) | install-info
 Description: LTTng Userspace Tracer (runtime)
  The userspace tracer is designed to provide detailed information about
  userspace activity. Like the kernel tracer, performance is the main goal.
@@ -24,7 +24,7 @@ Package: libust-dev
 Section: libdevel
 Architecture: i386 amd64 powerpc ppc64
 Depends: ${misc:Depends}, libust0 (= ${binary:Version})
-Recommends: liburcu-dev (>= 0.5.2)
+Recommends: liburcu-dev (>= 0.6.2)
 Description: LTTng Userspace Tracer (development)
  The userspace tracer is designed to provide detailed information about
  userspace activity. Like the kernel tracer, performance is the main goal.
