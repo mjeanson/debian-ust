@@ -10,7 +10,7 @@ Homepage: http://lttng.org/
 
 Package: libust0
 Architecture: i386 amd64 powerpc ppc64
-Depends: ${shlibs:Depends}, ${misc:Depends}, liburcu1 (>= 0.6.2), dpkg (>= 1.15.4) | install-info
+Depends: ${shlibs:Depends}, ${misc:Depends}, dpkg (>= 1.15.4) | install-info
 Description: LTTng Userspace Tracer (runtime)
  The userspace tracer is designed to provide detailed information about
  userspace activity. Like the kernel tracer, performance is the main goal.
@@ -24,7 +24,7 @@ Package: libust-dev
 Section: libdevel
 Architecture: i386 amd64 powerpc ppc64
 Depends: ${misc:Depends}, libust0 (= ${binary:Version})
-Recommends: liburcu-dev (>= 0.6.2)
+Recommends: liburcu-dev
 Description: LTTng Userspace Tracer (development)
  The userspace tracer is designed to provide detailed information about
  userspace activity. Like the kernel tracer, performance is the main goal.
