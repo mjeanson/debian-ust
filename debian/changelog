@@ -1,3 +1,11 @@
+ust (0.16-1) unstable; urgency=low
+
+  * [b2e8277] New upstream version 0.16 (Closes: #652252)
+  * [17ca597] Depend on version 0.6.6 of liburcu-dev
+  * [cdc6f54] Include pkgconfig in libust-dev
+
+ -- Jon Bernard <jbernard@debian.org>  Tue, 03 Jan 2012 14:44:19 -0500
+
 ust (0.15-3) unstable; urgency=low
 
   * [61bf984] Remove liburcu1 from libust0 Depends (Closes: #637636)
