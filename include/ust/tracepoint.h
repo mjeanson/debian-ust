@@ -27,6 +27,7 @@
 
 #include <urcu-bp.h>
 #include <urcu/list.h>
+#include <urcu/compiler.h>
 
 struct tracepoint_probe {
 	void *func;
@@ -70,12 +71,13 @@ struct tracepoint {
 /*
  * it_func[0] is never NULL because there is at least one element in the array
  * when the array itself is non NULL.
+ * __attribute__((unused)) is for backward compatibility API.
  */
 #define __DO_TRACE(tp, proto, args)					\
 	do {								\
 		struct tracepoint_probe *__tp_it_probe_ptr;		\
 		void *__tp_it_func;					\
-		void *__tp_cb_data;					\
+		void *__tp_cb_data __attribute__((unused));		\
 									\
 		rcu_read_lock();					\
 		__tp_it_probe_ptr = rcu_dereference((tp)->probes);	\
@@ -95,7 +97,7 @@ struct tracepoint {
 
 #define __CHECK_TRACE(name, proto, args)				\
 	do {								\
-		if (unlikely(__tracepoint_##name.state))		\
+		if (caa_unlikely(__tracepoint_##name.state))		\
 			__DO_TRACE(&__tracepoint_##name,		\
 				TP_PROTO(proto), TP_ARGS(args));	\
 	} while (0)
