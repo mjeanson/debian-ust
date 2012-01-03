@@ -10,7 +10,7 @@ fi
 source $TESTDIR/test_functions.sh
 source $TESTDIR/tap.sh
 
-starttest "Testing Tracepoints"
+starttest "Testing Deprecated Tracepoints"
 plan_tests 6
 USTTRACE="$TESTDIR/../usttrace"
 

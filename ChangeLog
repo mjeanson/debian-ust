@@ -1,3 +1,11 @@
+2011-12-15 ust 0.16
+	* Use caa_unlikely, depend on liburcu >= 0.6.6
+	* usttrace: allow spaces in command-line arguments
+	* Fix tracepoint test with deprecated API
+	* Add powerpc64 host_cpu to configure.ac
+	* Mark __tp_cb_data as possibly unused for backward compat API
+	* Fix git URL
+
 2011-07-15 ust 0.15
 	* Add backward compability for tracepoint API (still planned for
 	  deprecation, but should make the transition smoother).

@@ -22,7 +22,7 @@
  */
 
 #define UST_MAJOR_VERSION 0
-#define UST_MINOR_VERSION 15
-#define UST_VERSION 0.15
+#define UST_MINOR_VERSION 16
+#define UST_VERSION 0.16
 
 #endif  /* _UST_VERSION_H */

@@ -85,16 +85,13 @@ if [ -n "$where" ]; then
 	exit 0
 fi
 
-# Prepare vars
-CMD=$*
-
 # Validate input
 if [ -z "$HOME" ];
 then
 	error "no home specified"
 fi
 
-if [ -z "$CMD" ];
+if [ -z "$*" ];
 then
 	error "no command specified"
 	usage;
@@ -196,7 +193,7 @@ fi
     fi
 
 # Execute the command
-    $CMD 2>&1
+    "$@" 2>&1
 ) | tee "$OUTDIR/app.log"
 
 ## Because of the keepalive mechanism, we're sure that by the time

@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([ust], [0.15], [mathieu dot desnoyers at efficios dot com])
+AC_INIT([ust], [0.16], [mathieu dot desnoyers at efficios dot com])
 AC_CONFIG_AUX_DIR([config])
 AC_CANONICAL_TARGET
 AC_CANONICAL_HOST
@@ -111,6 +111,7 @@ changequote([,])dnl
 	x86_64) LIBFORMAT="elf64-x86-64" ;;
 	powerpc) LIBFORMAT="elf32-powerpc" ;;
 	ppc64) LIBFORMAT="elf64-powerpc" ;;
+	powerpc64) LIBFORMAT="elf64-powerpc" ;;
 	s390) LIBFORMAT="elf32-s390" ;;
 	s390x) LIBFORMAT="elf64-s390" ;;
         armv5) LIBFORMAT="elf32-littlearm"; NO_UNALIGNED_ACCESS=1 ;;
