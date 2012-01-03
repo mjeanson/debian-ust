@@ -1,4 +1,5 @@
 usr/include
+usr/lib/pkgconfig
 usr/lib/libustfork.so
 usr/lib/libustfork.a
 usr/lib/libustinstr-malloc.so
