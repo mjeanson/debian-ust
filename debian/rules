@@ -1,7 +1,11 @@
 #!/usr/bin/make -f
+
+# The option below causes the shared objects to contain a TEXTREL section,
+# triggering a non-PIC lintian error.
+#export DEB_BUILD_MAINT_OPTIONS := hardening=+all
+
 %:
 	dh $@
 
-override_dh_auto_build:
-	dh_auto_build
-	makeinfo --html --no-split doc/info/ust.texi -o debian/ust.html
+override_dh_auto_configure:
+	dh_auto_configure -- --with-sdt
