@@ -1,149 +1,190 @@
-2011-12-15 ust 0.16
-	* Use caa_unlikely, depend on liburcu >= 0.6.6
-	* usttrace: allow spaces in command-line arguments
-	* Fix tracepoint test with deprecated API
-	* Add powerpc64 host_cpu to configure.ac
-	* Mark __tp_cb_data as possibly unused for backward compat API
-	* Fix git URL
+2012-06-14 lttng-ust 2.0.4
+	* Fix: perform TLS fixup of nest count outside of UST mutex
+	* Fix: liblttng-ust-fork deadlock
+	* Fix: handle pthread errors
+	* Fix: local apps allowed should disable local (not global) tracing
+	* Fix strict ISO-C compatibility for ust-tracepoint-event.h public header
+	* Fix: support -std=c99 in tracepoint macros
+	* Fix: tracepoint.h should not generate old-style definitions
+	* Fix: don't define variables in headers
+	* test "hello": add boolean test
+	* Fix: perform macro expansion on tracepoint signatures
+	* UST check pointer/de-reference order
 
-2011-07-15 ust 0.15
-	* Add backward compability for tracepoint API (still planned for
-	  deprecation, but should make the transition smoother).
+2012-06-01 lttng-ust 2.0.3
+	* Fix: Block all signals in listener thread
+	* Remove jni support for configure
+	* Fix: don't SIGBUS when filesystem is full
+	* tracepoint: include stdio.h for NULL definition
+	* manpage update: document that probes need gcc
+	* Fix: remove # in front on extern "C" {
+	* Cleanup: don't use GNU old-style field designator extension
+	* Fix: remove padding field after variable sized array
+	* Fix: lttng-ust.pc needs to specify -ldl
+	* Update changelog after liblttng-ust-java removal
+	* Fix: drop unusable liblttng-ust-java.so
 
-2011-06-12 ust 0.14
-	* Rename trace_mark() API to ust_marker(). Old macros kept for
-	  slow deprecation.
-	* Tracepoint API is now private to UST.
-	* Introduction of the TRACEPOINT_EVENT API (work in progress).
-	  Please use ust_marker() API while we complete TRACEPOINT_EVENT.
-	* Privatize many headers which should have always been internal
-	  to UST. At the moment, only marker.h should be included by
-	  applications. When the TRACEPOINT_EVENT API will be completed,
-	  then other headers will be useful for the application
-	  (tracepoint_event.h, tracepoint.h and, indirectly, probe.h).
-	* Markers: merge fixes from LTTng 0.249 into marker.[ch].
-	* Add ust/version.h header file, which exports the UST version
-	  installed.
-	* Move to liburcu 0.6. Update dependencies.
+2012-04-18 lttng-ust 2.0.2
+	* Fix: drop unusable liblttng-ust-java.so
+	* Fix: examples Makefiles should pass $(LIBS) at last
+	* Fix: ustctl need to send the second fd upon error of 1st fd
 
-2011-05-19 ust 0.13
-	* API CHANGE!!! trace_mark has been deprecated, new ust_maker, without
-	channel name. ex. ust_marker(name, <format>, args...)
-	* Instrumentation API CHANGE!!! change from trace_<name>(args...) to
-	tracepoint(name, args...), register_trace_<name>(...) to
-	register_tracepoint(name, ...) and unregister_trace_<name>(...) to
-	unregister_tracepoint(name, ...)
-	* Instrumentation API CHANGE!!! TRACE_EVENT -> TRACEPOINT_EVENT etc
-	* Mutliple ust-consumerd fixes
-	* Fix a bug in the tracepoint ptrs section
-	* Clarify licenses
-	* Busybox support in most scripts added
-	* Remove some dead code
-	* List only online pids and pids that can be accessed by current users
-	using libustctl
+2012-03-29 lttng-ust 2.0.1
+	* Use bsd-compatible fcntl for close-on-exec on socket
+	* Fix multi-session wildcard support
+	* Fix event lost count when buffer is full
+	* Remove inappropriate \n from easy-ust sample
 
-2011-03-14 ust 0.12
-	* ARM support
-	* Fix lots of low-level bugs, mostly courtesy of Mathieu and Yannick
-	* Introduce new ustctl cli
-	* API CHANGE!!! libustcmd renamed to libustctl
-	* API CHANGE!!! libustctl now uses sockets instead of pids
-	* Short signal names in scripts for busybox compatibility
+2012-03-20 lttng-ust 2.0.0
+	* First STABLE version
+	* Add version name
 
-2011-01-14 ust 0.11
-	* Fix a serious bug in the newly introduced synchronized timer
-	implementation.
-	* Increase compatibility of an autoconf test
+2012-03-20 lttng-ust 2.0.0-rc4
+	* Fix out-of-bound write in ltt-events.c
+	* Document LTTNG_UST_DEBUG_VALGRIND compilation flag
+	* Update COPYING
+	* Add exception handling to lttng-gen-tp io operations
 
-2011-01-14 ust 0.10
-	* Run time check for lttng clock source providing synchronized
-	timestamps
-	* Rename of ustd and libustd to ust-consumerd and libustconsumer,
-	remember to run ldconfig
+2012-03-16 lttng-ust 2.0.0-rc3
+	* Fix: sendmsg should retry on EINTR, and use MSG_NOSIGNAL
+	* fix: ustcomm_close_unix_sock should close, not shutdown
+	* Fix: do not print EPIPE perror, as it is an expected error
+	* Ensure that multiplication of clock offset is done on 64-bit
+	* Add 2 missing licenses in deprecated tests
+	* Remove unbuild and unused (deprecated) make_shared_lib test
+	* License text standardization, add missing licenses
+	* Cleanup: remove duplicate check for 0 num_subbuf and subbuf_size
+	* Fix: power of 2 size check should apply to size_t type, not uint32_t
+	* Fix: recvmsg should handle EINTR
+	* Make lttng-gen-tp work on python 2.6
+	* Make lttng-gen-tp executable
 
-2010-12-03 ust 0.9
-	* Cleaned up namespace
-	* Compatible with userspace-rcu version 0.5.2
-	* Fixed a minor bug in a test
+2012-03-02 lttng-ust 2.0.0-rc2
+	* Manpage fixes
+	* Fix: dmesg printout should not print metadata warnings
+	* Fix: use transport name as channel name
+	* Fix: Add signature check in tracepoint activation
+	* Fix: add tracepoint signature at tracepoint definition site
+	* Fix: keep event probe signature, for use by event probe signature check
+	* Fix ABI: add padding to structures shared between UST and consumer
+	* Fix ABI: add padding to tracepoint and ring buffer config public structu
+	* Fix ABI: Adding missing padding in tracepoint event structures
+	* Fix: Add include/lttng/ust-config.h to git ignore
+	* Fix effect: update README about dlopen()
+	* Fix: fixup vtid TLS
+	* Fix: fixup ringbuffer tls at constructor by forcing read
+	* Fix: fix deadlock with dlopen() lttng-ust
+	* Fix: only print event errors every 1048576 hits
+	* Fix: add missing debug printout to identify the cause of lost events
+	* fix: liblttng-ust-ctl should check for incorrect parameters
+	* fix: ust comm error handling segfault
+	* Fix: Return -EINVAL instead of print warning if non power of 2 size/num_
+	* fix: on exit, leave thread/mmap reclaim to OS
+	* fix: Handle sys_futex with async cancel, add missing pthread_join
+	* fix: Only munmap the wait page when not exiting from process
+	* Use CPPFLAGS instead of CFLAGS for -I
+	* Fix type range comparison always false for 64-bit arch
+	* demo: remove useless libs
+	* tests: include missing headers
+	* Add missing limits.h include for NAME_MAX
 
-2010-10-26 ust 0.8
-	* API CHANGE!!! Add data pointer to tracepoint probe
-	void *data is always the first argument to a tracepoint probe
-	* License LGPGv2.1 text and information added
-	* Update COPYING file
-	* Add TRACE_EVENT api proposal, not finalised
-	NOT usable at this point. Only bound to a printf.
-	ustctl command for listing trace event
-	* Multiple fixes
-	Compilation warnings
-	Value and error handling
-    	Fix bugs introduce by prior commits
-	Security fix (CVE-2010-3386)
-	Add exit status for ustctl
-	Change malloc to zmalloc for most of UST
-	Remove unused code, syntax cleanup and consistency for markers
-	* New UST internal communication protocol
-	Add message headers
-	Usage of epoll
-	* New testcases
-	* Try to decrease namespace pollution
-	* Fix valgrind for sendmsg bug
-	* tracectl destructor aware of fork
+2012-02-20 lttng-ust 2.0.0-rc1
+	* Standardize version across toolchain
+	* Fix a typo in gen-tp Makefile
+	* Implement the .o file generation in lttng-gen-tp
 
-2010-08-16  ust 0.6
-	* add ust strncpy interface for input robustness
-	* multiple memory barrier fix
-	* add libustd: contains the core functionality of ustd
-	* add get/set commands for daemon socket path
-	* fix cacheline aligned to use liburcu value
-	* fix usage of custom probes: use trace_mark_tp
-	* remove ltt_relay_buffer_flush function
-	* add ustctl manpage: force-switch and get/set-sock-path
-	* fix invalid array size and directory creation mode for ustd
+2012-02-16 lttng-ust 1.9.8
+	* Fix comment in tracepoint.h
+	* Add loglevel info to manpage
+	* Remove stale binary file
+	* Add lttng-ust(3)
+	* Add a man page for lttng-gen-tp
+	* Install easy-ust and gen-tp examples in doc/
+	* Create the lttng-gen-tp tools as an helper to generate UST .h and .c files
+	* Add missing #define _GNU_SOURCE for sched_getcpu()
+	* Define _GNU_SOURCE for all implementation files rather than getcpu.h
+	* Add sched_getcpu and sysconf to AC_CHECK_FUNCS
+	* Mark lib_ring_buffer_print_errors unused
+	* Cleanup: remove extra space from easy_ust example
+	* Add missing comma to tracepoint STAP_PROBEV call
 
-2010-06-30  ust 0.5
-	* add support for PowerPC 32 architecture
-	* use clock_gettime(CLOCK_MONOTINIC) instead of gettimeofday()
-	* add several tests
-	* output test suite results in TAP format
-	* add support for traced library unregistration (useful with dlclose())
-	* add manpages
-	* compile with -fno-strict-antialiasing
-	* add support for channel overwrite and non-collection
-	* update tracepoint api from kernel
-	* fix various bugs and do various cleanups
-	* improve documentation
+2012-02-13 lttng-ust 1.9.7
+	* liblttng-ust-java: add missing -classpath ./
+	* Only specify that sdt.h provides system integration for now
+	* Add STAP_PROBEV check ton configure.ac
+	* Add sdt.h integration
+	* Remove extern C around probe header
+	* Move lttng/config.h to lttng/ust-config.h, and use LTTNG_UST_ namespace
+	* Add a configure report at the end of the output
+	* Add sdt.h integration option
+	* Set default loglevel in metadata
+	* Fix: LTTng-UST java jni wrapper does not build with OpenJDK
 
-2010-03-17  ust 0.4
-	* remove dependency on libkcompat
-	* use atomic ops from liburcu
-	* libmallocwrap: rename to libustinstr-malloc
-	* libinterfork: rename to libustfork
-	* add a testsuite
-	* add ustctl --get-subbuf-size and --get-subbuf-num
-	* updates for compilation with gcc-4.4
-	* remove periodical wakeup in listener thread
-	* change benign warnings to debug messages, not to confuse users
-	* ustd: fix destruction to free all file descriptors and memory
-	* libust: close all file descriptors on close
-	* remove periodical wakeup in daemon
-	* code cleanups
+2012-02-09 lttng-ust 1.9.6
+	* Fix tracepoint.h multiple .o within module/core exec linkage bug
+	* tracepoint: name -> _name to fix possible namespace clash
+	* Add debug printout to tracepoint.c
+	* Rename liblttng-ust-libc to liblttng-ust-libc-wrapper
+	* Update hardcoded loglevel
+	* Add "easy_ust" example
+	* Update gitignore
+	* Zero-initialize struct msghdr
+	* Add environment information
+	* Fix event-specific enabling
+	* Update static lib linking
+	* liblttng-ust-libc: fix linking
+	* liblttng-ust-libc: fix lib dependency
+	* Install README and ChangeLog into system doc
+	* Add hello-static-lib test
+	* Fix static provider linking: introduce TRACEPOINT_PROBE_DYNAMIC_LINKAGE
+	* Fix 32-bit type: allocated len is used
+	* Fix 32-bit type mismatch
 
-ust 0.3
-	* fix several issues, stabilizing tracing of large applications
-	* add --set-subbuf-size / --set-subbuf-num options to ustctl
-	* add a signal safe implementation of snprintf
+2012-02-02 lttng-ust 1.9.5
+	* UST comm ABI: Add padding, push version to 2.0
+	* Update loglevel names
+	* Implement loglevels as event and wildcard attributes
+	* Update loglevel ABI: only loglevel value/enum is known by UST
+	* Pre-assign fixed loglevels
+	* Remove old (now unused) loglevel control code entirely
+	* Update loglevel selection ABI
+	* Use boot_id as monotonic clock uuid
+	* clock: add clock description to metadata
+	* Properly fix the timekeeping overflow detection
+	* Revert "Fix timestamps for slow-paced event rates"
+	* Revert "Force 64-bit timestamps"
+	* Declare struct lttng_ust_calibrate
+	* Force 64-bit timestamps
+	* demo program: ensure we don't link demo on useless libs
+	* ust comm: Receive second FD even if 1st receive failed
+	* ust consumer: close shm fd after mapping it
+	* Add a comment about which wait fd is closed early by UST.
+	* Remove leftover structure in ust-abi.h
+	* Close stream and channel file descriptors as soon as passed to
+	  sessiond
+	* Fix AC_LANG_SOURCE usage: only takes one parameter
+	* Fix timestamps for slow-paced event rates
+	* configure.ac: Use AC_LANG_SOURCE for if else macros
+	* Add execution instructions to the demo test program
+	* Force the building of shared noinst libraries in the demo test
+	  program.
+	* Only print the futex perror in debug mode
 
-ust 0.2
-	* conversion of the buffering system to per-cpu
-	* update to the liburcu 0.4 API
-	* upgrade to trace format 2.6; the latest lttv may now be used
-	* add support for clone() interception in libinterfork
-	* port refactorings from the kernel tracer up to 0.173
-	* enhancements/refactor of libustcomm
-	* add sections in the manual about trace viewing and about tracing apps not linked to libust
-	* debugging output is now enabled by adding -DUST_DEBUG to the CFLAGS
-	* usttrace: change ustd socket name to ustd-sock-PID
-	* change app socket directory name for something more descriptive (/tmp/ust-app-socks)
-	* code cleanups
-	* various bug fixes
+2011-12-23 lttng-ust 1.9.4
+	* Split liblttng-ust into liblttng-ust and liblttng-ust-tracepoint libs
+	* Comment the union field (only used in call_rcu scheme)
+
+2011-12-21 lttng-ust 1.9.3
+	* Fix clock source overflow on 32-bit archs
+	* Remove unused trace_clock_frequency
+	* check for negative wait() return value
+	* Add DBG message when registering a probe
+	* Only show futex warning "perror" in debug mode
+
+2011-12-14 lttng-ust 1.9.2
+	* Add missing ust_libc.h to Makefile.am
+	* Use DBG instead of WARN for futex_wake workaround message
+	* Make dlopen more robust by using the .0 target for the library
+
+2011-12-13 lttng-ust 1.9.1
+	* First LTTng-UST 2.0 prerelease.

@@ -1,28 +1,29 @@
 nobase_include_HEADERS = \
-	ust/marker.h \
-	ust/tracepoint.h \
-	ust/tracepoint_event.h \
-	ust/probe.h \
-	ust/version.h
+	lttng/tracepoint.h \
+	lttng/tracepoint-rcu.h \
+	lttng/tracepoint-types.h \
+	lttng/tracepoint-event.h \
+	lttng/ust-tracepoint-event.h \
+	lttng/ust-tracepoint-event-reset.h \
+	lttng/ust-events.h \
+	lttng/ust-ctl.h \
+	lttng/ust-version.h \
+	lttng/ust-abi.h \
+	lttng/ringbuffer-abi.h \
+	lttng/ust-tracer.h \
+	lttng/ust-config.h \
+	lttng/ust.h \
+	lttng/ringbuffer-config.h \
+	lttng/align.h \
+	lttng/bug.h
+
+# note: usterr-signal-safe.h, core.h and share.h need namespace cleanup.
 
 noinst_HEADERS = \
-	share.h \
 	usterr.h \
+	usterr-signal-safe.h \
 	ust_snprintf.h \
-	usterr_signal_safe.h \
-	ust/compat.h \
-	ust/config.h \
-	ust/core.h \
-	ust/marker-internal.h \
-	ust/tracepoint-internal.h \
-	ust/clock.h \
-	ust/probe-internal.h \
-	ust/processor.h \
-	ust/kcompat/kcompat.h \
-	ust/kcompat/jhash.h \
-	ust/kcompat/compiler.h \
-	ust/kcompat/types.h \
-	ust/tracectl.h \
-	ust/ustctl.h \
-	ust/ustconsumer.h \
-	ust/stringify.h
+	ust-comm.h \
+	lttng/bitfield.h \
+	helper.h \
+	share.h
