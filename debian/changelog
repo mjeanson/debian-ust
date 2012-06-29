@@ -1,3 +1,11 @@
+ust (2.0.4-1) unstable; urgency=low
+
+  * [8d66bf4] Update watch file
+  * [8d2e5cc] New upstream version 2.0.4
+  * [01fc3a7] Synchronize with upstream's packaging effort
+
+ -- Jon Bernard <jbernard@debian.org>  Fri, 29 Jun 2012 16:47:49 -0400
+
 ust (0.16-1) unstable; urgency=low
 
   * [b2e8277] New upstream version 0.16 (Closes: #652252)
