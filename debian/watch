@@ -1,2 +1,2 @@
 version=3
-http://lttng.org/files/ust/releases/ust-(.*)\.tar\.gz
+http://lttng.org/files/lttng-ust/lttng-ust-(.*)\.tar\.(?:gz|bz2)
