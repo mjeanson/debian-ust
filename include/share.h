@@ -1,81 +1,23 @@
-/* Copyright (C) 2009  Pierre-Marc Fournier
+#ifndef _LTTNG_SHARE_H
+#define _LTTNG_SHARE_H
+
+/*
+ * Copyright (c) 2011 - Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
  */
 
-#ifndef UST_SHARE_H
-#define UST_SHARE_H
+#include <stdlib.h>
 
-/* write() */
-#include <unistd.h>
+ssize_t patient_write(int fd, const void *buf, size_t count);
+ssize_t patient_send(int fd, const void *buf, size_t count, int flags);
 
-/* send() */
-#include <sys/types.h>
-#include <sys/socket.h>
-
-#include <errno.h>
-
-/* This write is patient because it restarts if it was incomplete.
- */
-
-static __inline__ ssize_t patient_write(int fd, const void *buf, size_t count)
-{
-	const char *bufc = (const char *) buf;
-	int result;
-
-	for(;;) {
-		result = write(fd, bufc, count);
-		if(result == -1 && errno == EINTR) {
-			continue;
-		}
-		if(result <= 0) {
-			return result;
-		}
-		count -= result;
-		bufc += result;
-
-		if(count == 0) {
-			break;
-		}
-	}
-
-	return bufc-(const char *)buf;
-}
-
-static __inline__ ssize_t patient_send(int fd, const void *buf, size_t count, int flags)
-{
-	const char *bufc = (const char *) buf;
-	int result;
-
-	for(;;) {
-		result = send(fd, bufc, count, flags);
-		if(result == -1 && errno == EINTR) {
-			continue;
-		}
-		if(result <= 0) {
-			return result;
-		}
-		count -= result;
-		bufc += result;
-
-		if(count == 0) {
-			break;
-		}
-	}
-
-	return bufc-(const char *)buf;
-}
-
-#endif /* UST_SHARE_H */
+#endif /* _LTTNG_SHARE_H */

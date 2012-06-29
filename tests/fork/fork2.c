@@ -18,13 +18,15 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include <ust/marker.h>
+#define TRACEPOINT_DEFINE
+#define TRACEPOINT_CREATE_PROBES
+#include "ust_tests_fork.h"
 
 int main()
 {
 	printf("IN FORK2\n");
 
-	ust_marker(after_exec, UST_MARKER_NOARGS);
+	tracepoint(ust_tests_fork, after_exec);
 
 	return 0;
 }
