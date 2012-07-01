@@ -64,7 +64,7 @@ Description: Transitional package for liblttng-ust-dev
 Package: ust-bin
 Section: oldlibs
 Architecture: i386 amd64 powerpc ppc64
-Depends: ${misc:Depends}
+Depends: ${misc:Depends}, lttng-tools
 Description: Transitional package for lttng-tools
  This is a transitional package to ease upgrades to the lttng-tools package.
  It can safely be removed.
