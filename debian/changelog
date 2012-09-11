@@ -1,3 +1,13 @@
+ust (2.1.0~rc1-1) unstable; urgency=low
+
+  * [62f05c8] Set ust-bin to depend on lttng-tools
+  * [c61bd3c] Update copyright notice
+  * [3837a81] Set Architecture to any
+  * [9a6b403] Update watchfile to support upstream RC releases
+  * [0cf3789] New upstream version 2.1.0~rc1
+
+ -- Jon Bernard <jbernard@debian.org>  Tue, 11 Sep 2012 15:34:43 -0400
+
 ust (2.0.4-1) unstable; urgency=low
 
   * [8d66bf4] Update watch file
