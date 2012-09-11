@@ -5,6 +5,8 @@ nobase_include_HEADERS = \
 	lttng/tracepoint-event.h \
 	lttng/ust-tracepoint-event.h \
 	lttng/ust-tracepoint-event-reset.h \
+	lttng/ust-tracepoint-event-write.h \
+	lttng/ust-tracepoint-event-nowrite.h \
 	lttng/ust-events.h \
 	lttng/ust-ctl.h \
 	lttng/ust-version.h \
@@ -12,7 +14,9 @@ nobase_include_HEADERS = \
 	lttng/ringbuffer-abi.h \
 	lttng/ust-tracer.h \
 	lttng/ust-config.h \
+	lttng/ust-compiler.h \
 	lttng/ust.h \
+	lttng/ust-endian.h \
 	lttng/ringbuffer-config.h \
 	lttng/align.h \
 	lttng/bug.h
@@ -24,6 +28,7 @@ noinst_HEADERS = \
 	usterr-signal-safe.h \
 	ust_snprintf.h \
 	ust-comm.h \
+	lttng/ust-tid.h \
 	lttng/bitfield.h \
 	helper.h \
 	share.h

@@ -131,6 +131,10 @@ struct ustcomm_ust_msg {
 		struct lttng_ust_context context;
 		struct lttng_ust_tracer_version version;
 		struct lttng_ust_tracepoint_iter tracepoint;
+		struct {
+			uint32_t data_size;	/* following filter data */
+			uint32_t reloc_offset;
+		} filter;
 	} u;
 };
 
@@ -154,6 +158,11 @@ struct ustcomm_ust_reply {
 		struct lttng_ust_tracepoint_iter tracepoint;
 	} u;
 };
+
+/*
+ * LTTNG_UST_TRACEPOINT_FIELD_LIST reply is followed by a
+ * struct lttng_ust_field_iter field.
+ */
 
 extern int ustcomm_create_unix_sock(const char *pathname);
 extern int ustcomm_connect_unix_sock(const char *pathname);

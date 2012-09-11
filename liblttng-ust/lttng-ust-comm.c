@@ -22,7 +22,6 @@
 #define _LGPL_SOURCE
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/prctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -44,8 +43,10 @@
 #include <lttng/ust.h>
 #include <ust-comm.h>
 #include <usterr-signal-safe.h>
+#include <helper.h>
 #include "tracepoint-internal.h"
 #include "ltt-tracer-core.h"
+#include "compat.h"
 #include "../libringbuffer/tlsfixup.h"
 
 /*
@@ -175,7 +176,6 @@ static
 int register_app_to_sessiond(int socket)
 {
 	ssize_t ret;
-	int prctl_ret;
 	struct {
 		uint32_t major;
 		uint32_t minor;
@@ -194,11 +194,7 @@ int register_app_to_sessiond(int socket)
 	reg_msg.uid = getuid();
 	reg_msg.gid = getgid();
 	reg_msg.bits_per_long = CAA_BITS_PER_LONG;
-	prctl_ret = prctl(PR_GET_NAME, (unsigned long) reg_msg.name, 0, 0, 0);
-	if (prctl_ret) {
-		ERR("Error executing prctl");
-		return -errno;
-	}
+	lttng_ust_getprocname(reg_msg.name);
 
 	ret = ustcomm_send_unix_sock(socket, &reg_msg, sizeof(reg_msg));
 	if (ret >= 0 && ret != sizeof(reg_msg))
@@ -256,6 +252,7 @@ int handle_message(struct sock_info *sock_info,
 	struct ustcomm_ust_reply lur;
 	int shm_fd, wait_fd;
 	union ust_args args;
+	ssize_t len;
 
 	ust_lock();
 
@@ -285,6 +282,74 @@ int handle_message(struct sock_info *sock_info,
 		else
 			ret = lttng_ust_objd_unref(lum->handle);
 		break;
+	case LTTNG_UST_FILTER:
+	{
+		/* Receive filter data */
+		struct lttng_ust_filter_bytecode *bytecode;
+
+		if (lum->u.filter.data_size > FILTER_BYTECODE_MAX_LEN) {
+			ERR("Filter data size is too large: %u bytes\n",
+				lum->u.filter.data_size);
+			ret = -EINVAL;
+			goto error;
+		}
+
+		if (lum->u.filter.reloc_offset > lum->u.filter.data_size - 1) {
+			ERR("Filter reloc offset %u is not within data\n",
+				lum->u.filter.reloc_offset);
+			ret = -EINVAL;
+			goto error;
+		}
+
+		bytecode = zmalloc(sizeof(*bytecode) + lum->u.filter.data_size);
+		if (!bytecode) {
+			ret = -ENOMEM;
+			goto error;
+		}
+		len = ustcomm_recv_unix_sock(sock, bytecode->data,
+				lum->u.filter.data_size);
+		switch (len) {
+		case 0:	/* orderly shutdown */
+			ret = 0;
+			free(bytecode);
+			goto error;
+		case -1:
+			DBG("Receive failed from lttng-sessiond with errno %d", errno);
+			if (errno == ECONNRESET) {
+				ERR("%s remote end closed connection\n", sock_info->name);
+				ret = -EINVAL;
+				free(bytecode);
+				goto error;
+			}
+			ret = -EINVAL;
+			goto end;
+		default:
+			if (len == lum->u.filter.data_size) {
+				DBG("filter data received\n");
+				break;
+			} else {
+				ERR("incorrect filter data message size: %zd\n", len);
+				ret = -EINVAL;
+				free(bytecode);
+				goto end;
+			}
+		}
+		bytecode->len = lum->u.filter.data_size;
+		bytecode->reloc_offset = lum->u.filter.reloc_offset;
+		if (ops->cmd) {
+			ret = ops->cmd(lum->handle, lum->cmd,
+					(unsigned long) bytecode,
+					&args);
+			if (ret) {
+				free(bytecode);
+			}
+			/* don't free bytecode if everything went fine. */
+		} else {
+			ret = -ENOSYS;
+			free(bytecode);
+		}
+		break;
+	}
 	default:
 		if (ops->cmd)
 			ret = ops->cmd(lum->handle, lum->cmd,
@@ -364,6 +429,22 @@ end:
 		if (sendret) {
 			ret = sendret;
 			goto error;
+		}
+	}
+	/*
+	 * LTTNG_UST_TRACEPOINT_FIELD_LIST_GET needs to send the field
+	 * after the reply.
+	 */
+	if (lur.ret_code == USTCOMM_OK) {
+		switch (lum->cmd) {
+		case LTTNG_UST_TRACEPOINT_FIELD_LIST_GET:
+			len = ustcomm_send_unix_sock(sock,
+				&args.field_list.entry,
+				sizeof(args.field_list.entry));
+			if (len != sizeof(args.field_list.entry)) {
+				ret = -1;
+				goto error;
+			}
 		}
 	}
 	/*
@@ -669,7 +750,7 @@ error:
  * This thread does not allocate any resource, except within
  * handle_message, within mutex protection. This mutex protects against
  * fork and exit.
- * The other moment it allocates resources is at socket connexion, which
+ * The other moment it allocates resources is at socket connection, which
  * is also protected by the mutex.
  */
 static
@@ -855,6 +936,7 @@ void __attribute__((constructor)) lttng_ust_init(void)
 {
 	struct timespec constructor_timeout;
 	sigset_t sig_all_blocked, orig_parent_mask;
+	pthread_attr_t thread_attr;
 	int timeout_mode;
 	int ret;
 
@@ -904,19 +986,32 @@ void __attribute__((constructor)) lttng_ust_init(void)
 		ERR("pthread_sigmask: %s", strerror(ret));
 	}
 
-	ret = pthread_create(&global_apps.ust_listener, NULL,
+	ret = pthread_attr_init(&thread_attr);
+	if (ret) {
+		ERR("pthread_attr_init: %s", strerror(ret));
+	}
+	ret = pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_DETACHED);
+	if (ret) {
+		ERR("pthread_attr_setdetachstate: %s", strerror(ret));
+	}
+
+	ret = pthread_create(&global_apps.ust_listener, &thread_attr,
 			ust_listener_thread, &global_apps);
 	if (ret) {
 		ERR("pthread_create global: %s", strerror(ret));
 	}
 	if (local_apps.allowed) {
-		ret = pthread_create(&local_apps.ust_listener, NULL,
+		ret = pthread_create(&local_apps.ust_listener, &thread_attr,
 				ust_listener_thread, &local_apps);
 		if (ret) {
 			ERR("pthread_create local: %s", strerror(ret));
 		}
 	} else {
 		handle_register_done(&local_apps);
+	}
+	ret = pthread_attr_destroy(&thread_attr);
+	if (ret) {
+		ERR("pthread_attr_destroy: %s", strerror(ret));
 	}
 
 	/* Restore original signal mask in parent */

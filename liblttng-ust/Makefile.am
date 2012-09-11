@@ -28,12 +28,20 @@ liblttng_ust_runtime_la_SOURCES = \
 	lttng-context-procname.c \
 	ltt-context.c \
 	ltt-events.c \
+	lttng-filter.c \
+	lttng-filter.h \
+	lttng-filter-validator.c \
+	lttng-filter-specialize.c \
+	lttng-filter-interpreter.c \
+	filter-bytecode.h \
+	lttng-hash-helper.h \
 	tracepoint-internal.h \
 	clock.h \
 	compat.h \
 	wait.h \
 	jhash.h \
-	error.h
+	error.h \
+	lttng-ust-uuid.h
 
 liblttng_ust_support_la_SOURCES = \
 	ltt-tracer.h \
@@ -55,10 +63,17 @@ liblttng_ust_support_la_LIBADD = \
 liblttng_ust_la_LIBADD = \
 	-lpthread \
 	-lrt \
-	-luuid \
+	-lurcu-cds \
 	-llttng-ust-tracepoint \
 	$(top_builddir)/snprintf/libustsnprintf.la \
 	$(top_builddir)/liblttng-ust-comm/liblttng-ust-comm.la \
 	liblttng-ust-runtime.la liblttng-ust-support.la
+
+if LTTNG_UST_BUILD_WITH_LIBUUID
+liblttng_ust_la_LIBADD += -luuid
+endif
+if LTTNG_UST_BUILD_WITH_LIBC_UUID
+liblttng_ust_la_LIBADD += -lc
+endif
 
 liblttng_ust_la_CFLAGS = -DUST_COMPONENT="liblttng_ust" -fno-strict-aliasing

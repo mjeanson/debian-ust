@@ -9,8 +9,8 @@
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
-/* Define to 1 if you have the `dl' library (-ldl). */
-#undef HAVE_LIBDL
+/* Define to 1 if you have the <jni.h> header file. */
+#undef HAVE_JNI_H
 
 /* Define to 1 if you have the `pthread' library (-lpthread). */
 #undef HAVE_LIBPTHREAD
@@ -18,8 +18,8 @@
 /* Define to 1 if you have the `urcu-bp' library (-lurcu-bp). */
 #undef HAVE_LIBURCU_BP
 
-/* Define to 1 if you have the `uuid' library (-luuid). */
-#undef HAVE_LIBUUID
+/* Define to 1 if you have the `urcu-cds' library (-lurcu-cds). */
+#undef HAVE_LIBURCU_CDS
 
 /* Define to 1 if your system has a GNU libc compatible `malloc' function, and
    to 0 otherwise. */
@@ -72,6 +72,12 @@
 
 /* Use efficient unaligned access. */
 #undef LTTNG_UST_HAVE_EFFICIENT_UNALIGNED_ACCESS
+
+/* Has libc uuid support. */
+#undef LTTNG_UST_HAVE_LIBC_UUID
+
+/* Has libuuid support. */
+#undef LTTNG_UST_HAVE_LIBUUID
 
 /* SystemTap integration via sdt.h */
 #undef LTTNG_UST_HAVE_SDT_INTEGRATION

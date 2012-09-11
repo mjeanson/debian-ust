@@ -16,49 +16,8 @@
 #include <urcu/compiler.h>
 #include <lttng/ust-events.h>
 #include <lttng/ringbuffer-config.h>
+#include <lttng/ust-compiler.h>
 #include <string.h>
-
-/*
- * Macro declarations used for all stages.
- */
-
-#undef ctf_integer
-#define ctf_integer(_type, _item, _src)				\
-	ctf_integer_ext(_type, _item, _src, BYTE_ORDER, 10)
-
-#undef ctf_integer_hex
-#define ctf_integer_hex(_type, _item, _src)			\
-	ctf_integer_ext(_type, _item, _src, BYTE_ORDER, 16)
-
-#undef ctf_integer_network
-#define ctf_integer_network(_type, _item, _src)			\
-	ctf_integer_ext(_type, _item, _src, BIG_ENDIAN, 10)
-
-#undef ctf_integer_network_hex
-#define ctf_integer_network_hex(_type, _item, _src)		\
-	ctf_integer_ext(_type, _item, _src, BIG_ENDIAN, 16)
-
-/* ctf_float is redefined at each step */
-
-#undef ctf_array
-#define ctf_array(_type, _item, _src, _length)			\
-	ctf_array_encoded(_type, _item, _src, _length, none)
-
-#undef ctf_array_text
-#define ctf_array_text(_type, _item, _src, _length)		\
-	ctf_array_encoded(_type, _item, _src, _length, UTF8)
-
-#undef ctf_sequence
-#define ctf_sequence(_type, _item, _src, _length_type, _src_length)	\
-	ctf_sequence_encoded(_type, _item, _src,			\
-			_length_type, _src_length, none)
-
-#undef ctf_sequence_text
-#define ctf_sequence_text(_type, _item, _src, _length_type, _src_length) \
-	ctf_sequence_encoded(_type, _item, _src,			 \
-			_length_type, _src_length, UTF8)
-
-/* ctf_string is redefined at each step */
 
 /*
  * TRACEPOINT_EVENT_CLASS declares a class of tracepoints receiving the
@@ -146,23 +105,27 @@ static const char							\
 
 /* Reset all macros within TRACEPOINT_EVENT */
 #include <lttng/ust-tracepoint-event-reset.h>
+#include <lttng/ust-tracepoint-event-write.h>
+#include <lttng/ust-tracepoint-event-nowrite.h>
 
-#undef ctf_integer_ext
-#define ctf_integer_ext(_type, _item, _src, _byte_order, _base)	\
+#undef _ctf_integer_ext
+#define _ctf_integer_ext(_type, _item, _src, _byte_order, _base, _nowrite)	\
 	{							\
 	  .name = #_item,					\
 	  .type = __type_integer(_type, _byte_order, _base, none),\
+	  .nowrite = _nowrite,					\
 	},
 
-#undef ctf_float
-#define ctf_float(_type, _item, _src)				\
+#undef _ctf_float
+#define _ctf_float(_type, _item, _src, _nowrite)		\
 	{							\
 	  .name = #_item,					\
 	  .type = __type_float(_type),				\
+	  .nowrite = _nowrite,					\
 	},
 
-#undef ctf_array_encoded
-#define ctf_array_encoded(_type, _item, _src, _length, _encoding) \
+#undef _ctf_array_encoded
+#define _ctf_array_encoded(_type, _item, _src, _length, _encoding, _nowrite) \
 	{							\
 	  .name = #_item,					\
 	  .type =						\
@@ -174,11 +137,12 @@ static const char							\
 			    .elem_type = __type_integer(_type, BYTE_ORDER, 10, _encoding), \
 			},					\
 		},						\
+	  .nowrite = _nowrite,					\
 	},
 
-#undef ctf_sequence_encoded
-#define ctf_sequence_encoded(_type, _item, _src,	\
-			_length_type, _src_length, _encoding)	\
+#undef _ctf_sequence_encoded
+#define _ctf_sequence_encoded(_type, _item, _src,	\
+			_length_type, _src_length, _encoding, _nowrite)	\
 	{							\
 	  .name = #_item,					\
 	  .type =						\
@@ -190,10 +154,11 @@ static const char							\
 			    .elem_type = __type_integer(_type, BYTE_ORDER, 10, _encoding), \
 			},					\
 		},						\
+	  .nowrite = _nowrite,					\
 	},
 
-#undef ctf_string
-#define ctf_string(_item, _src)					\
+#undef _ctf_string
+#define _ctf_string(_item, _src, _nowrite)			\
 	{							\
 	  .name = #_item,					\
 	  .type =						\
@@ -201,6 +166,7 @@ static const char							\
 		  .atype = atype_string,			\
 		  .u.basic.string.encoding = lttng_encode_UTF8,	\
 		},						\
+	  .nowrite = _nowrite,					\
 	},
 
 #undef TP_FIELDS
@@ -240,25 +206,26 @@ static void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args));
 
 /* Reset all macros within TRACEPOINT_EVENT */
 #include <lttng/ust-tracepoint-event-reset.h>
+#include <lttng/ust-tracepoint-event-write.h>
 
-#undef ctf_integer_ext
-#define ctf_integer_ext(_type, _item, _src, _byte_order, _base)		       \
+#undef _ctf_integer_ext
+#define _ctf_integer_ext(_type, _item, _src, _byte_order, _base, _nowrite)       \
 	__event_len += lib_ring_buffer_align(__event_len, lttng_alignof(_type)); \
 	__event_len += sizeof(_type);
 
-#undef ctf_float
-#define ctf_float(_type, _item, _src)		      			       \
+#undef _ctf_float
+#define _ctf_float(_type, _item, _src, _nowrite)				 \
 	__event_len += lib_ring_buffer_align(__event_len, lttng_alignof(_type)); \
 	__event_len += sizeof(_type);
 
-#undef ctf_array_encoded
-#define ctf_array_encoded(_type, _item, _src, _length, _encoding)	       \
+#undef _ctf_array_encoded
+#define _ctf_array_encoded(_type, _item, _src, _length, _encoding, _nowrite)     \
 	__event_len += lib_ring_buffer_align(__event_len, lttng_alignof(_type)); \
 	__event_len += sizeof(_type) * (_length);
 
-#undef ctf_sequence_encoded
-#define ctf_sequence_encoded(_type, _item, _src, _length_type,	\
-			_src_length, _encoding)			\
+#undef _ctf_sequence_encoded
+#define _ctf_sequence_encoded(_type, _item, _src, _length_type,	\
+			_src_length, _encoding, _nowrite)	\
 	__event_len += lib_ring_buffer_align(__event_len, lttng_alignof(_length_type));   \
 	__event_len += sizeof(_length_type);				       \
 	__event_len += lib_ring_buffer_align(__event_len, lttng_alignof(_type)); \
@@ -266,8 +233,8 @@ static void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args));
 	__event_len += sizeof(_type) * __dynamic_len[__dynamic_len_idx];       \
 	__dynamic_len_idx++;
 
-#undef ctf_string
-#define ctf_string(_item, _src)						       \
+#undef _ctf_string
+#define _ctf_string(_item, _src, _nowrite)				       \
 	__event_len += __dynamic_len[__dynamic_len_idx++] = strlen(_src) + 1;
 
 #undef TP_ARGS
@@ -277,8 +244,11 @@ static void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args));
 #define TP_FIELDS(...) __VA_ARGS__
 
 #undef TRACEPOINT_EVENT_CLASS
-#define TRACEPOINT_EVENT_CLASS(_provider, _name, _args, _fields)      \
-static inline size_t __event_get_size__##_provider##___##_name(size_t *__dynamic_len, _TP_ARGS_DATA_PROTO(_args)) \
+#define TRACEPOINT_EVENT_CLASS(_provider, _name, _args, _fields)	      \
+static inline lttng_ust_notrace						      \
+size_t __event_get_size__##_provider##___##_name(size_t *__dynamic_len, _TP_ARGS_DATA_PROTO(_args)); \
+static inline								      \
+size_t __event_get_size__##_provider##___##_name(size_t *__dynamic_len, _TP_ARGS_DATA_PROTO(_args)) \
 {									      \
 	size_t __event_len = 0;						      \
 	unsigned int __dynamic_len_idx = 0;				      \
@@ -292,34 +262,63 @@ static inline size_t __event_get_size__##_provider##___##_name(size_t *__dynamic
 #include TRACEPOINT_INCLUDE
 
 /*
- * Stage 4 of tracepoint event generation.
+ * Stage 3.1 of tracepoint event generation.
  *
- * Create static inline function that calculates event payload alignment.
+ * Create static inline function that layout the filter stack data.
+ * We make both write and nowrite data available to the filter.
  */
 
 /* Reset all macros within TRACEPOINT_EVENT */
 #include <lttng/ust-tracepoint-event-reset.h>
+#include <lttng/ust-tracepoint-event-write.h>
+#include <lttng/ust-tracepoint-event-nowrite.h>
 
-#undef ctf_integer_ext
-#define ctf_integer_ext(_type, _item, _src, _byte_order, _base)		       \
-	__event_align = _tp_max_t(size_t, __event_align, lttng_alignof(_type));
+#undef _ctf_integer_ext
+#define _ctf_integer_ext(_type, _item, _src, _byte_order, _base, _nowrite)     \
+	if (lttng_is_signed_type(_type)) {				       \
+		int64_t __ctf_tmp_int64 = (int64_t) (_type) (_src);	       \
+		memcpy(__stack_data, &__ctf_tmp_int64, sizeof(int64_t));       \
+	} else {							       \
+		uint64_t __ctf_tmp_uint64 = (uint64_t) (_type) (_src);	       \
+		memcpy(__stack_data, &__ctf_tmp_uint64, sizeof(uint64_t));     \
+	}								       \
+	__stack_data += sizeof(int64_t);
 
-#undef ctf_float
-#define ctf_float(_type, _item, _src)					       \
-	__event_align = _tp_max_t(size_t, __event_align, lttng_alignof(_type));
+#undef _ctf_float
+#define _ctf_float(_type, _item, _src, _nowrite)			       \
+	{								       \
+		double __ctf_tmp_double = (double) (_type) (_src);	       \
+		memcpy(__stack_data, &__ctf_tmp_double, sizeof(double));       \
+		__stack_data += sizeof(double);				       \
+	}
 
-#undef ctf_array_encoded
-#define ctf_array_encoded(_type, _item, _src, _length, _encoding)	       \
-	__event_align = _tp_max_t(size_t, __event_align, lttng_alignof(_type));
+#undef _ctf_array_encoded
+#define _ctf_array_encoded(_type, _item, _src, _length, _encoding, _nowrite)   \
+	{								       \
+		unsigned long __ctf_tmp_ulong = (unsigned long) (_length);     \
+		memcpy(__stack_data, &__ctf_tmp_ulong, sizeof(unsigned long)); \
+		__stack_data += sizeof(unsigned long);			       \
+		memcpy(__stack_data, &(_src), sizeof(void **));		       \
+		__stack_data += sizeof(void **);			       \
+	}
 
-#undef ctf_sequence_encoded
-#define ctf_sequence_encoded(_type, _item, _src, _length_type,	\
-			_src_length, _encoding)			\
-	__event_align = _tp_max_t(size_t, __event_align, lttng_alignof(_length_type));	  \
-	__event_align = _tp_max_t(size_t, __event_align, lttng_alignof(_type));
+#undef _ctf_sequence_encoded
+#define _ctf_sequence_encoded(_type, _item, _src, _length_type,		       \
+			_src_length, _encoding, _nowrite)		       \
+	{								       \
+		unsigned long __ctf_tmp_ulong = (unsigned long) (_src_length); \
+		memcpy(__stack_data, &__ctf_tmp_ulong, sizeof(unsigned long)); \
+		__stack_data += sizeof(unsigned long);			       \
+		memcpy(__stack_data, &(_src), sizeof(void **));		       \
+		__stack_data += sizeof(void **);			       \
+	}
 
-#undef ctf_string
-#define ctf_string(_item, _src)
+#undef _ctf_string
+#define _ctf_string(_item, _src, _nowrite)				       \
+	{								       \
+		memcpy(__stack_data, &(_src), sizeof(void **));		       \
+		__stack_data += sizeof(void **);			       \
+	}
 
 #undef TP_ARGS
 #define TP_ARGS(...) __VA_ARGS__
@@ -329,6 +328,58 @@ static inline size_t __event_get_size__##_provider##___##_name(size_t *__dynamic
 
 #undef TRACEPOINT_EVENT_CLASS
 #define TRACEPOINT_EVENT_CLASS(_provider, _name, _args, _fields)	      \
+static inline								      \
+void __event_prepare_filter_stack__##_provider##___##_name(char *__stack_data,\
+						 _TP_ARGS_DATA_PROTO(_args))  \
+{									      \
+	_fields								      \
+}
+
+#include TRACEPOINT_INCLUDE
+
+
+
+/*
+ * Stage 4 of tracepoint event generation.
+ *
+ * Create static inline function that calculates event payload alignment.
+ */
+
+/* Reset all macros within TRACEPOINT_EVENT */
+#include <lttng/ust-tracepoint-event-reset.h>
+#include <lttng/ust-tracepoint-event-write.h>
+
+#undef _ctf_integer_ext
+#define _ctf_integer_ext(_type, _item, _src, _byte_order, _base, _nowrite)     \
+	__event_align = _tp_max_t(size_t, __event_align, lttng_alignof(_type));
+
+#undef _ctf_float
+#define _ctf_float(_type, _item, _src, _nowrite)			       \
+	__event_align = _tp_max_t(size_t, __event_align, lttng_alignof(_type));
+
+#undef _ctf_array_encoded
+#define _ctf_array_encoded(_type, _item, _src, _length, _encoding, _nowrite)   \
+	__event_align = _tp_max_t(size_t, __event_align, lttng_alignof(_type));
+
+#undef _ctf_sequence_encoded
+#define _ctf_sequence_encoded(_type, _item, _src, _length_type,	\
+			_src_length, _encoding, _nowrite)	\
+	__event_align = _tp_max_t(size_t, __event_align, lttng_alignof(_length_type));	  \
+	__event_align = _tp_max_t(size_t, __event_align, lttng_alignof(_type));
+
+#undef _ctf_string
+#define _ctf_string(_item, _src, _nowrite)
+
+#undef TP_ARGS
+#define TP_ARGS(...) __VA_ARGS__
+
+#undef TP_FIELDS
+#define TP_FIELDS(...) __VA_ARGS__
+
+#undef TRACEPOINT_EVENT_CLASS
+#define TRACEPOINT_EVENT_CLASS(_provider, _name, _args, _fields)	      \
+static inline lttng_ust_notrace						      \
+size_t __event_get_align__##_provider##___##_name(_TP_ARGS_PROTO(_args));     \
 static inline								      \
 size_t __event_get_align__##_provider##___##_name(_TP_ARGS_PROTO(_args))      \
 {									      \
@@ -349,33 +400,34 @@ size_t __event_get_align__##_provider##___##_name(_TP_ARGS_PROTO(_args))      \
 
 /* Reset all macros within TRACEPOINT_EVENT */
 #include <lttng/ust-tracepoint-event-reset.h>
+#include <lttng/ust-tracepoint-event-write.h>
 
-#undef ctf_integer_ext
-#define ctf_integer_ext(_type, _item, _src, _byte_order, _base)	        \
+#undef _ctf_integer_ext
+#define _ctf_integer_ext(_type, _item, _src, _byte_order, _base, _nowrite) \
 	{								\
 		_type __tmp = (_src);					\
 		lib_ring_buffer_align_ctx(&__ctx, lttng_alignof(__tmp));\
 		__chan->ops->event_write(&__ctx, &__tmp, sizeof(__tmp));\
 	}
 
-#undef ctf_float
-#define ctf_float(_type, _item, _src)				        \
+#undef _ctf_float
+#define _ctf_float(_type, _item, _src, _nowrite)		        \
 	{								\
 		_type __tmp = (_src);					\
 		lib_ring_buffer_align_ctx(&__ctx, lttng_alignof(__tmp));\
 		__chan->ops->event_write(&__ctx, &__tmp, sizeof(__tmp));\
 	}
 
-#undef ctf_array_encoded
-#define ctf_array_encoded(_type, _item, _src, _length, _encoding)       \
+#undef _ctf_array_encoded
+#define _ctf_array_encoded(_type, _item, _src, _length, _encoding, _nowrite) \
 	lib_ring_buffer_align_ctx(&__ctx, lttng_alignof(_type));	\
 	__chan->ops->event_write(&__ctx, _src, sizeof(_type) * (_length));
 
-#undef ctf_sequence_encoded
-#define ctf_sequence_encoded(_type, _item, _src, _length_type,		\
-			_src_length, _encoding)			\
+#undef _ctf_sequence_encoded
+#define _ctf_sequence_encoded(_type, _item, _src, _length_type,		\
+			_src_length, _encoding, _nowrite)		\
 	{								\
-		_length_type __tmpl = __dynamic_len[__dynamic_len_idx];	\
+		_length_type __tmpl = __stackvar.__dynamic_len[__dynamic_len_idx]; \
 		lib_ring_buffer_align_ctx(&__ctx, lttng_alignof(_length_type));\
 		__chan->ops->event_write(&__ctx, &__tmpl, sizeof(_length_type));\
 	}								\
@@ -383,14 +435,14 @@ size_t __event_get_align__##_provider##___##_name(_TP_ARGS_PROTO(_args))      \
 	__chan->ops->event_write(&__ctx, _src,				\
 		sizeof(_type) * __get_dynamic_len(dest));
 
-#undef ctf_string
-#define ctf_string(_item, _src)					        \
+#undef _ctf_string
+#define _ctf_string(_item, _src, _nowrite)			        \
 	lib_ring_buffer_align_ctx(&__ctx, lttng_alignof(*(_src)));	\
 	__chan->ops->event_write(&__ctx, _src, __get_dynamic_len(dest));
 
 /* Beware: this get len actually consumes the len value */
 #undef __get_dynamic_len
-#define __get_dynamic_len(field)	__dynamic_len[__dynamic_len_idx++]
+#define __get_dynamic_len(field)	__stackvar.__dynamic_len[__dynamic_len_idx++]
 
 #undef TP_ARGS
 #define TP_ARGS(...) __VA_ARGS__
@@ -398,16 +450,28 @@ size_t __event_get_align__##_provider##___##_name(_TP_ARGS_PROTO(_args))      \
 #undef TP_FIELDS
 #define TP_FIELDS(...) __VA_ARGS__
 
+/*
+ * Using twice size for filter stack data to hold size and pointer for
+ * each field (worse case). For integers, max size required is 64-bit.
+ * Same for double-precision floats. Those fit within
+ * 2*sizeof(unsigned long) for all supported architectures.
+ */
 #undef TRACEPOINT_EVENT_CLASS
 #define TRACEPOINT_EVENT_CLASS(_provider, _name, _args, _fields)	      \
-static void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args))\
+static lttng_ust_notrace						      \
+void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args));      \
+static									      \
+void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args))	      \
 {									      \
 	struct ltt_event *__event = __tp_data;				      \
 	struct ltt_channel *__chan = __event->chan;			      \
 	struct lttng_ust_lib_ring_buffer_ctx __ctx;			      \
 	size_t __event_len, __event_align;				      \
 	size_t __dynamic_len_idx = 0;					      \
-	size_t __dynamic_len[_TP_ARRAY_SIZE(__event_fields___##_provider##___##_name)];	      \
+	union {								      \
+		size_t __dynamic_len[_TP_ARRAY_SIZE(__event_fields___##_provider##___##_name)]; \
+		char __filter_stack_data[2 * sizeof(unsigned long) * _TP_ARRAY_SIZE(__event_fields___##_provider##___##_name)]; \
+	} __stackvar;							      \
 	int __ret;							      \
 									      \
 	if (0)								      \
@@ -418,7 +482,13 @@ static void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args))\
 		return;							      \
 	if (caa_unlikely(!CMM_ACCESS_ONCE(__event->enabled)))		      \
 		return;							      \
-	__event_len = __event_get_size__##_provider##___##_name(__dynamic_len,\
+	if (caa_unlikely(__event->filter)) {				      \
+		__event_prepare_filter_stack__##_provider##___##_name(__stackvar.__filter_stack_data, \
+			_TP_ARGS_DATA_VAR(_args));				      \
+		if (caa_likely(!__event->filter(__event->filter_data, __stackvar.__filter_stack_data))) \
+			return;						      \
+	}								      \
+	__event_len = __event_get_size__##_provider##___##_name(__stackvar.__dynamic_len, \
 		 _TP_ARGS_DATA_VAR(_args));				      \
 	__event_align = __event_get_align__##_provider##___##_name(_TP_ARGS_VAR(_args)); \
 	lib_ring_buffer_ctx_init(&__ctx, __chan->chan, __event, __event_len,  \
@@ -496,7 +566,7 @@ static const int *							       \
 const struct lttng_event_desc __event_desc___##_provider##_##_name = {	       \
 	.fields = __event_fields___##_provider##___##_template,		       \
 	.name = #_provider ":" #_name,					       \
-	.probe_callback = (void *) &__event_probe__##_provider##___##_template,\
+	.probe_callback = (void (*)(void)) &__event_probe__##_provider##___##_template,\
 	.nr_fields = _TP_ARRAY_SIZE(__event_fields___##_provider##___##_template), \
 	.loglevel = &__ref_loglevel___##_provider##___##_name,		       \
 	.signature = __tp_event_signature___##_provider##___##_template,       \
@@ -546,7 +616,9 @@ static struct lttng_probe_desc _TP_COMBINE_TOKENS(__probe_desc___, TRACEPOINT_PR
 
 /* Reset all macros within TRACEPOINT_EVENT */
 #include <lttng/ust-tracepoint-event-reset.h>
-static void __attribute__((constructor))
+static void lttng_ust_notrace __attribute__((constructor))
+_TP_COMBINE_TOKENS(__lttng_events_init__, TRACEPOINT_PROVIDER)(void);
+static void
 _TP_COMBINE_TOKENS(__lttng_events_init__, TRACEPOINT_PROVIDER)(void)
 {
 	int ret;
@@ -555,7 +627,9 @@ _TP_COMBINE_TOKENS(__lttng_events_init__, TRACEPOINT_PROVIDER)(void)
 	assert(!ret);
 }
 
-static void __attribute__((destructor))
+static void lttng_ust_notrace __attribute__((destructor))
+_TP_COMBINE_TOKENS(__lttng_events_exit__, TRACEPOINT_PROVIDER)(void);
+static void
 _TP_COMBINE_TOKENS(__lttng_events_exit__, TRACEPOINT_PROVIDER)(void)
 {
 	ltt_probe_unregister(&_TP_COMBINE_TOKENS(__probe_desc___, TRACEPOINT_PROVIDER));

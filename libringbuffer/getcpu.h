@@ -20,7 +20,6 @@
  */
 
 #include <urcu/compiler.h>
-#include <sched.h>
 
 #ifdef LTTNG_UST_DEBUG_VALGRIND
 
@@ -38,6 +37,33 @@ int lttng_ust_get_cpu(void)
 #else
 
 /*
+ * sched_getcpu.
+ */
+#ifdef __linux__
+
+/* old uClibc versions didn't have sched_getcpu */
+#if defined(__UCLIBC__) && __UCLIBC_MAJOR__ == 0 && \
+	(__UCLIBC_MINOR__ < 9 || \
+	 (__UCLIBC_MINOR__ == 9 && __UCLIBC_SUBLEVEL__ <= 32))
+#include <sys/syscall.h>
+#define __getcpu(cpu, node, cache)	syscall(__NR_getcpu, cpu, node, cache)
+/*
+ * If getcpu is not implemented in the kernel, use cpu 0 as fallback.
+ */
+static inline
+int lttng_ust_get_cpu(void)
+{
+	int cpu, ret;
+
+	ret = __getcpu(&cpu, NULL, NULL);
+	if (caa_unlikely(ret < 0))
+		return 0;
+	return c;
+}
+#else /* __UCLIBC__ */
+#include <sched.h>
+
+/*
  * If getcpu is not implemented in the kernel, use cpu 0 as fallback.
  */
 static inline
@@ -50,6 +76,23 @@ int lttng_ust_get_cpu(void)
 		return 0;
 	return cpu;
 }
+#endif	/* __UCLIBC__ */
+
+#elif (defined(__FreeBSD__) || defined(__CYGWIN__))
+
+/*
+ * FreeBSD and Cygwin do not allow query of CPU ID. Always use CPU
+ * number 0, with the assocated performance degradation on SMP.
+ */
+static inline
+int lttng_ust_get_cpu(void)
+{
+	return 0;
+}
+
+#else
+#error "Please add support for your OS into liblttng-ust/compat.h."
+#endif
 
 #endif
 
