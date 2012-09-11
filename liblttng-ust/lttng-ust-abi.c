@@ -52,6 +52,8 @@ static int lttng_ust_abi_close_in_progress;
 
 static
 int lttng_abi_tracepoint_list(void);
+static
+int lttng_abi_tracepoint_field_list(void);
 
 /*
  * Object descriptor table. Should be protected from concurrent access
@@ -220,6 +222,7 @@ static const struct lttng_ust_objd_ops lttng_event_ops;
 static const struct lttng_ust_objd_ops lttng_wildcard_ops;
 static const struct lttng_ust_objd_ops lib_ring_buffer_objd_ops;
 static const struct lttng_ust_objd_ops lttng_tracepoint_list_ops;
+static const struct lttng_ust_objd_ops lttng_tracepoint_field_list_ops;
 
 enum channel_type {
 	PER_CPU_CHANNEL,
@@ -260,9 +263,9 @@ static
 long lttng_abi_tracer_version(int objd,
 	struct lttng_ust_tracer_version *v)
 {
-	v->major = LTTNG_UST_MAJOR_VERSION;
-	v->minor = LTTNG_UST_MINOR_VERSION;
-	v->patchlevel = LTTNG_UST_PATCHLEVEL_VERSION;
+	v->major = LTTNG_UST_INTERNAL_MAJOR_VERSION;
+	v->minor = LTTNG_UST_INTERNAL_MINOR_VERSION;
+	v->patchlevel = LTTNG_UST_INTERNAL_PATCHLEVEL_VERSION;
 	return 0;
 }
 
@@ -303,6 +306,8 @@ long lttng_abi_add_context(int objd,
  *		Returns the LTTng kernel tracer version
  *	LTTNG_UST_TRACEPOINT_LIST
  *		Returns a file descriptor listing available tracepoints
+ *	LTTNG_UST_TRACEPOINT_FIELD_LIST
+ *		Returns a file descriptor listing available tracepoint fields
  *	LTTNG_UST_WAIT_QUIESCENT
  *		Returns after all previously running probes have completed
  *
@@ -320,6 +325,8 @@ long lttng_cmd(int objd, unsigned int cmd, unsigned long arg,
 				(struct lttng_ust_tracer_version *) arg);
 	case LTTNG_UST_TRACEPOINT_LIST:
 		return lttng_abi_tracepoint_list();
+	case LTTNG_UST_TRACEPOINT_FIELD_LIST:
+		return lttng_abi_tracepoint_field_list();
 	case LTTNG_UST_WAIT_QUIESCENT:
 		synchronize_trace();
 		return 0;
@@ -354,7 +361,7 @@ void lttng_metadata_create_events(int channel_objd)
 	 * We tolerate no failure path after event creation. It will stay
 	 * invariant for the rest of the session.
 	 */
-	ret = ltt_event_create(channel, &metadata_params, NULL, &event);
+	ret = ltt_event_create(channel, &metadata_params, &event);
 	if (ret < 0) {
 		goto create_error;
 	}
@@ -602,6 +609,88 @@ static const struct lttng_ust_objd_ops lttng_tracepoint_list_ops = {
 	.cmd = lttng_tracepoint_list_cmd,
 };
 
+static
+long lttng_tracepoint_field_list_cmd(int objd, unsigned int cmd,
+	unsigned long arg, union ust_args *uargs)
+{
+	struct lttng_ust_field_list *list = objd_private(objd);
+	struct lttng_ust_field_iter *tp = &uargs->field_list.entry;
+	struct lttng_ust_field_iter *iter;
+
+	switch (cmd) {
+	case LTTNG_UST_TRACEPOINT_FIELD_LIST_GET:
+	{
+	retry:
+		iter = lttng_ust_field_list_get_iter_next(list);
+		if (!iter)
+			return -ENOENT;
+		if (!strcmp(iter->event_name, "lttng_ust:metadata"))
+			goto retry;
+		memcpy(tp, iter, sizeof(*tp));
+		return 0;
+	}
+	default:
+		return -EINVAL;
+	}
+}
+
+static
+int lttng_abi_tracepoint_field_list(void)
+{
+	int list_objd, ret;
+	struct lttng_ust_field_list *list;
+
+	list_objd = objd_alloc(NULL, &lttng_tracepoint_field_list_ops);
+	if (list_objd < 0) {
+		ret = list_objd;
+		goto objd_error;
+	}
+	list = zmalloc(sizeof(*list));
+	if (!list) {
+		ret = -ENOMEM;
+		goto alloc_error;
+	}
+	objd_set_private(list_objd, list);
+
+	/* populate list by walking on all registered probes. */
+	ret = ltt_probes_get_field_list(list);
+	if (ret) {
+		goto list_error;
+	}
+	return list_objd;
+
+list_error:
+	free(list);
+alloc_error:
+	{
+		int err;
+
+		err = lttng_ust_objd_unref(list_objd);
+		assert(!err);
+	}
+objd_error:
+	return ret;
+}
+
+static
+int lttng_release_tracepoint_field_list(int objd)
+{
+	struct lttng_ust_field_list *list = objd_private(objd);
+
+	if (list) {
+		ltt_probes_prune_field_list(list);
+		free(list);
+		return 0;
+	} else {
+		return -EINVAL;
+	}
+}
+
+static const struct lttng_ust_objd_ops lttng_tracepoint_field_list_ops = {
+	.release = lttng_release_tracepoint_field_list,
+	.cmd = lttng_tracepoint_field_list_cmd,
+};
+
 struct stream_priv_data {
 	struct lttng_ust_lib_ring_buffer *buf;
 	struct ltt_channel *ltt_chan;
@@ -664,7 +753,7 @@ int lttng_abi_create_event(int channel_objd,
 	 * We tolerate no failure path after event creation. It will stay
 	 * invariant for the rest of the session.
 	 */
-	ret = ltt_event_create(channel, event_param, NULL, &event);
+	ret = ltt_event_create(channel, event_param, &event);
 	if (ret < 0) {
 		goto event_error;
 	}
@@ -946,6 +1035,8 @@ static const struct lttng_ust_objd_ops lib_ring_buffer_objd_ops = {
  *		Enable recording for this event (weak enable)
  *	LTTNG_UST_DISABLE
  *		Disable recording for this event (strong disable)
+ *	LTTNG_UST_FILTER
+ *		Attach a filter to an event.
  */
 static
 long lttng_event_cmd(int objd, unsigned int cmd, unsigned long arg,
@@ -962,6 +1053,17 @@ long lttng_event_cmd(int objd, unsigned int cmd, unsigned long arg,
 		return ltt_event_enable(event);
 	case LTTNG_UST_DISABLE:
 		return ltt_event_disable(event);
+	case LTTNG_UST_FILTER:
+	{
+		int ret;
+		ret = lttng_filter_event_attach_bytecode(event,
+				(struct lttng_ust_filter_bytecode *) arg);
+		if (ret)
+			return ret;
+		lttng_filter_event_link_bytecode(event,
+				event->filter_bytecode);
+		return 0;
+	}
 	default:
 		return -EINVAL;
 	}
@@ -999,6 +1101,8 @@ static const struct lttng_ust_objd_ops lttng_event_ops = {
  *		Enable recording for these wildcard events (weak enable)
  *	LTTNG_UST_DISABLE
  *		Disable recording for these wildcard events (strong disable)
+ *	LTTNG_UST_FILTER
+ *		Attach a filter to a wildcard.
  */
 static
 long lttng_wildcard_cmd(int objd, unsigned int cmd, unsigned long arg,
@@ -1018,6 +1122,17 @@ long lttng_wildcard_cmd(int objd, unsigned int cmd, unsigned long arg,
 		return ltt_wildcard_enable(wildcard);
 	case LTTNG_UST_DISABLE:
 		return ltt_wildcard_disable(wildcard);
+	case LTTNG_UST_FILTER:
+	{
+		int ret;
+
+		ret = lttng_filter_wildcard_attach_bytecode(wildcard,
+				(struct lttng_ust_filter_bytecode *) arg);
+		if (ret)
+			return ret;
+		lttng_filter_wildcard_link_bytecode(wildcard);
+		return 0;
+	}
 	default:
 		return -EINVAL;
 	}

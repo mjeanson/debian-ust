@@ -22,11 +22,9 @@
 
 #define _GNU_SOURCE
 #include <stdio.h>
-#include <endian.h>
 #include <urcu/list.h>
 #include <urcu/hlist.h>
 #include <pthread.h>
-#include <uuid/uuid.h>
 #include <errno.h>
 #include <sys/shm.h>
 #include <sys/ipc.h>
@@ -34,7 +32,7 @@
 #include <stddef.h>
 #include <inttypes.h>
 #include <time.h>
-#include <sys/prctl.h>
+#include <lttng/ust-endian.h>
 #include "clock.h"
 
 #include <urcu-bp.h>
@@ -48,6 +46,8 @@
 #include <usterr-signal-safe.h>
 #include <helper.h>
 #include "error.h"
+#include "compat.h"
+#include "lttng-ust-uuid.h"
 
 #include "tracepoint-internal.h"
 #include "ltt-tracer.h"
@@ -55,8 +55,6 @@
 #include "wait.h"
 #include "../libringbuffer/shm.h"
 #include "jhash.h"
-
-#define PROCNAME_LEN 17
 
 /*
  * The sessions mutex is the centralized mutex across UST tracing
@@ -253,14 +251,15 @@ int pending_probe_fix_events(const struct lttng_event_desc *desc)
 					sizeof(event_param.name));
 				/* create event */
 				ret = ltt_event_create(sw->chan,
-					&event_param, NULL,
-					&ev);
+					&event_param, &ev);
 				if (ret) {
 					DBG("Error creating event");
 					continue;
 				}
 				cds_list_add(&ev->wildcard_list,
 					&sw->events);
+				lttng_filter_event_link_bytecode(ev,
+					sw->filter_bytecode);
 			}
 		}
 	}
@@ -297,6 +296,8 @@ int pending_probe_fix_events(const struct lttng_event_desc *desc)
 		event->id = chan->free_event_id++;
 		ret |= _ltt_event_metadata_statedump(chan->session, chan,
 				event);
+		lttng_filter_event_link_bytecode(event,
+			event->filter_bytecode);
 	}
 	return ret;
 }
@@ -309,6 +310,7 @@ void synchronize_trace(void)
 struct ltt_session *ltt_session_create(void)
 {
 	struct ltt_session *session;
+	int ret;
 
 	session = zmalloc(sizeof(struct ltt_session));
 	if (!session)
@@ -316,7 +318,10 @@ struct ltt_session *ltt_session_create(void)
 	CDS_INIT_LIST_HEAD(&session->chan);
 	CDS_INIT_LIST_HEAD(&session->events);
 	CDS_INIT_LIST_HEAD(&session->wildcards);
-	uuid_generate(session->uuid);
+	ret = lttng_ust_uuid_generate(session->uuid);
+	if (ret != 0) {
+		session->uuid[0] = '\0';
+	}
 	cds_list_add(&session->list, &sessions);
 	return session;
 }
@@ -498,7 +503,6 @@ void _ltt_channel_destroy(struct ltt_channel *chan)
  */
 int ltt_event_create(struct ltt_channel *chan,
 		struct lttng_ust_event *event_param,
-		void *filter,
 		struct ltt_event **_event)
 {
 	const struct lttng_event_desc *desc = NULL;	/* silence gcc */
@@ -546,7 +550,6 @@ int ltt_event_create(struct ltt_channel *chan,
 		goto cache_error;
 	}
 	event->chan = chan;
-	event->filter = filter;
 	/*
 	 * used_event_id counts the maximum number of event IDs that can
 	 * register if all probes register.
@@ -651,6 +654,8 @@ void _ltt_event_destroy(struct ltt_event *event)
 	}
 	cds_list_del(&event->list);
 	lttng_destroy_context(event->ctx);
+	free(event->filter_bytecode);
+	free(event->filter_data);
 	free(event);
 }
 
@@ -720,6 +725,9 @@ int _ltt_field_statedump(struct ltt_session *session,
 			 const struct lttng_event_field *field)
 {
 	int ret = 0;
+
+	if (field->nowrite)
+		return 0;
 
 	switch (field->type.atype) {
 	case atype_integer:
@@ -1018,7 +1026,7 @@ int _ltt_stream_packet_context_declare(struct ltt_session *session)
 		"struct packet_context {\n"
 		"	uint64_clock_monotonic_t timestamp_begin;\n"
 		"	uint64_clock_monotonic_t timestamp_end;\n"
-		"	uint32_t events_discarded;\n"
+		"	unsigned long events_discarded;\n"
 		"	uint32_t content_size;\n"
 		"	uint32_t packet_size;\n"
 		"	uint32_t cpu_id;\n"
@@ -1101,11 +1109,13 @@ static
 int _ltt_session_metadata_statedump(struct ltt_session *session)
 {
 	unsigned char *uuid_c = session->uuid;
-	char uuid_s[37], clock_uuid_s[CLOCK_UUID_LEN];
+	char uuid_s[LTTNG_UST_UUID_STR_LEN],
+		clock_uuid_s[LTTNG_UST_UUID_STR_LEN];
 	struct ltt_channel *chan;
 	struct ltt_event *event;
 	int ret = 0;
-	char procname[PROCNAME_LEN] = "";
+	char procname[LTTNG_UST_PROCNAME_LEN] = "";
+	char hostname[HOST_NAME_MAX];
 
 	if (!CMM_ACCESS_ONCE(session->active))
 		return 0;
@@ -1128,6 +1138,7 @@ int _ltt_session_metadata_statedump(struct ltt_session *session)
 		"typealias integer { size = 16; align = %u; signed = false; } := uint16_t;\n"
 		"typealias integer { size = 32; align = %u; signed = false; } := uint32_t;\n"
 		"typealias integer { size = 64; align = %u; signed = false; } := uint64_t;\n"
+		"typealias integer { size = %u; align = %u; signed = false; } := unsigned long;\n"
 		"typealias integer { size = 5; align = 1; signed = false; } := uint5_t;\n"
 		"typealias integer { size = 27; align = 1; signed = false; } := uint27_t;\n"
 		"\n"
@@ -1146,6 +1157,8 @@ int _ltt_session_metadata_statedump(struct ltt_session *session)
 		lttng_alignof(uint16_t) * CHAR_BIT,
 		lttng_alignof(uint32_t) * CHAR_BIT,
 		lttng_alignof(uint64_t) * CHAR_BIT,
+		sizeof(unsigned long) * CHAR_BIT,
+		lttng_alignof(unsigned long) * CHAR_BIT,
 		CTF_SPEC_MAJOR,
 		CTF_SPEC_MINOR,
 		uuid_s,
@@ -1159,10 +1172,15 @@ int _ltt_session_metadata_statedump(struct ltt_session *session)
 		goto end;
 
 	/* ignore error, just use empty string if error. */
-	(void) prctl(PR_GET_NAME, (unsigned long) procname, 0, 0, 0);
-	procname[PROCNAME_LEN - 1] = '\0';
+	hostname[0] = '\0';
+	ret = gethostname(hostname, sizeof(hostname));
+	if (ret && errno == ENAMETOOLONG)
+		hostname[HOST_NAME_MAX - 1] = '\0';
+	lttng_ust_getprocname(procname);
+	procname[LTTNG_UST_PROCNAME_LEN - 1] = '\0';
 	ret = lttng_metadata_printf(session,
 		"env {\n"
+		"	hostname = \"%s\";\n"
 		"	vpid = %d;\n"
 		"	procname = \"%s\";\n"
 		"	domain = \"ust\";\n"
@@ -1171,6 +1189,7 @@ int _ltt_session_metadata_statedump(struct ltt_session *session)
 		"	tracer_minor = %u;\n"
 		"	tracer_patchlevel = %u;\n"
 		"};\n\n",
+		hostname,
 		(int) getpid(),
 		procname,
 		LTTNG_UST_MAJOR_VERSION,
@@ -1411,6 +1430,7 @@ void _remove_wildcard(struct session_wildcard *wildcard)
 		cds_list_del(&wildcard->entry->list);
 		free(wildcard->entry);
 	}
+	free(wildcard->filter_bytecode);
 	free(wildcard);
 }
 
@@ -1478,7 +1498,7 @@ int ltt_wildcard_disable(struct session_wildcard *wildcard)
  */
 void lttng_fixup_event_tls(void)
 {
-	unsigned char uuid[37];
+	unsigned char uuid[LTTNG_UST_UUID_STR_LEN];
 
-	(void) uuid_generate(uuid);
+	(void) lttng_ust_uuid_generate(uuid);
 }

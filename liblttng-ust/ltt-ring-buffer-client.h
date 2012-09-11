@@ -24,6 +24,7 @@
 #include <lttng/ust-events.h>
 #include "lttng/bitfield.h"
 #include "clock.h"
+#include "lttng-ust-uuid.h"
 #include "ltt-tracer.h"
 #include "../libringbuffer/frontend_types.h"
 
@@ -43,14 +44,14 @@ struct packet_header {
 					 * Trace magic number.
 					 * contains endianness information.
 					 */
-	uint8_t uuid[16];
+	uint8_t uuid[LTTNG_UST_UUID_LEN];
 	uint32_t stream_id;
 
 	struct {
 		/* Stream packet context */
 		uint64_t timestamp_begin;	/* Cycle count at subbuffer start */
 		uint64_t timestamp_end;		/* Cycle count at subbuffer end */
-		uint32_t events_discarded;	/*
+		unsigned long events_discarded;	/*
 						 * Events lost in this subbuffer since
 						 * the beginning of the trace.
 						 * (may overflow)

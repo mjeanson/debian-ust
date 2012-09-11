@@ -9,10 +9,9 @@ SUBDIRS = . include snprintf libringbuffer liblttng-ust-comm \
 		tests \
 		doc
 
-#disabled for 2.0
-#if BUILD_JNI_INTERFACE
-#SUBDIRS += liblttng-ust-java
-#endif
+if BUILD_JNI_INTERFACE
+SUBDIRS += liblttng-ust-java
+endif
 
 #temporarily disabled
 # liblttng-ust-malloc
@@ -21,3 +20,5 @@ pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = lttng-ust.pc
 
 dist_doc_DATA = README ChangeLog
+
+dist_noinst_DATA = CodingStyle

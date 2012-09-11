@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([lttng-ust],[2.0.4],[mathieu dot desnoyers at efficios dot com])
+AC_INIT([lttng-ust],[2.1.0-rc1],[mathieu dot desnoyers at efficios dot com])
 
 # Following the numbering scheme proposed by libtool for the library version
 # http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
@@ -34,10 +34,35 @@ AC_DEFINE_UNQUOTED([VERSION_MAJOR], $major_version, [UST major version number])
 AC_DEFINE_UNQUOTED([VERSION_MINOR], $minor_version, [UST minor version number])
 AC_DEFINE_UNQUOTED([VERSION_PATCHLEVEL], $patchlevel_version, [UST patchlevel version number])
 
-version_name="Annedd'ale"
-version_description="New type of beer, 100% from Quebec, flavored with sapin beaumier needles, with a touch of hops."
-AC_DEFINE_UNQUOTED([VERSION_NAME], [$version_name], [UST version name])
-AC_DEFINE_UNQUOTED([VERSION_DESCRIPTION], [$version_description], [UST version description])
+version_name="Basse Messe"
+version_description="Light coloured German ale whose style was named after the city Cologne (Koln) where it was first brewed. It is a rather simple beer with lightly fruity aromas and a delicate hoppy fragrance. The beer has a pronounced malty taste with a subtle bitter aftertaste"
+AC_DEFINE_UNQUOTED([VERSION_NAME], ["$version_name"], [UST version name])
+AC_DEFINE_UNQUOTED([VERSION_DESCRIPTION], ["$version_description"], [UST version description])
+
+AC_PROG_GREP
+# libtool link_all_deplibs fixup. See http://bugs.lttng.org/issues/321.
+AC_ARG_ENABLE(libtool-linkdep-fixup,
+	AS_HELP_STRING([--disable-libtool-linkdep-fixup],
+			[disable the libtool fixup for linking all dependent libraries (link_all_deplibs)]),
+	libtool_fixup=$enableval,
+	libtool_fixup=yes)
+
+AS_IF([test "x$libtool_fixup" = "xyes"],
+	    [
+	    libtool_m4="$srcdir/config/libtool.m4"
+	    libtool_flag_pattern=".*link_all_deplibs\s*,\s*\$1\s*)"
+	    AC_MSG_CHECKING([for occurence(s) of link_all_deplibs = no in $libtool_m4])
+	    libtool_flag_pattern_count=$(grep -c "$libtool_flag_pattern\s*=\s*no" $libtool_m4)
+	    AS_IF([test $libtool_flag_pattern_count -ne 0],
+	    [
+		  AC_MSG_RESULT([$libtool_flag_pattern_count])
+		  AC_MSG_WARN([the detected libtool will not link all dependencies, forcing link_all_deplibs = unknown])
+		  sed -i "s/\($libtool_flag_pattern\)\s*=\s*no/\1=unknown/g" $libtool_m4
+		  ],
+		  [
+		  AC_MSG_RESULT([none])
+		  ])
+	    ])
 
 # Checks for programs.
 AC_PROG_CC
@@ -46,13 +71,45 @@ AC_PROG_MAKE_SET
 LT_INIT
 
 ## Checks for libraries.
-AC_CHECK_LIB([dl], [dlopen])
+AC_CHECK_LIB([dl], [dlopen],
+[
+	have_libdl=yes
+],
+[
+	#libdl not found, check for dlopen in libc.
+	AC_CHECK_LIB([c], [dlopen],
+	[
+		have_libc_dl=yes
+	],
+	[
+		AC_MSG_ERROR([Cannot find dlopen in libdl nor libc. Use [LDFLAGS]=-Ldir to specify their location.])
+	])
+])
+AM_CONDITIONAL([LTTNG_UST_BUILD_WITH_LIBDL], [test "x$have_libdl" = "xyes"])
+AM_CONDITIONAL([LTTNG_UST_BUILD_WITH_LIBC_DL], [test "x$have_libc_dl" = "xyes"])
+
 AC_CHECK_LIB([pthread], [pthread_create])
 
 # Check for libuuid
-AC_CHECK_LIB([uuid], [uuid_generate], [],
-	[AC_MSG_ERROR([Cannot find libuuid. Use [LDFLAGS]=-Ldir to specify its location.])]
+AC_CHECK_LIB([uuid], [uuid_generate],
+[
+	AC_DEFINE_UNQUOTED([LTTNG_UST_HAVE_LIBUUID], 1, [Has libuuid support.])
+	have_libuuid=yes
+],
+[
+	# libuuid not found, check for uuid_create in libc.
+	AC_CHECK_LIB([c], [uuid_create],
+	[
+		AC_DEFINE_UNQUOTED([LTTNG_UST_HAVE_LIBC_UUID], 1, [Has libc uuid support.])
+		have_libc_uuid=yes
+	],
+	[
+		AC_MSG_ERROR([Cannot find libuuid uuid_generate nor libc uuid_create. Use [LDFLAGS]=-Ldir to specify their location.])
+	])
+]
 )
+AM_CONDITIONAL([LTTNG_UST_BUILD_WITH_LIBUUID], [test "x$have_libuuid" = "xyes"])
+AM_CONDITIONAL([LTTNG_UST_BUILD_WITH_LIBC_UUID], [test "x$have_libc_uuid" = "xyes"])
 
 # Checks for header files.
 #AC_CHECK_HEADERS([fcntl.h stdint.h stdlib.h string.h sys/socket.h sys/time.h unistd.h])
@@ -78,18 +135,16 @@ AC_CHECK_FUNCS([gettimeofday munmap socket strerror strtol sched_getcpu sysconf]
 
 CFLAGS="-Wall $CFLAGS"
 
-# Check for texinfo, required for building the documentation
-# TODO: make this (and building the documentation) optional
-AC_CHECK_PROG([TEXINFO], [makeinfo], [yes])
-AS_IF([test "x$TEXINFO" != "xyes"],[
-	AC_MSG_ERROR([Please install the 'texinfo' program and make sure 'makeinfo' is in the PATH.])
-])
-
 # URCU
 
 # urcu - check if we just find the headers it out of the box.
 AC_CHECK_HEADERS([urcu-bp.h], [], [AC_MSG_ERROR([Cannot find [URCU] headers (urcu-bp.h). Use [CPPFLAGS]=-Idir to specify their location.
 This error can also occur when the liburcu package's configure script has not been run.])])
+
+# urcu-cds - check that URCU Concurrent Data Structure lib is available to compilation
+# Part of Userspace RCU library 0.7.2 or better.
+AC_CHECK_LIB([urcu-cds], [_cds_lfht_new], [], [AC_MSG_ERROR([Cannot find
+liburcu-cds lib, part of Userspace RCU 0.7 or better. Use [LDFLAGS]=-Ldir to specify its location.])])
 
 AC_MSG_CHECKING([caa_likely()])
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
@@ -147,6 +202,7 @@ changequote([,])dnl
 	  fi
 	  ;;
 	x86_64) LIBFORMAT="elf64-x86-64" ;;
+	amd64) LIBFORMAT="elf64-x86-64" ;;
 	powerpc) LIBFORMAT="elf32-powerpc" ;;
 	ppc64) LIBFORMAT="elf64-powerpc" ;;
 	powerpc64) LIBFORMAT="elf64-powerpc" ;;
@@ -197,6 +253,22 @@ AS_IF([test $JAVA_JDK],[
         ])
 ])
 
+# Check for JNI header files if requested
+AC_ARG_WITH([jni-interface],
+	[AS_HELP_STRING([--with-jni-interface],[build JNI interface between C and Java. Needs Java include files [default=no]])],
+	[jni_interface=$withval],
+	[jni_interface=no]
+)
+
+AS_IF([test "x$jni_interface" = "xyes"],[
+        AC_CHECK_HEADERS([jni.h],[],[
+        AC_MSG_ERROR([missing jni.h
+Make sure Sun Java, OpenJDK or GCJ is installed and that this header file exists in the system path.
+Use the --with-java-jdk=DIR flag to point to your Java include files, or disable the JNI interface.])
+	])
+])
+AM_CONDITIONAL([BUILD_JNI_INTERFACE], [test "x$jni_interface" = "xyes"])
+
 # sdt.h integration
 AC_ARG_WITH([sdt],
 	[AS_HELP_STRING([--with-sdt],[provide SystemTap integration via sdt.h [default=no]])],
@@ -239,8 +311,6 @@ AS_IF([test "x$with_sdt" = "xyes"],[
 	#tests/exit-fast/Makefile
 	#tests/basic_long/Makefile
 
-#	liblttng-ust-java/Makefile
-
 AC_CONFIG_FILES([
 	Makefile
 	doc/Makefile
@@ -253,6 +323,7 @@ AC_CONFIG_FILES([
 	liblttng-ust/Makefile
 	liblttng-ust-ctl/Makefile
 	liblttng-ust-fork/Makefile
+	liblttng-ust-java/Makefile
 	liblttng-ust-libc-wrapper/Makefile
 	tools/Makefile
 	tests/Makefile
@@ -278,6 +349,9 @@ AS_ECHO("LTTng-UST will be built with the following options:")
 AS_ECHO("Library format: $LIBFORMAT")
 
 AS_ECHO()
+AS_ECHO_N("Java support (JNI): ")
+AS_IF([test "x$jni_interface" = "xyes"], [AS_ECHO("Enabled")], [AS_ECHO("Disabled")])
+
 AS_ECHO_N("sdt.h integration:  ")
 AS_IF([test "x$with_sdt" = "xyes"], [AS_ECHO("Enabled")], [AS_ECHO("Disabled")])
 
