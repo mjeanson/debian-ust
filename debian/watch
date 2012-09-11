@@ -1,2 +1,3 @@
 version=3
-http://lttng.org/files/lttng-ust/lttng-ust-(.*)\.tar\.(?:gz|bz2)
+opts=versionmangle=s/-(rc\d|pre\d)/~$1/ \
+    http://lttng.org/files/lttng-ust/lttng-ust-(.*)\.tar\.(?:gz|bz2)
