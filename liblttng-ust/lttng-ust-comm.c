@@ -41,11 +41,12 @@
 #include <lttng/ust-events.h>
 #include <lttng/ust-abi.h>
 #include <lttng/ust.h>
+#include <lttng/ust-error.h>
 #include <ust-comm.h>
 #include <usterr-signal-safe.h>
 #include <helper.h>
 #include "tracepoint-internal.h"
-#include "ltt-tracer-core.h"
+#include "lttng-tracer-core.h"
 #include "compat.h"
 #include "../libringbuffer/tlsfixup.h"
 
@@ -130,12 +131,12 @@ struct sock_info local_apps = {
 
 static int wait_poll_fallback;
 
-extern void ltt_ring_buffer_client_overwrite_init(void);
-extern void ltt_ring_buffer_client_discard_init(void);
-extern void ltt_ring_buffer_metadata_client_init(void);
-extern void ltt_ring_buffer_client_overwrite_exit(void);
-extern void ltt_ring_buffer_client_discard_exit(void);
-extern void ltt_ring_buffer_metadata_client_exit(void);
+extern void lttng_ring_buffer_client_overwrite_init(void);
+extern void lttng_ring_buffer_client_discard_init(void);
+extern void lttng_ring_buffer_metadata_client_init(void);
+extern void lttng_ring_buffer_client_overwrite_exit(void);
+extern void lttng_ring_buffer_client_discard_exit(void);
+extern void lttng_ring_buffer_metadata_client_exit(void);
 
 /*
  * Force a read (imply TLS fixup for dlopen) of TLS variables.
@@ -157,14 +158,16 @@ int setup_local_apps(void)
 	 * Disallow per-user tracing for setuid binaries.
 	 */
 	if (uid != geteuid()) {
-		local_apps.allowed = 0;
+		assert(local_apps.allowed == 0);
 		return 0;
-	} else {
-		local_apps.allowed = 1;
 	}
 	home_dir = (const char *) getenv("HOME");
-	if (!home_dir)
+	if (!home_dir) {
+		WARN("HOME environment variable not set. Disabling LTTng-UST per-user tracing.");
+		assert(local_apps.allowed == 0);
 		return -ENOENT;
+	}
+	local_apps.allowed = 1;
 	snprintf(local_apps.sock_path, PATH_MAX,
 		 DEFAULT_HOME_APPS_UNIX_SOCK, home_dir);
 	snprintf(local_apps.wait_shm_path, PATH_MAX,
@@ -212,15 +215,15 @@ int send_reply(int sock, struct ustcomm_ust_reply *lur)
 	case sizeof(*lur):
 		DBG("message successfully sent");
 		return 0;
-	case -1:
-		if (errno == ECONNRESET) {
-			printf("remote end closed connection\n");
+	default:
+		if (len == -ECONNRESET) {
+			DBG("remote end closed connection");
 			return 0;
 		}
-		return -1;
-	default:
-		printf("incorrect message size: %zd\n", len);
-		return -1;
+		if (len < 0)
+			return len;
+		DBG("incorrect message size: %zd", len);
+		return -EINVAL;
 	}
 }
 
@@ -285,17 +288,17 @@ int handle_message(struct sock_info *sock_info,
 	case LTTNG_UST_FILTER:
 	{
 		/* Receive filter data */
-		struct lttng_ust_filter_bytecode *bytecode;
+		struct lttng_ust_filter_bytecode_node *bytecode;
 
 		if (lum->u.filter.data_size > FILTER_BYTECODE_MAX_LEN) {
-			ERR("Filter data size is too large: %u bytes\n",
+			ERR("Filter data size is too large: %u bytes",
 				lum->u.filter.data_size);
 			ret = -EINVAL;
 			goto error;
 		}
 
-		if (lum->u.filter.reloc_offset > lum->u.filter.data_size - 1) {
-			ERR("Filter reloc offset %u is not within data\n",
+		if (lum->u.filter.reloc_offset > lum->u.filter.data_size) {
+			ERR("Filter reloc offset %u is not within data",
 				lum->u.filter.reloc_offset);
 			ret = -EINVAL;
 			goto error;
@@ -306,40 +309,41 @@ int handle_message(struct sock_info *sock_info,
 			ret = -ENOMEM;
 			goto error;
 		}
-		len = ustcomm_recv_unix_sock(sock, bytecode->data,
+		len = ustcomm_recv_unix_sock(sock, bytecode->bc.data,
 				lum->u.filter.data_size);
 		switch (len) {
 		case 0:	/* orderly shutdown */
 			ret = 0;
 			free(bytecode);
 			goto error;
-		case -1:
-			DBG("Receive failed from lttng-sessiond with errno %d", errno);
-			if (errno == ECONNRESET) {
-				ERR("%s remote end closed connection\n", sock_info->name);
-				ret = -EINVAL;
-				free(bytecode);
-				goto error;
-			}
-			ret = -EINVAL;
-			goto end;
 		default:
 			if (len == lum->u.filter.data_size) {
-				DBG("filter data received\n");
+				DBG("filter data received");
 				break;
+			} else if (len < 0) {
+				DBG("Receive failed from lttng-sessiond with errno %d", (int) -len);
+				if (len == -ECONNRESET) {
+					ERR("%s remote end closed connection", sock_info->name);
+					ret = len;
+					free(bytecode);
+					goto error;
+				}
+				ret = len;
+				goto end;
 			} else {
-				ERR("incorrect filter data message size: %zd\n", len);
+				DBG("incorrect filter data message size: %zd", len);
 				ret = -EINVAL;
 				free(bytecode);
 				goto end;
 			}
 		}
-		bytecode->len = lum->u.filter.data_size;
-		bytecode->reloc_offset = lum->u.filter.reloc_offset;
+		bytecode->bc.len = lum->u.filter.data_size;
+		bytecode->bc.reloc_offset = lum->u.filter.reloc_offset;
+		bytecode->bc.seqnum = lum->u.filter.seqnum;
 		if (ops->cmd) {
 			ret = ops->cmd(lum->handle, lum->cmd,
 					(unsigned long) bytecode,
-					&args);
+					&args, sock_info);
 			if (ret) {
 				free(bytecode);
 			}
@@ -354,7 +358,7 @@ int handle_message(struct sock_info *sock_info,
 		if (ops->cmd)
 			ret = ops->cmd(lum->handle, lum->cmd,
 					(unsigned long) &lum->u,
-					&args);
+					&args, sock_info);
 		else
 			ret = -ENOSYS;
 		break;
@@ -365,10 +369,39 @@ end:
 	lur.cmd = lum->cmd;
 	lur.ret_val = ret;
 	if (ret >= 0) {
-		lur.ret_code = USTCOMM_OK;
+		lur.ret_code = LTTNG_UST_OK;
 	} else {
-		//lur.ret_code = USTCOMM_SESSION_FAIL;
-		lur.ret_code = ret;
+		/*
+		 * Use -LTTNG_UST_ERR as wildcard for UST internal
+		 * error that are not caused by the transport, except if
+		 * we already have a more precise error message to
+		 * report.
+		 */
+		if (ret > -LTTNG_UST_ERR) {
+			/* Translate code to UST error. */
+			switch (ret) {
+			case -EEXIST:
+				lur.ret_code = -LTTNG_UST_ERR_EXIST;
+				break;
+			case -EINVAL:
+				lur.ret_code = -LTTNG_UST_ERR_INVAL;
+				break;
+			case -ENOENT:
+				lur.ret_code = -LTTNG_UST_ERR_NOENT;
+				break;
+			case -EPERM:
+				lur.ret_code = -LTTNG_UST_ERR_PERM;
+				break;
+			case -ENOSYS:
+				lur.ret_code = -LTTNG_UST_ERR_NOSYS;
+				break;
+			default:
+				lur.ret_code = -LTTNG_UST_ERR;
+				break;
+			}
+		} else {
+			lur.ret_code = ret;
+		}
 	}
 	if (ret >= 0) {
 		switch (lum->cmd) {
@@ -397,14 +430,14 @@ end:
 	}
 	ret = send_reply(sock, &lur);
 	if (ret < 0) {
-		perror("error sending reply");
+		DBG("error sending reply");
 		goto error;
 	}
 
 	if ((lum->cmd == LTTNG_UST_STREAM
 	     || lum->cmd == LTTNG_UST_CHANNEL
 	     || lum->cmd == LTTNG_UST_METADATA)
-			&& lur.ret_code == USTCOMM_OK) {
+			&& lur.ret_code == LTTNG_UST_OK) {
 		int sendret = 0;
 
 		/* we also need to send the file descriptors. */
@@ -412,7 +445,7 @@ end:
 			&shm_fd, &shm_fd,
 			1, sizeof(int));
 		if (ret < 0) {
-			perror("send shm_fd");
+			ERR("send shm_fd");
 			sendret = ret;
 		}
 		/*
@@ -435,14 +468,18 @@ end:
 	 * LTTNG_UST_TRACEPOINT_FIELD_LIST_GET needs to send the field
 	 * after the reply.
 	 */
-	if (lur.ret_code == USTCOMM_OK) {
+	if (lur.ret_code == LTTNG_UST_OK) {
 		switch (lum->cmd) {
 		case LTTNG_UST_TRACEPOINT_FIELD_LIST_GET:
 			len = ustcomm_send_unix_sock(sock,
 				&args.field_list.entry,
 				sizeof(args.field_list.entry));
+			if (len < 0) {
+				ret = len;
+				goto error;
+			}
 			if (len != sizeof(args.field_list.entry)) {
-				ret = -1;
+				ret = -EINVAL;
 				goto error;
 			}
 		}
@@ -453,7 +490,7 @@ end:
 	 * that we keep the write side of the wait_fd open, but close
 	 * the read side.
 	 */
-	if (lur.ret_code == USTCOMM_OK) {
+	if (lur.ret_code == LTTNG_UST_OK) {
 		switch (lum->cmd) {
 		case LTTNG_UST_STREAM:
 			if (shm_fd >= 0) {
@@ -616,9 +653,9 @@ int get_wait_shm(struct sock_info *sock_info, size_t mmap_size)
 			ret = ftruncate(wait_shm_fd, mmap_size);
 			if (ret) {
 				PERROR("ftruncate");
-				exit(EXIT_FAILURE);
+				_exit(EXIT_FAILURE);
 			}
-			exit(EXIT_SUCCESS);
+			_exit(EXIT_SUCCESS);
 		}
 		/*
 		 * For local shm, we need to have rw access to accept
@@ -630,13 +667,13 @@ int get_wait_shm(struct sock_info *sock_info, size_t mmap_size)
 		 */
 		if (!sock_info->global && errno != EACCES) {
 			ERR("Error opening shm %s", sock_info->wait_shm_path);
-			exit(EXIT_FAILURE);
+			_exit(EXIT_FAILURE);
 		}
 		/*
 		 * The shm exists, but we cannot open it RW. Report
 		 * success.
 		 */
-		exit(EXIT_SUCCESS);
+		_exit(EXIT_SUCCESS);
 	} else {
 		return -1;
 	}
@@ -810,7 +847,8 @@ restart:
 
 	/*
 	 * Create only one root handle per listener thread for the whole
-	 * process lifetime.
+	 * process lifetime, so we ensure we get ID which is statically
+	 * assigned to the root handle.
 	 */
 	if (sock_info->root_handle == -1) {
 		ret = lttng_abi_create_root_handle();
@@ -844,7 +882,7 @@ restart:
 		len = ustcomm_recv_unix_sock(sock, &lum, sizeof(lum));
 		switch (len) {
 		case 0:	/* orderly shutdown */
-			DBG("%s ltt-sessiond has performed an orderly shutdown\n", sock_info->name);
+			DBG("%s lttng-sessiond has performed an orderly shutdown", sock_info->name);
 			ust_lock();
 			/*
 			 * Either sessiond has shutdown or refused us by closing the socket.
@@ -861,26 +899,31 @@ restart:
 			ust_unlock();
 			goto end;
 		case sizeof(lum):
-			DBG("message received\n");
+			DBG("message received");
 			ret = handle_message(sock_info, sock, &lum);
-			if (ret < 0) {
+			if (ret) {
 				ERR("Error handling message for %s socket", sock_info->name);
 			}
 			continue;
-		case -1:
-			DBG("Receive failed from lttng-sessiond with errno %d", errno);
-			if (errno == ECONNRESET) {
-				ERR("%s remote end closed connection\n", sock_info->name);
+		default:
+			if (len < 0) {
+				DBG("Receive failed from lttng-sessiond with errno %d", (int) -len);
+			} else {
+				DBG("incorrect message size (%s socket): %zd", sock_info->name, len);
+			}
+			if (len == -ECONNRESET) {
+				DBG("%s remote end closed connection", sock_info->name);
 				goto end;
 			}
 			goto end;
-		default:
-			ERR("incorrect message size (%s socket): %zd\n", sock_info->name, len);
-			continue;
 		}
 
 	}
 end:
+	ust_lock();
+	/* Cleanup socket handles before trying to reconnect */
+	lttng_ust_objd_table_owner_cleanup(sock_info);
+	ust_unlock();
 	goto restart;	/* try to reconnect */
 quit:
 	return NULL;
@@ -930,8 +973,6 @@ int get_timeout(struct timespec *constructor_timeout)
  * sessiond monitoring thread: monitor presence of global and per-user
  * sessiond by polling the application common named pipe.
  */
-/* TODO */
-
 void __attribute__((constructor)) lttng_ust_init(void)
 {
 	struct timespec constructor_timeout;
@@ -952,6 +993,7 @@ void __attribute__((constructor)) lttng_ust_init(void)
 	lttng_fixup_ringbuffer_tls();
 	lttng_fixup_vtid_tls();
 	lttng_fixup_nest_count_tls();
+	lttng_fixup_procname_tls();
 
 	/*
 	 * We want precise control over the order in which we construct
@@ -961,9 +1003,9 @@ void __attribute__((constructor)) lttng_ust_init(void)
 	 */
 	init_usterr();
 	init_tracepoint();
-	ltt_ring_buffer_metadata_client_init();
-	ltt_ring_buffer_client_overwrite_init();
-	ltt_ring_buffer_client_discard_init();
+	lttng_ring_buffer_metadata_client_init();
+	lttng_ring_buffer_client_overwrite_init();
+	lttng_ring_buffer_client_discard_init();
 
 	timeout_mode = get_timeout(&constructor_timeout);
 
@@ -972,7 +1014,7 @@ void __attribute__((constructor)) lttng_ust_init(void)
 
 	ret = setup_local_apps();
 	if (ret) {
-		ERR("Error setting up to local apps");
+		DBG("local apps setup returned %d", ret);
 	}
 
 	/* A new thread created by pthread_create inherits the signal mask
@@ -1027,7 +1069,7 @@ void __attribute__((constructor)) lttng_ust_init(void)
 					&constructor_timeout);
 		} while (ret < 0 && errno == EINTR);
 		if (ret < 0 && errno == ETIMEDOUT) {
-			ERR("Timed out waiting for ltt-sessiond");
+			ERR("Timed out waiting for lttng-sessiond");
 		} else {
 			assert(!ret);
 		}
@@ -1059,9 +1101,9 @@ void lttng_ust_cleanup(int exiting)
 	 */
 	lttng_ust_abi_exit();
 	lttng_ust_events_exit();
-	ltt_ring_buffer_client_discard_exit();
-	ltt_ring_buffer_client_overwrite_exit();
-	ltt_ring_buffer_metadata_client_exit();
+	lttng_ring_buffer_client_discard_exit();
+	lttng_ring_buffer_client_overwrite_exit();
+	lttng_ring_buffer_metadata_client_exit();
 	exit_tracepoint();
 	if (!exiting) {
 		/* Reinitialize values for fork */

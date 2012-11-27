@@ -54,18 +54,22 @@
 #endif
 
 #ifdef DEBUG
-#define dbg_printf(fmt, args...)     printf("[debug bytecode] " fmt, ## args)
+#define dbg_printf(fmt, args...)				\
+	printf("[debug bytecode in %s:%s@%u] " fmt,		\
+		__FILE__, __func__, __LINE__, ## args)
 #else
 #define dbg_printf(fmt, args...)				\
 do {								\
 	/* do nothing but check printf format */		\
 	if (0)							\
-		printf("[debug bytecode] " fmt, ## args);	\
+		printf("[debug bytecode in %s:%s@%u] " fmt,	\
+			__FILE__, __func__, __LINE__, ## args);	\
 } while (0)
 #endif
 
-/* Linked bytecode */
+/* Linked bytecode. Child of struct lttng_bytecode_runtime. */
 struct bytecode_runtime {
+	struct lttng_bytecode_runtime p;
 	uint16_t len;
 	char data[0];
 };
@@ -186,9 +190,9 @@ const char *print_op(enum filter_op op);
 int lttng_filter_validate_bytecode(struct bytecode_runtime *bytecode);
 int lttng_filter_specialize_bytecode(struct bytecode_runtime *bytecode);
 
-int lttng_filter_false(void *filter_data,
+uint64_t lttng_filter_false(void *filter_data,
 		const char *filter_stack_data);
-int lttng_filter_interpret_bytecode(void *filter_data,
+uint64_t lttng_filter_interpret_bytecode(void *filter_data,
 		const char *filter_stack_data);
 
 #endif /* _LTTNG_FILTER_H */

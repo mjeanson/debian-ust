@@ -1,5 +1,5 @@
 /*
- * ltt-probes.c
+ * lttng-probes.c
  *
  * Holds LTTng probes registry.
  *
@@ -31,14 +31,19 @@
 #include <helper.h>
 #include <ctype.h>
 
-#include "ltt-tracer-core.h"
+#include "lttng-tracer-core.h"
 #include "jhash.h"
 #include "error.h"
 
 /*
  * probe list is protected by ust_lock()/ust_unlock().
  */
-static CDS_LIST_HEAD(probe_list);
+CDS_LIST_HEAD(probe_list);
+
+struct cds_list_head *lttng_get_probe_list_head(void)
+{
+	return &probe_list;
+}
 
 static
 const struct lttng_probe_desc *find_provider(const char *provider)
@@ -68,7 +73,7 @@ const struct lttng_event_desc *find_event(const char *name)
 	return NULL;
 }
 
-int ltt_probe_register(struct lttng_probe_desc *desc)
+int lttng_probe_register(struct lttng_probe_desc *desc)
 {
 	struct lttng_probe_desc *iter;
 	int ret = 0;
@@ -116,7 +121,7 @@ desc_added:
 		ed = desc->event_desc[i];
 		DBG("Registered event probe \"%s\" with signature \"%s\"",
 			ed->name, ed->signature);
-		ret = pending_probe_fix_events(ed);
+		ret = lttng_fix_pending_event_desc(ed);
 		assert(!ret);
 	}
 end:
@@ -124,7 +129,13 @@ end:
 	return ret;
 }
 
-void ltt_probe_unregister(struct lttng_probe_desc *desc)
+/* Backward compatibility with UST 2.0 */
+int ltt_probe_register(struct lttng_probe_desc *desc)
+{
+	return lttng_probe_register(desc);
+}
+
+void lttng_probe_unregister(struct lttng_probe_desc *desc)
 {
 	ust_lock();
 	cds_list_del(&desc->head);
@@ -132,10 +143,16 @@ void ltt_probe_unregister(struct lttng_probe_desc *desc)
 	ust_unlock();
 }
 
+/* Backward compatibility with UST 2.0 */
+void ltt_probe_unregister(struct lttng_probe_desc *desc)
+{
+	lttng_probe_unregister(desc);
+}
+
 /*
  * called with UST lock held.
  */
-const struct lttng_event_desc *ltt_event_get(const char *name)
+const struct lttng_event_desc *lttng_event_get(const char *name)
 {
 	const struct lttng_event_desc *event;
 
@@ -145,11 +162,11 @@ const struct lttng_event_desc *ltt_event_get(const char *name)
 	return event;
 }
 
-void ltt_event_put(const struct lttng_event_desc *event)
+void lttng_event_put(const struct lttng_event_desc *event)
 {
 }
 
-void ltt_probes_prune_event_list(struct lttng_ust_tracepoint_list *list)
+void lttng_probes_prune_event_list(struct lttng_ust_tracepoint_list *list)
 {
 	struct tp_list_entry *list_entry, *tmp;
 
@@ -162,7 +179,7 @@ void ltt_probes_prune_event_list(struct lttng_ust_tracepoint_list *list)
 /*
  * called with UST lock held.
  */
-int ltt_probes_get_event_list(struct lttng_ust_tracepoint_list *list)
+int lttng_probes_get_event_list(struct lttng_ust_tracepoint_list *list)
 {
 	struct lttng_probe_desc *probe_desc;
 	int i;
@@ -195,7 +212,7 @@ int ltt_probes_get_event_list(struct lttng_ust_tracepoint_list *list)
 	return 0;
 
 err_nomem:
-	ltt_probes_prune_event_list(list);
+	lttng_probes_prune_event_list(list);
 	return -ENOMEM;
 }
 
@@ -219,7 +236,7 @@ struct lttng_ust_tracepoint_iter *
 	return &entry->tp;
 }
 
-void ltt_probes_prune_field_list(struct lttng_ust_field_list *list)
+void lttng_probes_prune_field_list(struct lttng_ust_field_list *list)
 {
 	struct tp_field_list_entry *list_entry, *tmp;
 
@@ -232,7 +249,7 @@ void ltt_probes_prune_field_list(struct lttng_ust_field_list *list)
 /*
  * called with UST lock held.
  */
-int ltt_probes_get_field_list(struct lttng_ust_field_list *list)
+int lttng_probes_get_field_list(struct lttng_ust_field_list *list)
 {
 	struct lttng_probe_desc *probe_desc;
 	int i;
@@ -243,6 +260,28 @@ int ltt_probes_get_field_list(struct lttng_ust_field_list *list)
 			const struct lttng_event_desc *event_desc =
 				probe_desc->event_desc[i];
 			int j;
+
+			if (event_desc->nr_fields == 0) {
+				/* Events without fields. */
+				struct tp_field_list_entry *list_entry;
+
+				list_entry = zmalloc(sizeof(*list_entry));
+				if (!list_entry)
+					goto err_nomem;
+				cds_list_add(&list_entry->head, &list->head);
+				strncpy(list_entry->field.event_name,
+					event_desc->name,
+					LTTNG_UST_SYM_NAME_LEN);
+				list_entry->field.event_name[LTTNG_UST_SYM_NAME_LEN - 1] = '\0';
+				list_entry->field.field_name[0] = '\0';
+				list_entry->field.type = LTTNG_UST_FIELD_OTHER;
+				if (!event_desc->loglevel) {
+					list_entry->field.loglevel = TRACE_DEFAULT;
+				} else {
+					list_entry->field.loglevel = *(*event_desc->loglevel);
+				}
+				list_entry->field.nowrite = 1;
+			}
 
 			for (j = 0; j < event_desc->nr_fields; j++) {
 				const struct lttng_event_field *event_field =
@@ -309,7 +348,7 @@ int ltt_probes_get_field_list(struct lttng_ust_field_list *list)
 	return 0;
 
 err_nomem:
-	ltt_probes_prune_field_list(list);
+	lttng_probes_prune_field_list(list);
 	return -ENOMEM;
 }
 
@@ -332,57 +371,3 @@ struct lttng_ust_field_iter *
 				struct tp_field_list_entry, head);
 	return &entry->field;
 }
-
-/*
- * marshall all probes/all events and create those that fit the
- * wildcard. Add them to the events list as created.
- */
-void ltt_probes_create_wildcard_events(struct wildcard_entry *entry,
-				struct session_wildcard *wildcard)
-{
-	struct lttng_probe_desc *probe_desc;
-	struct lttng_ust_event event_param;
-	int i;
-
-	cds_list_for_each_entry(probe_desc, &probe_list, head) {
-		for (i = 0; i < probe_desc->nr_events; i++) {
-			const struct lttng_event_desc *event_desc;
-			int match = 0;
-
-			event_desc = probe_desc->event_desc[i];
-			/* compare excluding final '*' */
-			assert(strlen(entry->name) > 0);
-			if (strcmp(event_desc->name, "lttng_ust:metadata")
-					&& (strlen(entry->name) == 1
-						|| !strncmp(event_desc->name, entry->name,
-							strlen(entry->name) - 1))) {
-				if (ltt_loglevel_match(event_desc,
-					entry->loglevel_type,
-						entry->loglevel)) {
-					match = 1;
-				}
-			}
-			if (match) {
-				struct ltt_event *ev;
-				int ret;
-
-				memcpy(&event_param, &wildcard->event_param,
-						sizeof(event_param));
-				memcpy(event_param.name,
-					event_desc->name,
-					sizeof(event_param.name));
-				/* create event */
-				ret = ltt_event_create(wildcard->chan,
-					&event_param, &ev);
-				if (ret) {
-					DBG("Error creating event");
-					continue;
-				}
-				cds_list_add(&ev->wildcard_list,
-					&wildcard->events);
-			}
-		}
-	}
-	lttng_filter_wildcard_link_bytecode(wildcard);
-}
-

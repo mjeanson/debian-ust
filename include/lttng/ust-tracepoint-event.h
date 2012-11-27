@@ -14,6 +14,7 @@
 
 #include <stdio.h>
 #include <urcu/compiler.h>
+#include <urcu/rculist.h>
 #include <lttng/ust-events.h>
 #include <lttng/ringbuffer-config.h>
 #include <lttng/ust-compiler.h>
@@ -296,9 +297,10 @@ size_t __event_get_size__##_provider##___##_name(size_t *__dynamic_len, _TP_ARGS
 #define _ctf_array_encoded(_type, _item, _src, _length, _encoding, _nowrite)   \
 	{								       \
 		unsigned long __ctf_tmp_ulong = (unsigned long) (_length);     \
+		const void *__ctf_tmp_ptr = (_src);			       \
 		memcpy(__stack_data, &__ctf_tmp_ulong, sizeof(unsigned long)); \
 		__stack_data += sizeof(unsigned long);			       \
-		memcpy(__stack_data, &(_src), sizeof(void **));		       \
+		memcpy(__stack_data, &__ctf_tmp_ptr, sizeof(void **));	       \
 		__stack_data += sizeof(void **);			       \
 	}
 
@@ -307,16 +309,18 @@ size_t __event_get_size__##_provider##___##_name(size_t *__dynamic_len, _TP_ARGS
 			_src_length, _encoding, _nowrite)		       \
 	{								       \
 		unsigned long __ctf_tmp_ulong = (unsigned long) (_src_length); \
+		const void *__ctf_tmp_ptr = (_src);			       \
 		memcpy(__stack_data, &__ctf_tmp_ulong, sizeof(unsigned long)); \
 		__stack_data += sizeof(unsigned long);			       \
-		memcpy(__stack_data, &(_src), sizeof(void **));		       \
+		memcpy(__stack_data, &__ctf_tmp_ptr, sizeof(void **));	       \
 		__stack_data += sizeof(void **);			       \
 	}
 
 #undef _ctf_string
 #define _ctf_string(_item, _src, _nowrite)				       \
 	{								       \
-		memcpy(__stack_data, &(_src), sizeof(void **));		       \
+		const void *__ctf_tmp_ptr = (_src);			       \
+		memcpy(__stack_data, &__ctf_tmp_ptr, sizeof(void **));	       \
 		__stack_data += sizeof(void **);			       \
 	}
 
@@ -455,6 +459,7 @@ size_t __event_get_align__##_provider##___##_name(_TP_ARGS_PROTO(_args))      \
  * each field (worse case). For integers, max size required is 64-bit.
  * Same for double-precision floats. Those fit within
  * 2*sizeof(unsigned long) for all supported architectures.
+ * Perform UNION (||) of filter runtime list.
  */
 #undef TRACEPOINT_EVENT_CLASS
 #define TRACEPOINT_EVENT_CLASS(_provider, _name, _args, _fields)	      \
@@ -463,8 +468,8 @@ void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args));      \
 static									      \
 void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args))	      \
 {									      \
-	struct ltt_event *__event = __tp_data;				      \
-	struct ltt_channel *__chan = __event->chan;			      \
+	struct lttng_event *__event = __tp_data;			      \
+	struct lttng_channel *__chan = __event->chan;			      \
 	struct lttng_ust_lib_ring_buffer_ctx __ctx;			      \
 	size_t __event_len, __event_align;				      \
 	size_t __dynamic_len_idx = 0;					      \
@@ -482,10 +487,18 @@ void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args))	      \
 		return;							      \
 	if (caa_unlikely(!CMM_ACCESS_ONCE(__event->enabled)))		      \
 		return;							      \
-	if (caa_unlikely(__event->filter)) {				      \
+	if (caa_unlikely(!cds_list_empty(&__event->bytecode_runtime_head))) { \
+		struct lttng_bytecode_runtime *bc_runtime;		      \
+		int __filter_record = 0;				      \
+									      \
 		__event_prepare_filter_stack__##_provider##___##_name(__stackvar.__filter_stack_data, \
-			_TP_ARGS_DATA_VAR(_args));				      \
-		if (caa_likely(!__event->filter(__event->filter_data, __stackvar.__filter_stack_data))) \
+			_TP_ARGS_DATA_VAR(_args));			      \
+		cds_list_for_each_entry_rcu(bc_runtime, &__event->bytecode_runtime_head, node) { \
+			if (caa_unlikely(bc_runtime->filter(bc_runtime,	      \
+					__stackvar.__filter_stack_data) & LTTNG_FILTER_RECORD_FLAG)) \
+				__filter_record = 1;			      \
+		}							      \
+		if (caa_likely(!__filter_record))			      \
 			return;						      \
 	}								      \
 	__event_len = __event_get_size__##_provider##___##_name(__stackvar.__dynamic_len, \
@@ -548,6 +561,21 @@ static const int *_loglevel___##__provider##___##__name =		   \
 #include TRACEPOINT_INCLUDE
 
 /*
+ * Stage 6.1 of tracepoint event generation.
+ *
+ * Tracepoint UML URI info.
+ */
+
+/* Reset all macros within TRACEPOINT_EVENT */
+#include <lttng/ust-tracepoint-event-reset.h>
+
+#undef TRACEPOINT_MODEL_EMF_URI
+#define TRACEPOINT_MODEL_EMF_URI(__provider, __name, __uri)		   \
+static const char *_model_emf_uri___##__provider##___##__name = __uri;
+
+#include TRACEPOINT_INCLUDE
+
+/*
  * Stage 7.1 of tracepoint event generation.
  *
  * Create events description structures. We use a weakref because
@@ -563,6 +591,9 @@ static const int *_loglevel___##__provider##___##__name =		   \
 static const int *							       \
 	__ref_loglevel___##_provider##___##_name			       \
 	__attribute__((weakref ("_loglevel___" #_provider "___" #_name)));     \
+static const char *							       \
+	__ref_model_emf_uri___##_provider##___##_name			       \
+	__attribute__((weakref ("_model_emf_uri___" #_provider "___" #_name)));\
 const struct lttng_event_desc __event_desc___##_provider##_##_name = {	       \
 	.fields = __event_fields___##_provider##___##_template,		       \
 	.name = #_provider ":" #_name,					       \
@@ -570,6 +601,7 @@ const struct lttng_event_desc __event_desc___##_provider##_##_name = {	       \
 	.nr_fields = _TP_ARRAY_SIZE(__event_fields___##_provider##___##_template), \
 	.loglevel = &__ref_loglevel___##_provider##___##_name,		       \
 	.signature = __tp_event_signature___##_provider##___##_template,       \
+	.u.ext.model_emf_uri = &__ref_model_emf_uri___##_provider##___##_name, \
 };
 
 #include TRACEPOINT_INCLUDE
@@ -623,7 +655,7 @@ _TP_COMBINE_TOKENS(__lttng_events_init__, TRACEPOINT_PROVIDER)(void)
 {
 	int ret;
 
-	ret = ltt_probe_register(&_TP_COMBINE_TOKENS(__probe_desc___, TRACEPOINT_PROVIDER));
+	ret = lttng_probe_register(&_TP_COMBINE_TOKENS(__probe_desc___, TRACEPOINT_PROVIDER));
 	assert(!ret);
 }
 
@@ -632,7 +664,7 @@ _TP_COMBINE_TOKENS(__lttng_events_exit__, TRACEPOINT_PROVIDER)(void);
 static void
 _TP_COMBINE_TOKENS(__lttng_events_exit__, TRACEPOINT_PROVIDER)(void)
 {
-	ltt_probe_unregister(&_TP_COMBINE_TOKENS(__probe_desc___, TRACEPOINT_PROVIDER));
+	lttng_probe_unregister(&_TP_COMBINE_TOKENS(__probe_desc___, TRACEPOINT_PROVIDER));
 }
 
 int _TP_COMBINE_TOKENS(__tracepoint_provider_, TRACEPOINT_PROVIDER);

@@ -105,7 +105,7 @@ int stack_strcmp(struct estack *stack, int top, const char *cmp_type)
 	return diff;
 }
 
-int lttng_filter_false(void *filter_data,
+uint64_t lttng_filter_false(void *filter_data,
 		const char *filter_stack_data)
 {
 	return 0;
@@ -157,13 +157,18 @@ LABEL_##name
 
 #endif
 
-int lttng_filter_interpret_bytecode(void *filter_data,
+/*
+ * Return 0 (discard), or raise the 0x1 flag (log event).
+ * Currently, other flags are kept for future extensions and have no
+ * effect.
+ */
+uint64_t lttng_filter_interpret_bytecode(void *filter_data,
 		const char *filter_stack_data)
 {
 	struct bytecode_runtime *bytecode = filter_data;
 	void *pc, *next_pc, *start_pc;
 	int ret = -EINVAL;
-	int retval = 0;
+	uint64_t retval = 0;
 	struct estack _stack;
 	struct estack *stack = &_stack;
 	register int64_t ax = 0, bx = 0;
@@ -279,6 +284,7 @@ int lttng_filter_interpret_bytecode(void *filter_data,
 			goto end;
 
 		OP(FILTER_OP_RETURN):
+			/* LTTNG_FILTER_DISCARD  or LTTNG_FILTER_RECORD_FLAG */
 			retval = !!estack_ax_v;
 			ret = 0;
 			goto end;

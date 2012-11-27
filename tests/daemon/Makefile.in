@@ -15,6 +15,7 @@
 
 @SET_MAKE@
 
+
 VPATH = @srcdir@
 am__make_dryrun = \
   { \
@@ -52,7 +53,10 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
-subdir = snprintf
+noinst_PROGRAMS = daemon$(EXEEXT)
+@LTTNG_UST_BUILD_WITH_LIBDL_TRUE@am__append_1 = -ldl
+@LTTNG_UST_BUILD_WITH_LIBC_DL_TRUE@am__append_2 = -lc
+subdir = tests/daemon
 DIST_COMMON = README $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/config/libtool.m4 \
@@ -67,21 +71,17 @@ CONFIG_HEADER = $(top_builddir)/config.h \
 	$(top_builddir)/include/lttng/ust-config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
-LTLIBRARIES = $(noinst_LTLIBRARIES)
-libustsnprintf_la_LIBADD =
-am_libustsnprintf_la_OBJECTS = libustsnprintf_la-fflush.lo \
-	libustsnprintf_la-fvwrite.lo libustsnprintf_la-mbrtowc_sb.lo \
-	libustsnprintf_la-snprintf.lo libustsnprintf_la-vfprintf.lo \
-	libustsnprintf_la-wsetup.lo libustsnprintf_la-core.lo \
-	libustsnprintf_la-patient_write.lo
-libustsnprintf_la_OBJECTS = $(am_libustsnprintf_la_OBJECTS)
+PROGRAMS = $(noinst_PROGRAMS)
+am_daemon_OBJECTS = daemon.$(OBJEXT)
+daemon_OBJECTS = $(am_daemon_OBJECTS)
+am__DEPENDENCIES_1 =
+daemon_DEPENDENCIES = $(top_builddir)/liblttng-ust/liblttng-ust.la \
+	$(top_builddir)/liblttng-ust-fork/liblttng-ust-fork.la \
+	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
-libustsnprintf_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
-	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
-	$(libustsnprintf_la_CFLAGS) $(CFLAGS) \
-	$(libustsnprintf_la_LDFLAGS) $(LDFLAGS) -o $@
+SCRIPTS = $(noinst_SCRIPTS)
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir) -I$(top_builddir)/include/lttng
 depcomp = $(SHELL) $(top_srcdir)/config/depcomp
 am__depfiles_maybe = depfiles
@@ -108,8 +108,8 @@ am__v_CCLD_0 = @echo "  CCLD  " $@;
 AM_V_GEN = $(am__v_GEN_@AM_V@)
 am__v_GEN_ = $(am__v_GEN_@AM_DEFAULT_V@)
 am__v_GEN_0 = @echo "  GEN   " $@;
-SOURCES = $(libustsnprintf_la_SOURCES)
-DIST_SOURCES = $(libustsnprintf_la_SOURCES)
+SOURCES = $(daemon_SOURCES)
+DIST_SOURCES = $(daemon_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -245,27 +245,13 @@ target_vendor = @target_vendor@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/libustcomm
-AM_CFLAGS = -fno-strict-aliasing
-noinst_LTLIBRARIES = libustsnprintf.la
-libustsnprintf_la_SOURCES = \
-	fflush.c \
-	fileext.h \
-	floatio.h \
-	fvwrite.c \
-	fvwrite.h \
-	local.h \
-	mbrtowc_sb.c \
-	snprintf.c \
-	various.h \
-	vfprintf.c \
-	wcio.h \
-	wsetup.c \
-	core.c \
-	patient_write.c
-
-libustsnprintf_la_LDFLAGS = -no-undefined -static
-libustsnprintf_la_CFLAGS = -DUST_COMPONENT="lttng_ust_snprintf" -fPIC -fno-strict-aliasing
+AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_builddir)/include -Wsystem-headers
+daemon_SOURCES = daemon.c ust_tests_daemon.h
+daemon_LDADD = $(top_builddir)/liblttng-ust/liblttng-ust.la \
+	$(top_builddir)/liblttng-ust-fork/liblttng-ust-fork.la \
+	$(am__append_1) $(am__append_2)
+noinst_SCRIPTS = run
+EXTRA_DIST = run
 all: all-am
 
 .SUFFIXES:
@@ -279,9 +265,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign snprintf/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign tests/daemon/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --foreign snprintf/Makefile
+	  $(AUTOMAKE) --foreign tests/daemon/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
@@ -301,16 +287,17 @@ $(ACLOCAL_M4):  $(am__aclocal_m4_deps)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 $(am__aclocal_m4_deps):
 
-clean-noinstLTLIBRARIES:
-	-test -z "$(noinst_LTLIBRARIES)" || rm -f $(noinst_LTLIBRARIES)
-	@list='$(noinst_LTLIBRARIES)'; for p in $$list; do \
-	  dir="`echo $$p | sed -e 's|/[^/]*$$||'`"; \
-	  test "$$dir" != "$$p" || dir=.; \
-	  echo "rm -f \"$${dir}/so_locations\""; \
-	  rm -f "$${dir}/so_locations"; \
-	done
-libustsnprintf.la: $(libustsnprintf_la_OBJECTS) $(libustsnprintf_la_DEPENDENCIES) $(EXTRA_libustsnprintf_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(libustsnprintf_la_LINK)  $(libustsnprintf_la_OBJECTS) $(libustsnprintf_la_LIBADD) $(LIBS)
+clean-noinstPROGRAMS:
+	@list='$(noinst_PROGRAMS)'; test -n "$$list" || exit 0; \
+	echo " rm -f" $$list; \
+	rm -f $$list || exit $$?; \
+	test -n "$(EXEEXT)" || exit 0; \
+	list=`for p in $$list; do echo "$$p"; done | sed 's/$(EXEEXT)$$//'`; \
+	echo " rm -f" $$list; \
+	rm -f $$list
+daemon$(EXEEXT): $(daemon_OBJECTS) $(daemon_DEPENDENCIES) $(EXTRA_daemon_DEPENDENCIES) 
+	@rm -f daemon$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(daemon_OBJECTS) $(daemon_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -318,14 +305,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libustsnprintf_la-core.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libustsnprintf_la-fflush.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libustsnprintf_la-fvwrite.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libustsnprintf_la-mbrtowc_sb.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libustsnprintf_la-patient_write.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libustsnprintf_la-snprintf.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libustsnprintf_la-vfprintf.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libustsnprintf_la-wsetup.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/daemon.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -347,62 +327,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LTCOMPILE) -c -o $@ $<
-
-libustsnprintf_la-fflush.lo: fflush.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustsnprintf_la_CFLAGS) $(CFLAGS) -MT libustsnprintf_la-fflush.lo -MD -MP -MF $(DEPDIR)/libustsnprintf_la-fflush.Tpo -c -o libustsnprintf_la-fflush.lo `test -f 'fflush.c' || echo '$(srcdir)/'`fflush.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libustsnprintf_la-fflush.Tpo $(DEPDIR)/libustsnprintf_la-fflush.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='fflush.c' object='libustsnprintf_la-fflush.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustsnprintf_la_CFLAGS) $(CFLAGS) -c -o libustsnprintf_la-fflush.lo `test -f 'fflush.c' || echo '$(srcdir)/'`fflush.c
-
-libustsnprintf_la-fvwrite.lo: fvwrite.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustsnprintf_la_CFLAGS) $(CFLAGS) -MT libustsnprintf_la-fvwrite.lo -MD -MP -MF $(DEPDIR)/libustsnprintf_la-fvwrite.Tpo -c -o libustsnprintf_la-fvwrite.lo `test -f 'fvwrite.c' || echo '$(srcdir)/'`fvwrite.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libustsnprintf_la-fvwrite.Tpo $(DEPDIR)/libustsnprintf_la-fvwrite.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='fvwrite.c' object='libustsnprintf_la-fvwrite.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustsnprintf_la_CFLAGS) $(CFLAGS) -c -o libustsnprintf_la-fvwrite.lo `test -f 'fvwrite.c' || echo '$(srcdir)/'`fvwrite.c
-
-libustsnprintf_la-mbrtowc_sb.lo: mbrtowc_sb.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustsnprintf_la_CFLAGS) $(CFLAGS) -MT libustsnprintf_la-mbrtowc_sb.lo -MD -MP -MF $(DEPDIR)/libustsnprintf_la-mbrtowc_sb.Tpo -c -o libustsnprintf_la-mbrtowc_sb.lo `test -f 'mbrtowc_sb.c' || echo '$(srcdir)/'`mbrtowc_sb.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libustsnprintf_la-mbrtowc_sb.Tpo $(DEPDIR)/libustsnprintf_la-mbrtowc_sb.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='mbrtowc_sb.c' object='libustsnprintf_la-mbrtowc_sb.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustsnprintf_la_CFLAGS) $(CFLAGS) -c -o libustsnprintf_la-mbrtowc_sb.lo `test -f 'mbrtowc_sb.c' || echo '$(srcdir)/'`mbrtowc_sb.c
-
-libustsnprintf_la-snprintf.lo: snprintf.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustsnprintf_la_CFLAGS) $(CFLAGS) -MT libustsnprintf_la-snprintf.lo -MD -MP -MF $(DEPDIR)/libustsnprintf_la-snprintf.Tpo -c -o libustsnprintf_la-snprintf.lo `test -f 'snprintf.c' || echo '$(srcdir)/'`snprintf.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libustsnprintf_la-snprintf.Tpo $(DEPDIR)/libustsnprintf_la-snprintf.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='snprintf.c' object='libustsnprintf_la-snprintf.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustsnprintf_la_CFLAGS) $(CFLAGS) -c -o libustsnprintf_la-snprintf.lo `test -f 'snprintf.c' || echo '$(srcdir)/'`snprintf.c
-
-libustsnprintf_la-vfprintf.lo: vfprintf.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustsnprintf_la_CFLAGS) $(CFLAGS) -MT libustsnprintf_la-vfprintf.lo -MD -MP -MF $(DEPDIR)/libustsnprintf_la-vfprintf.Tpo -c -o libustsnprintf_la-vfprintf.lo `test -f 'vfprintf.c' || echo '$(srcdir)/'`vfprintf.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libustsnprintf_la-vfprintf.Tpo $(DEPDIR)/libustsnprintf_la-vfprintf.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='vfprintf.c' object='libustsnprintf_la-vfprintf.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustsnprintf_la_CFLAGS) $(CFLAGS) -c -o libustsnprintf_la-vfprintf.lo `test -f 'vfprintf.c' || echo '$(srcdir)/'`vfprintf.c
-
-libustsnprintf_la-wsetup.lo: wsetup.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustsnprintf_la_CFLAGS) $(CFLAGS) -MT libustsnprintf_la-wsetup.lo -MD -MP -MF $(DEPDIR)/libustsnprintf_la-wsetup.Tpo -c -o libustsnprintf_la-wsetup.lo `test -f 'wsetup.c' || echo '$(srcdir)/'`wsetup.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libustsnprintf_la-wsetup.Tpo $(DEPDIR)/libustsnprintf_la-wsetup.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='wsetup.c' object='libustsnprintf_la-wsetup.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustsnprintf_la_CFLAGS) $(CFLAGS) -c -o libustsnprintf_la-wsetup.lo `test -f 'wsetup.c' || echo '$(srcdir)/'`wsetup.c
-
-libustsnprintf_la-core.lo: core.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustsnprintf_la_CFLAGS) $(CFLAGS) -MT libustsnprintf_la-core.lo -MD -MP -MF $(DEPDIR)/libustsnprintf_la-core.Tpo -c -o libustsnprintf_la-core.lo `test -f 'core.c' || echo '$(srcdir)/'`core.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libustsnprintf_la-core.Tpo $(DEPDIR)/libustsnprintf_la-core.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='core.c' object='libustsnprintf_la-core.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustsnprintf_la_CFLAGS) $(CFLAGS) -c -o libustsnprintf_la-core.lo `test -f 'core.c' || echo '$(srcdir)/'`core.c
-
-libustsnprintf_la-patient_write.lo: patient_write.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustsnprintf_la_CFLAGS) $(CFLAGS) -MT libustsnprintf_la-patient_write.lo -MD -MP -MF $(DEPDIR)/libustsnprintf_la-patient_write.Tpo -c -o libustsnprintf_la-patient_write.lo `test -f 'patient_write.c' || echo '$(srcdir)/'`patient_write.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libustsnprintf_la-patient_write.Tpo $(DEPDIR)/libustsnprintf_la-patient_write.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='patient_write.c' object='libustsnprintf_la-patient_write.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libustsnprintf_la_CFLAGS) $(CFLAGS) -c -o libustsnprintf_la-patient_write.lo `test -f 'patient_write.c' || echo '$(srcdir)/'`patient_write.c
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -494,7 +418,7 @@ distdir: $(DISTFILES)
 	done
 check-am: all-am
 check: check-am
-all-am: Makefile $(LTLIBRARIES)
+all-am: Makefile $(PROGRAMS) $(SCRIPTS)
 installdirs:
 install: install-am
 install-exec: install-exec-am
@@ -528,7 +452,7 @@ maintainer-clean-generic:
 	@echo "it deletes files that may require special tools to rebuild."
 clean: clean-am
 
-clean-am: clean-generic clean-libtool clean-noinstLTLIBRARIES \
+clean-am: clean-generic clean-libtool clean-noinstPROGRAMS \
 	mostlyclean-am
 
 distclean: distclean-am
@@ -600,7 +524,7 @@ uninstall-am:
 .MAKE: install-am install-strip
 
 .PHONY: CTAGS GTAGS all all-am check check-am clean clean-generic \
-	clean-libtool clean-noinstLTLIBRARIES ctags distclean \
+	clean-libtool clean-noinstPROGRAMS ctags distclean \
 	distclean-compile distclean-generic distclean-libtool \
 	distclean-tags distdir dvi dvi-am html html-am info info-am \
 	install install-am install-data install-data-am install-dvi \

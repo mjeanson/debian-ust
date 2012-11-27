@@ -53,7 +53,7 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
-noinst_PROGRAMS = demo$(EXEEXT)
+@NO_SHARED_FALSE@noinst_PROGRAMS = demo$(EXEEXT)
 subdir = tests/demo
 DIST_COMMON = README $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -70,9 +70,12 @@ CONFIG_HEADER = $(top_builddir)/config.h \
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 LTLIBRARIES = $(noinst_LTLIBRARIES)
-liblttng_ust_provider_ust_tests_demo_la_DEPENDENCIES =  \
-	$(top_builddir)/liblttng-ust/liblttng-ust.la
-am_liblttng_ust_provider_ust_tests_demo_la_OBJECTS = tp.lo tp2.lo
+@NO_SHARED_FALSE@liblttng_ust_provider_ust_tests_demo_la_DEPENDENCIES =  \
+@NO_SHARED_FALSE@	$(top_builddir)/liblttng-ust/liblttng-ust.la
+am__liblttng_ust_provider_ust_tests_demo_la_SOURCES_DIST = tp.c \
+	ust_tests_demo.h tp2.c ust_tests_demo2.h
+@NO_SHARED_FALSE@am_liblttng_ust_provider_ust_tests_demo_la_OBJECTS =  \
+@NO_SHARED_FALSE@	tp.lo tp2.lo
 liblttng_ust_provider_ust_tests_demo_la_OBJECTS =  \
 	$(am_liblttng_ust_provider_ust_tests_demo_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -83,9 +86,13 @@ liblttng_ust_provider_ust_tests_demo_la_LINK = $(LIBTOOL) $(AM_V_lt) \
 	$(CCLD) $(AM_CFLAGS) $(CFLAGS) \
 	$(liblttng_ust_provider_ust_tests_demo_la_LDFLAGS) $(LDFLAGS) \
 	-o $@
-liblttng_ust_provider_ust_tests_demo3_la_DEPENDENCIES =  \
-	$(top_builddir)/liblttng-ust/liblttng-ust.la
-am_liblttng_ust_provider_ust_tests_demo3_la_OBJECTS = tp3.lo
+@NO_SHARED_FALSE@am_liblttng_ust_provider_ust_tests_demo_la_rpath =
+@NO_SHARED_FALSE@liblttng_ust_provider_ust_tests_demo3_la_DEPENDENCIES =  \
+@NO_SHARED_FALSE@	$(top_builddir)/liblttng-ust/liblttng-ust.la
+am__liblttng_ust_provider_ust_tests_demo3_la_SOURCES_DIST = tp3.c \
+	ust_tests_demo3.h
+@NO_SHARED_FALSE@am_liblttng_ust_provider_ust_tests_demo3_la_OBJECTS =  \
+@NO_SHARED_FALSE@	tp3.lo
 liblttng_ust_provider_ust_tests_demo3_la_OBJECTS =  \
 	$(am_liblttng_ust_provider_ust_tests_demo3_la_OBJECTS)
 liblttng_ust_provider_ust_tests_demo3_la_LINK = $(LIBTOOL) $(AM_V_lt) \
@@ -93,8 +100,10 @@ liblttng_ust_provider_ust_tests_demo3_la_LINK = $(LIBTOOL) $(AM_V_lt) \
 	$(CCLD) $(AM_CFLAGS) $(CFLAGS) \
 	$(liblttng_ust_provider_ust_tests_demo3_la_LDFLAGS) $(LDFLAGS) \
 	-o $@
+@NO_SHARED_FALSE@am_liblttng_ust_provider_ust_tests_demo3_la_rpath =
 PROGRAMS = $(noinst_PROGRAMS)
-am_demo_OBJECTS = demo.$(OBJEXT)
+am__demo_SOURCES_DIST = demo.c ust_tests_demo.h
+@NO_SHARED_FALSE@am_demo_OBJECTS = demo.$(OBJEXT)
 demo_OBJECTS = $(am_demo_OBJECTS)
 demo_DEPENDENCIES =
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir) -I$(top_builddir)/include/lttng
@@ -126,9 +135,10 @@ am__v_GEN_0 = @echo "  GEN   " $@;
 SOURCES = $(liblttng_ust_provider_ust_tests_demo_la_SOURCES) \
 	$(liblttng_ust_provider_ust_tests_demo3_la_SOURCES) \
 	$(demo_SOURCES)
-DIST_SOURCES = $(liblttng_ust_provider_ust_tests_demo_la_SOURCES) \
-	$(liblttng_ust_provider_ust_tests_demo3_la_SOURCES) \
-	$(demo_SOURCES)
+DIST_SOURCES =  \
+	$(am__liblttng_ust_provider_ust_tests_demo_la_SOURCES_DIST) \
+	$(am__liblttng_ust_provider_ust_tests_demo3_la_SOURCES_DIST) \
+	$(am__demo_SOURCES_DIST)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -174,7 +184,6 @@ INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
-LIBFORMAT = @LIBFORMAT@
 LIBOBJS = @LIBOBJS@
 
 # Set LIBS to nothing so the application does not link on useless
@@ -271,43 +280,45 @@ top_srcdir = @top_srcdir@
 
 # -Wsystem-headers is needed to print warnings in the tracepoint
 # description file.
-AM_CPPFLAGS = -I$(top_srcdir)/include -Wsystem-headers
+AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_builddir)/include -Wsystem-headers
 
+# Do not build this test if shared libraries support was
+# explicitly disabled.
 # Force the shared flag on the noinst libraries since they are
 # only built static by default
-FORCE_SHARED_LIB_OPTIONS = -module -shared -avoid-version \
-			   -rpath $(abs_builddir)
+@NO_SHARED_FALSE@FORCE_SHARED_LIB_OPTIONS = -module -shared -avoid-version \
+@NO_SHARED_FALSE@			   -rpath $(abs_builddir)
 
-noinst_LTLIBRARIES = liblttng-ust-provider-ust-tests-demo.la \
-	liblttng-ust-provider-ust-tests-demo3.la
+@NO_SHARED_FALSE@noinst_LTLIBRARIES = liblttng-ust-provider-ust-tests-demo.la \
+@NO_SHARED_FALSE@	liblttng-ust-provider-ust-tests-demo3.la
 
 
 #contains ust_tests_demo.h and ust_tests_demo2.h provider probes
-liblttng_ust_provider_ust_tests_demo_la_SOURCES = \
-	tp.c ust_tests_demo.h \
-	tp2.c ust_tests_demo2.h
+@NO_SHARED_FALSE@liblttng_ust_provider_ust_tests_demo_la_SOURCES = \
+@NO_SHARED_FALSE@	tp.c ust_tests_demo.h \
+@NO_SHARED_FALSE@	tp2.c ust_tests_demo2.h
 
-liblttng_ust_provider_ust_tests_demo_la_LIBADD = \
-	$(top_builddir)/liblttng-ust/liblttng-ust.la
+@NO_SHARED_FALSE@liblttng_ust_provider_ust_tests_demo_la_LIBADD = \
+@NO_SHARED_FALSE@	$(top_builddir)/liblttng-ust/liblttng-ust.la
 
-liblttng_ust_provider_ust_tests_demo_la_LDFLAGS = \
-	$(FORCE_SHARED_LIB_OPTIONS)
+@NO_SHARED_FALSE@liblttng_ust_provider_ust_tests_demo_la_LDFLAGS = \
+@NO_SHARED_FALSE@	$(FORCE_SHARED_LIB_OPTIONS)
 
 
 #contains ust_tests_demo3.h provider probes
-liblttng_ust_provider_ust_tests_demo3_la_SOURCES = \
-	tp3.c ust_tests_demo3.h
+@NO_SHARED_FALSE@liblttng_ust_provider_ust_tests_demo3_la_SOURCES = \
+@NO_SHARED_FALSE@	tp3.c ust_tests_demo3.h
 
-liblttng_ust_provider_ust_tests_demo3_la_LIBADD = \
-	$(top_builddir)/liblttng-ust/liblttng-ust.la
+@NO_SHARED_FALSE@liblttng_ust_provider_ust_tests_demo3_la_LIBADD = \
+@NO_SHARED_FALSE@	$(top_builddir)/liblttng-ust/liblttng-ust.la
 
-liblttng_ust_provider_ust_tests_demo3_la_LDFLAGS = \
-	$(FORCE_SHARED_LIB_OPTIONS)
+@NO_SHARED_FALSE@liblttng_ust_provider_ust_tests_demo3_la_LDFLAGS = \
+@NO_SHARED_FALSE@	$(FORCE_SHARED_LIB_OPTIONS)
 
-demo_SOURCES = demo.c ust_tests_demo.h
-@LTTNG_UST_BUILD_WITH_LIBC_DL_TRUE@demo_LDADD = -lc
+@NO_SHARED_FALSE@demo_SOURCES = demo.c ust_tests_demo.h
+@LTTNG_UST_BUILD_WITH_LIBC_DL_TRUE@@NO_SHARED_FALSE@demo_LDADD = -lc
 # The demo program only depends on libdl/libc for dlopen().
-@LTTNG_UST_BUILD_WITH_LIBDL_TRUE@demo_LDADD = -ldl
+@LTTNG_UST_BUILD_WITH_LIBDL_TRUE@@NO_SHARED_FALSE@demo_LDADD = -ldl
 all: all-am
 
 .SUFFIXES:
@@ -352,9 +363,9 @@ clean-noinstLTLIBRARIES:
 	  rm -f "$${dir}/so_locations"; \
 	done
 liblttng-ust-provider-ust-tests-demo.la: $(liblttng_ust_provider_ust_tests_demo_la_OBJECTS) $(liblttng_ust_provider_ust_tests_demo_la_DEPENDENCIES) $(EXTRA_liblttng_ust_provider_ust_tests_demo_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(liblttng_ust_provider_ust_tests_demo_la_LINK)  $(liblttng_ust_provider_ust_tests_demo_la_OBJECTS) $(liblttng_ust_provider_ust_tests_demo_la_LIBADD) $(LIBS)
+	$(AM_V_CCLD)$(liblttng_ust_provider_ust_tests_demo_la_LINK) $(am_liblttng_ust_provider_ust_tests_demo_la_rpath) $(liblttng_ust_provider_ust_tests_demo_la_OBJECTS) $(liblttng_ust_provider_ust_tests_demo_la_LIBADD) $(LIBS)
 liblttng-ust-provider-ust-tests-demo3.la: $(liblttng_ust_provider_ust_tests_demo3_la_OBJECTS) $(liblttng_ust_provider_ust_tests_demo3_la_DEPENDENCIES) $(EXTRA_liblttng_ust_provider_ust_tests_demo3_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(liblttng_ust_provider_ust_tests_demo3_la_LINK)  $(liblttng_ust_provider_ust_tests_demo3_la_OBJECTS) $(liblttng_ust_provider_ust_tests_demo3_la_LIBADD) $(LIBS)
+	$(AM_V_CCLD)$(liblttng_ust_provider_ust_tests_demo3_la_LINK) $(am_liblttng_ust_provider_ust_tests_demo3_la_rpath) $(liblttng_ust_provider_ust_tests_demo3_la_OBJECTS) $(liblttng_ust_provider_ust_tests_demo3_la_LIBADD) $(LIBS)
 
 clean-noinstPROGRAMS:
 	@list='$(noinst_PROGRAMS)'; test -n "$$list" || exit 0; \
