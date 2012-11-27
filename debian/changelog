@@ -1,3 +1,9 @@
+ust (2.1.0~rc2-1) unstable; urgency=low
+
+  * [13cb8e9] New upstream version 2.1.0~rc2
+
+ -- Jon Bernard <jbernard@debian.org>  Tue, 27 Nov 2012 14:14:40 -0500
+
 ust (2.1.0~rc1-1) unstable; urgency=low
 
   * [62f05c8] Set ust-bin to depend on lttng-tools
