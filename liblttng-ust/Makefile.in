@@ -100,10 +100,10 @@ am__installdirs = "$(DESTDIR)$(libdir)"
 LTLIBRARIES = $(lib_LTLIBRARIES) $(noinst_LTLIBRARIES)
 liblttng_ust_runtime_la_LIBADD =
 am_liblttng_ust_runtime_la_OBJECTS = lttng-ust-comm.lo \
-	lttng-ust-abi.lo ltt-probes.lo lttng-probe-ust.lo \
+	lttng-ust-abi.lo lttng-probes.lo lttng-probe-ust.lo \
 	lttng-context-vtid.lo lttng-context-vpid.lo \
 	lttng-context-pthread-id.lo lttng-context-procname.lo \
-	ltt-context.lo ltt-events.lo lttng-filter.lo \
+	lttng-context.lo lttng-events.lo lttng-filter.lo \
 	lttng-filter-validator.lo lttng-filter-specialize.lo \
 	lttng-filter-interpreter.lo
 liblttng_ust_runtime_la_OBJECTS =  \
@@ -114,9 +114,9 @@ am__v_lt_0 = --silent
 liblttng_ust_support_la_DEPENDENCIES =  \
 	$(top_builddir)/libringbuffer/libringbuffer.la
 am_liblttng_ust_support_la_OBJECTS = ust-core.lo \
-	ltt-ring-buffer-client-discard.lo \
-	ltt-ring-buffer-client-overwrite.lo \
-	ltt-ring-buffer-metadata-client.lo
+	lttng-ring-buffer-client-discard.lo \
+	lttng-ring-buffer-client-overwrite.lo \
+	lttng-ring-buffer-metadata-client.lo
 liblttng_ust_support_la_OBJECTS =  \
 	$(am_liblttng_ust_support_la_OBJECTS)
 liblttng_ust_tracepoint_la_DEPENDENCIES =
@@ -219,7 +219,6 @@ INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
-LIBFORMAT = @LIBFORMAT@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
@@ -310,14 +309,14 @@ target_vendor = @target_vendor@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-AM_CPPFLAGS = -I$(top_srcdir)/include
+AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_builddir)/include
 AM_CFLAGS = -fno-strict-aliasing
 noinst_LTLIBRARIES = liblttng-ust-runtime.la liblttng-ust-support.la
 lib_LTLIBRARIES = liblttng-ust-tracepoint.la liblttng-ust.la
 liblttng_ust_tracepoint_la_SOURCES = \
 	tracepoint.c \
 	tracepoint-internal.h \
-	ltt-tracer-core.h \
+	lttng-tracer-core.h \
 	jhash.h \
 	error.h
 
@@ -329,15 +328,15 @@ liblttng_ust_tracepoint_la_CFLAGS = -DUST_COMPONENT="liblttng_ust_tracepoint" -f
 liblttng_ust_runtime_la_SOURCES = \
 	lttng-ust-comm.c \
 	lttng-ust-abi.c \
-	ltt-probes.c \
+	lttng-probes.c \
 	probes/lttng-probe-ust.c \
 	probes/lttng-probe-ust.h \
 	lttng-context-vtid.c \
 	lttng-context-vpid.c \
 	lttng-context-pthread-id.c \
 	lttng-context-procname.c \
-	ltt-context.c \
-	ltt-events.c \
+	lttng-context.c \
+	lttng-events.c \
 	lttng-filter.c \
 	lttng-filter.h \
 	lttng-filter-validator.c \
@@ -354,14 +353,14 @@ liblttng_ust_runtime_la_SOURCES = \
 	lttng-ust-uuid.h
 
 liblttng_ust_support_la_SOURCES = \
-	ltt-tracer.h \
-	ltt-tracer-core.h \
+	lttng-tracer.h \
+	lttng-tracer-core.h \
 	ust-core.c \
-	ltt-ring-buffer-client.h \
-	ltt-ring-buffer-client-discard.c \
-	ltt-ring-buffer-client-overwrite.c \
-	ltt-ring-buffer-metadata-client.h \
-	ltt-ring-buffer-metadata-client.c
+	lttng-ring-buffer-client.h \
+	lttng-ring-buffer-client-discard.c \
+	lttng-ring-buffer-client-overwrite.c \
+	lttng-ring-buffer-metadata-client.h \
+	lttng-ring-buffer-metadata-client.c
 
 liblttng_ust_la_SOURCES = 
 liblttng_ust_la_LDFLAGS = -no-undefined -version-info $(LTTNG_UST_LIBRARY_VERSION)
@@ -466,21 +465,21 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/liblttng_ust_tracepoint_la-tracepoint.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ltt-context.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ltt-events.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ltt-probes.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ltt-ring-buffer-client-discard.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ltt-ring-buffer-client-overwrite.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ltt-ring-buffer-metadata-client.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-procname.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-pthread-id.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-vpid.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-vtid.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-events.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-filter-interpreter.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-filter-specialize.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-filter-validator.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-filter.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-probe-ust.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-probes.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ring-buffer-client-discard.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ring-buffer-client-overwrite.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ring-buffer-metadata-client.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-abi.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-comm.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ust-core.Plo@am__quote@

@@ -162,7 +162,6 @@ INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
-LIBFORMAT = @LIBFORMAT@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
@@ -253,7 +252,7 @@ target_vendor = @target_vendor@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-AM_CPPFLAGS = -I$(top_srcdir)/include -Wsystem-headers
+AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_builddir)/include -Wsystem-headers
 fork_SOURCES = fork.c ust_tests_fork.h
 fork_LDADD = $(top_builddir)/liblttng-ust/liblttng-ust.la \
 	$(top_builddir)/liblttng-ust-fork/liblttng-ust-fork.la \

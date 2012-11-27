@@ -176,6 +176,7 @@ struct lttng_ust_calibrate {
 struct lttng_ust_filter_bytecode {
 	uint32_t len;
 	uint32_t reloc_offset;
+	uint64_t seqnum;
 	char data[0];
 };
 
@@ -249,7 +250,7 @@ union ust_args {
 
 struct lttng_ust_objd_ops {
 	long (*cmd)(int objd, unsigned int cmd, unsigned long arg,
-		union ust_args *args);
+		union ust_args *args, void *owner);
 	int (*release)(int objd);
 };
 
@@ -261,5 +262,6 @@ int lttng_ust_objd_unref(int id);
 
 void lttng_ust_abi_exit(void);
 void lttng_ust_events_exit(void);
+void lttng_ust_objd_table_owner_cleanup(void *owner);
 
 #endif /* _LTTNG_UST_ABI_H */
