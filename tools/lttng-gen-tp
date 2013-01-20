@@ -31,8 +31,8 @@ class HeaderFile:
 #undef TRACEPOINT_PROVIDER
 #define TRACEPOINT_PROVIDER {providerName}
 
-#undef TRACEPOINT_INCLUDE_FILE
-#define TRACEPOINT_INCLUDE_FILE ./{headerFilename}
+#undef TRACEPOINT_INCLUDE
+#define TRACEPOINT_INCLUDE "./{headerFilename}"
 
 #ifdef __cplusplus
 extern "C"{{
@@ -61,7 +61,7 @@ extern "C"{{
 
     def write(self):
         outputFile = open(self.outputFilename,"w")
-        includeGuard = "_"+self.outputFilename.upper().replace(".","_")
+        includeGuard = self.outputFilename.upper().replace(".","_")
 
         outputFile.write(HeaderFile.HEADER_TPL.format(providerName=self.template.domain,
                                            includeGuard = includeGuard,
@@ -207,8 +207,6 @@ def main(argv=None):
             opts, args = getopt.gnu_getopt(argv[1:], "ho:a", ["help"])
         except getopt.error, msg:
              raise Usage(msg)
-        if len(args) == 0:
-            raise Usage("No template file given")
 
     except Usage, err:
         print >>sys.stderr, err.msg
@@ -224,6 +222,14 @@ def main(argv=None):
             outputNames.append(a)
         if o in ("-a",""):
             all = True
+    try:
+        if len(args) == 0:
+            raise Usage("No template file given")
+
+    except Usage, err:
+        print >>sys.stderr, err.msg
+        print >>sys.stderr, "for help use --help"
+        return 2
 
     doCFile = None
     doHeader = None
@@ -257,6 +263,9 @@ def main(argv=None):
 
     # process arguments
     for arg in args:
+        if arg[-3:] != ".tp":
+                print arg + " does not end in .tp. Skipping."
+                continue
 
         tpl = None
         try:

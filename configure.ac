@@ -1,13 +1,18 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([lttng-ust],[2.1.0-rc2],[mathieu dot desnoyers at efficios dot com])
+AC_INIT([lttng-ust],[2.1.1],[mathieu dot desnoyers at efficios dot com])
 
 # Following the numbering scheme proposed by libtool for the library version
 # http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
+# This is the library version of liblttng-ust.
 AC_SUBST([LTTNG_UST_LIBRARY_VERSION], [0:0:0])
 # note: remember to update tracepoint.h dlopen() to match this version
 # number. TODO: eventually automate by exporting the major number.
+
+# This is the library version of liblttng-ust-ctl, used internally by
+# liblttng-ust, lttng-sessiond, and lttng-consumerd.
+AC_SUBST([LTTNG_UST_CTL_LIBRARY_VERSION], [1:0:0])
 
 AC_CONFIG_AUX_DIR([config])
 AC_CANONICAL_TARGET
@@ -71,6 +76,18 @@ AC_PROG_CC
 AC_PROG_CXX
 AC_PROG_MAKE_SET
 LT_INIT
+
+# rw_PROG_CXX_WORKS
+# Check whether the C++ compiler works.
+AC_CACHE_CHECK([whether the C++ compiler works],
+		[rw_cv_prog_cxx_works],
+		[AC_LANG_PUSH([C++])
+		AC_LINK_IFELSE([AC_LANG_PROGRAM([], [])],
+				[rw_cv_prog_cxx_works=yes],
+				[rw_cv_prog_cxx_works=no])
+		AC_LANG_POP([C++])])
+
+AM_CONDITIONAL([CXX_WORKS], [test "x$rw_cv_prog_cxx_works" = "xyes"])
 
 ## Checks for libraries.
 AC_CHECK_LIB([dl], [dlopen],

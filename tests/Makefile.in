@@ -53,6 +53,8 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
+#SUBDIRS = . hello2 basic basic_long simple_include snprintf test-nevents test-libustinstr-malloc dlopen same_line_marker trace_event register_test tracepoint libustctl_function_tests exit-fast
+@CXX_WORKS_TRUE@am__append_1 = hello.cxx
 subdir = tests
 DIST_COMMON = README $(dist_noinst_SCRIPTS) $(srcdir)/Makefile.am \
 	$(srcdir)/Makefile.in
@@ -129,7 +131,8 @@ AM_RECURSIVE_TARGETS = $(RECURSIVE_TARGETS:-recursive=) \
 	distdir
 ETAGS = etags
 CTAGS = ctags
-DIST_SUBDIRS = $(SUBDIRS)
+DIST_SUBDIRS = . hello hello-static-lib fork ust-basic-tracing \
+	ust-multi-test demo daemon hello.cxx
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 am__relativize = \
   dir0=`pwd`; \
@@ -199,6 +202,7 @@ LIBTOOL = @LIBTOOL@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
+LTTNG_UST_CTL_LIBRARY_VERSION = @LTTNG_UST_CTL_LIBRARY_VERSION@
 LTTNG_UST_LIBRARY_VERSION = @LTTNG_UST_LIBRARY_VERSION@
 MAJOR_VERSION = @MAJOR_VERSION@
 MAKEINFO = @MAKEINFO@
@@ -283,10 +287,8 @@ target_vendor = @target_vendor@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-SUBDIRS = . hello hello-static-lib fork ust-basic-tracing ust-multi-test \
-		demo hello.cxx daemon
-
-#SUBDIRS = . hello2 basic basic_long simple_include snprintf test-nevents test-libustinstr-malloc dlopen same_line_marker trace_event register_test tracepoint libustctl_function_tests exit-fast
+SUBDIRS = . hello hello-static-lib fork ust-basic-tracing \
+	ust-multi-test demo daemon $(am__append_1)
 dist_noinst_SCRIPTS = test_loop runtests trace_matches
 noinst_LIBRARIES = libtap.a
 libtap_a_SOURCES = \
