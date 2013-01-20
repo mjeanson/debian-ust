@@ -10,6 +10,14 @@
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 
 #ifdef __cplusplus
@@ -31,16 +39,31 @@ extern "C" {
 	TRACEPOINT_EVENT_INSTANCE(_provider, _name, _name,		\
 			_TP_PARAMS(_args))
 
-#define TRACEPOINT_INCLUDE	__tp_stringify(TRACEPOINT_INCLUDE_FILE)
 
 #undef TRACEPOINT_CREATE_PROBES
 
 #define TRACEPOINT_HEADER_MULTI_READ
+
+/*
+ * LTTng-UST 2.0 expects TRACEPOINT_INCLUDE_FILE, but this approach has
+ * the unwanted side-effect of expanding any macro name found within
+ * TRACEPOINT_INCLUDE_FILE.
+ *
+ * Starting from LTTng-UST 2.1, we expect the TRACEPOINT_INCLUDE to be
+ * defined by probes as a string. We still check for
+ * TRACEPOINT_INCLUDE_FILE for API backward compatibility.
+ */
+#ifdef TRACEPOINT_INCLUDE_FILE
+#define TRACEPOINT_INCLUDE	__tp_stringify(TRACEPOINT_INCLUDE_FILE)
+#endif
+
 #include TRACEPOINT_INCLUDE
 
 #include <lttng/ust-tracepoint-event.h>
 
 #undef TRACEPOINT_HEADER_MULTI_READ
+#undef TRACEPOINT_INCLUDE_FILE
+#undef TRACEPOINT_INCLUDE
 
 #define TRACEPOINT_CREATE_PROBES
 
