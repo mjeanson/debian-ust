@@ -1,3 +1,9 @@
+ust (2.1.1-1) unstable; urgency=low
+
+  * [97f524d] New upstream version 2.1.1
+
+ -- Jon Bernard <jbernard@debian.org>  Sun, 20 Jan 2013 16:54:48 -0500
+
 ust (2.1.0~rc2-1) unstable; urgency=low
 
   * [13cb8e9] New upstream version 2.1.0~rc2
