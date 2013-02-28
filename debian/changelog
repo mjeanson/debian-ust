@@ -1,3 +1,10 @@
+ust (2.1.1-2) unstable; urgency=low
+
+  * [390e7e4] Include liblttng-ust-ctl library in liblttng-ust0.
+    Thanks to Glenn McGrath
+
+ -- Jon Bernard <jbernard@debian.org>  Thu, 28 Feb 2013 03:48:49 -0500
+
 ust (2.1.1-1) unstable; urgency=low
 
   * [97f524d] New upstream version 2.1.1
