@@ -1,3 +1,9 @@
+ust (2.1.1-3) unstable; urgency=low
+
+  * [9a36287] Only build against systemtap where available
+
+ -- Jon Bernard <jbernard@debian.org>  Wed, 11 Sep 2013 15:31:56 -0400
+
 ust (2.1.1-2) unstable; urgency=low
 
   * [390e7e4] Include liblttng-ust-ctl library in liblttng-ust0.
