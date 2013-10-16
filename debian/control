@@ -2,7 +2,7 @@ Source: ust
 Priority: extra
 Maintainer: Jon Bernard <jbernard@debian.org>
 Build-Depends: debhelper (>= 9), liburcu-dev (>= 0.6.6), uuid-dev, texinfo,
-  systemtap-sdt-dev (>= 1.6) [amd64 armel armhf i386 powerpc s390 s390x]
+  systemtap-sdt-dev (>= 1.6) [amd64 armel armhf i386 powerpc]
 Standards-Version: 3.9.3
 Section: libs
 Vcs-Git: git://git.debian.org/git/collab-maint/ust.git
