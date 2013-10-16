@@ -1,3 +1,10 @@
+ust (2.1.1-5) unstable; urgency=low
+
+  * [1a79688] Replace s390 with s390x
+  * [97e3fcb] Don't build against systemtap-sdt-dev on s390
+
+ -- Jon Bernard <jbernard@debian.org>  Wed, 16 Oct 2013 17:50:09 -0400
+
 ust (2.1.1-4) unstable; urgency=low
 
   * [e9f26ce] Futher restrict the architecture list
