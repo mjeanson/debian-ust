@@ -39,7 +39,7 @@ Section: libdevel
 Architecture: amd64 armel armhf i386 mips mipsel powerpc s390x
 Multi-Arch: same
 Depends: ${misc:Depends}, liblttng-ust0 (= ${binary:Version}),
- liburcu-dev (>= 0.6.6), uuid-dev, systemtap-sdt-dev (>= 1.6)
+ liburcu-dev (>= 0.6.6), uuid-dev, systemtap-sdt-dev (>= 1.6) [amd64 armel armhf i386 powerpc]
 Recommends: python
 Replaces: libust-dev (<< 2.0.4-1~)
 Breaks: libust-dev (<< 2.0.4-1~)
