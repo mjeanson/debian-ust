@@ -1,3 +1,9 @@
+ust (2.1.1-6) unstable; urgency=low
+
+  * [c06ec11] Restrict liblttng-ust-dev's systemtap-sdt-dev dependency
+
+ -- Jon Bernard <jbernard@debian.org>  Fri, 18 Oct 2013 12:43:26 -0400
+
 ust (2.1.1-5) unstable; urgency=low
 
   * [1a79688] Replace s390 with s390x
