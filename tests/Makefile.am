@@ -1,16 +1,26 @@
-SUBDIRS = . hello hello-static-lib fork ust-basic-tracing ust-multi-test \
-		demo daemon
-#SUBDIRS = . hello2 basic basic_long simple_include snprintf test-nevents test-libustinstr-malloc dlopen same_line_marker trace_event register_test tracepoint libustctl_function_tests exit-fast
+SUBDIRS = utils hello same_line_tracepoint snprintf benchmark
 
 if CXX_WORKS
 SUBDIRS += hello.cxx
 endif
 
-dist_noinst_SCRIPTS = test_loop runtests trace_matches
+SCRIPT_LIST = test_loop run.sh unit_tests
 
-noinst_LIBRARIES = libtap.a
+dist_noinst_SCRIPTS = $(SCRIPT_LIST)
 
-libtap_a_SOURCES = \
-	tap.c \
-	tap.h
+all-local:
+	@if [ x"$(srcdir)" != x"$(builddir)" ]; then \
+		for script in $(SCRIPT_LIST); do \
+			cp -f $(srcdir)/$$script $(builddir); \
+		done; \
+	fi
 
+clean-local:
+	@if [ x"$(srcdir)" != x"$(builddir)" ]; then \
+		for script in $(SCRIPT_LIST); do \
+			rm -f $(builddir)/$$script; \
+		done; \
+	fi
+
+check-am:
+	./run.sh unit_tests

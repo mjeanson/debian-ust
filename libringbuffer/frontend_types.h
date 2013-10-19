@@ -29,6 +29,7 @@
  */
 
 #include <string.h>
+#include <time.h>	/* for timer_t */
 
 #include <urcu/list.h>
 #include <urcu/uatomic.h>
@@ -37,6 +38,7 @@
 #include <usterr-signal-safe.h>
 #include "backend_types.h"
 #include "shm_internal.h"
+#include "shm_types.h"
 #include "vatomic.h"
 
 /*
@@ -46,6 +48,7 @@
 enum switch_mode { SWITCH_ACTIVE, SWITCH_FLUSH };
 
 /* channel: collection of per-cpu ring buffers. */
+#define RB_CHANNEL_PADDING		32
 struct channel {
 	int record_disabled;
 	unsigned long commit_count_mask;	/*
@@ -55,12 +58,19 @@ struct channel {
 						 * subbuffer index.
 						 */
 
-	unsigned long switch_timer_interval;	/* Buffer flush (jiffies) */
-	unsigned long read_timer_interval;	/* Reader wakeup (jiffies) */
-	//wait_queue_head_t read_wait;		/* reader wait queue */
+	unsigned long switch_timer_interval;	/* Buffer flush (us) */
+	timer_t switch_timer;
+	int switch_timer_enabled;
+
+	unsigned long read_timer_interval;	/* Reader wakeup (us) */
+	timer_t read_timer;
+	int read_timer_enabled;
+
 	int finalized;				/* Has channel been finalized */
 	size_t priv_data_offset;
-	/* Note: padding field is missing */
+	unsigned int nr_streams;		/* Number of streams */
+	struct lttng_ust_shm_handle *handle;
+	char padding[RB_CHANNEL_PADDING];
 	/*
 	 * Associated backend contains a variable-length array. Needs to
 	 * be last member.
@@ -108,7 +118,6 @@ struct lttng_ust_lib_ring_buffer {
 					 * Active readers count
 					 * standard atomic access (shared)
 					 */
-	long active_shadow_readers;
 					/* Dropped records */
 	union v_atomic records_lost_full;	/* Buffer full */
 	union v_atomic records_lost_wrap;	/* Nested wrap-around */
@@ -117,14 +126,10 @@ struct lttng_ust_lib_ring_buffer {
 	union v_atomic records_overrun;	/* Number of overwritten records */
 	//wait_queue_head_t read_wait;	/* reader buffer-level wait queue */
 	int finalized;			/* buffer has been finalized */
-	//struct timer_list switch_timer;	/* timer for periodical switch */
-	//struct timer_list read_timer;	/* timer for read poll */
 	unsigned long get_subbuf_consumed;	/* Read-side consumed */
 	unsigned long prod_snapshot;	/* Producer count snapshot */
 	unsigned long cons_snapshot;	/* Consumer count snapshot */
-	unsigned int get_subbuf:1,	/* Sub-buffer being held by reader */
-		switch_timer_enabled:1,	/* Protected by ring_buffer_nohz_lock */
-		read_timer_enabled:1;	/* Protected by ring_buffer_nohz_lock */
+	unsigned int get_subbuf:1;	/* Sub-buffer being held by reader */
 	/* shmp pointer to self */
 	DECLARE_SHMP(struct lttng_ust_lib_ring_buffer, self);
 	char padding[RB_RING_BUFFER_PADDING];
@@ -161,7 +166,7 @@ void *channel_get_private(struct channel *chan)
 			uatomic_inc(&__chan->record_disabled);		\
 			WARN_ON(1);					\
 		}							\
-		_____ret;						\
+		_____ret = _____ret; /* For clang "unused result". */	\
 	})
 
 #endif /* _LTTNG_RING_BUFFER_FRONTEND_TYPES_H */

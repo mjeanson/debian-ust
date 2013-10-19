@@ -52,8 +52,6 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
-@LTTNG_UST_BUILD_WITH_LIBUUID_TRUE@am__append_1 = -luuid
-@LTTNG_UST_BUILD_WITH_LIBC_UUID_TRUE@am__append_2 = -lc
 subdir = liblttng-ust
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -100,12 +98,11 @@ am__installdirs = "$(DESTDIR)$(libdir)"
 LTLIBRARIES = $(lib_LTLIBRARIES) $(noinst_LTLIBRARIES)
 liblttng_ust_runtime_la_LIBADD =
 am_liblttng_ust_runtime_la_OBJECTS = lttng-ust-comm.lo \
-	lttng-ust-abi.lo lttng-probes.lo lttng-probe-ust.lo \
-	lttng-context-vtid.lo lttng-context-vpid.lo \
-	lttng-context-pthread-id.lo lttng-context-procname.lo \
-	lttng-context.lo lttng-events.lo lttng-filter.lo \
-	lttng-filter-validator.lo lttng-filter-specialize.lo \
-	lttng-filter-interpreter.lo
+	lttng-ust-abi.lo lttng-probes.lo lttng-context-vtid.lo \
+	lttng-context-vpid.lo lttng-context-pthread-id.lo \
+	lttng-context-procname.lo lttng-context-ip.lo lttng-context.lo \
+	lttng-events.lo lttng-filter.lo lttng-filter-validator.lo \
+	lttng-filter-specialize.lo lttng-filter-interpreter.lo
 liblttng_ust_runtime_la_OBJECTS =  \
 	$(am_liblttng_ust_runtime_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -115,11 +112,14 @@ liblttng_ust_support_la_DEPENDENCIES =  \
 	$(top_builddir)/libringbuffer/libringbuffer.la
 am_liblttng_ust_support_la_OBJECTS = ust-core.lo \
 	lttng-ring-buffer-client-discard.lo \
+	lttng-ring-buffer-client-discard-rt.lo \
 	lttng-ring-buffer-client-overwrite.lo \
+	lttng-ring-buffer-client-overwrite-rt.lo \
 	lttng-ring-buffer-metadata-client.lo
 liblttng_ust_support_la_OBJECTS =  \
 	$(am_liblttng_ust_support_la_OBJECTS)
-liblttng_ust_tracepoint_la_DEPENDENCIES =
+liblttng_ust_tracepoint_la_DEPENDENCIES =  \
+	$(top_builddir)/snprintf/libustsnprintf.la
 am_liblttng_ust_tracepoint_la_OBJECTS =  \
 	liblttng_ust_tracepoint_la-tracepoint.lo
 liblttng_ust_tracepoint_la_OBJECTS =  \
@@ -128,12 +128,11 @@ liblttng_ust_tracepoint_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(liblttng_ust_tracepoint_la_CFLAGS) $(CFLAGS) \
 	$(liblttng_ust_tracepoint_la_LDFLAGS) $(LDFLAGS) -o $@
-am__DEPENDENCIES_1 =
 liblttng_ust_la_DEPENDENCIES =  \
 	$(top_builddir)/snprintf/libustsnprintf.la \
 	$(top_builddir)/liblttng-ust-comm/liblttng-ust-comm.la \
-	liblttng-ust-runtime.la liblttng-ust-support.la \
-	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
+	liblttng-ust-tracepoint.la liblttng-ust-runtime.la \
+	liblttng-ust-support.la
 am_liblttng_ust_la_OBJECTS =
 liblttng_ust_la_OBJECTS = $(am_liblttng_ust_la_OBJECTS)
 liblttng_ust_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
@@ -322,7 +321,8 @@ liblttng_ust_tracepoint_la_SOURCES = \
 	error.h
 
 liblttng_ust_tracepoint_la_LIBADD = \
-	-lurcu-bp
+	-lurcu-bp \
+	$(top_builddir)/snprintf/libustsnprintf.la
 
 liblttng_ust_tracepoint_la_LDFLAGS = -no-undefined -version-info $(LTTNG_UST_LIBRARY_VERSION)
 liblttng_ust_tracepoint_la_CFLAGS = -DUST_COMPONENT="liblttng_ust_tracepoint" -fno-strict-aliasing
@@ -330,12 +330,11 @@ liblttng_ust_runtime_la_SOURCES = \
 	lttng-ust-comm.c \
 	lttng-ust-abi.c \
 	lttng-probes.c \
-	probes/lttng-probe-ust.c \
-	probes/lttng-probe-ust.h \
 	lttng-context-vtid.c \
 	lttng-context-vpid.c \
 	lttng-context-pthread-id.c \
 	lttng-context-procname.c \
+	lttng-context-ip.c \
 	lttng-context.c \
 	lttng-events.c \
 	lttng-filter.c \
@@ -350,8 +349,8 @@ liblttng_ust_runtime_la_SOURCES = \
 	compat.h \
 	wait.h \
 	jhash.h \
-	error.h \
-	lttng-ust-uuid.h
+	lttng-ust-uuid.h \
+	error.h
 
 liblttng_ust_support_la_SOURCES = \
 	lttng-tracer.h \
@@ -359,7 +358,9 @@ liblttng_ust_support_la_SOURCES = \
 	ust-core.c \
 	lttng-ring-buffer-client.h \
 	lttng-ring-buffer-client-discard.c \
+	lttng-ring-buffer-client-discard-rt.c \
 	lttng-ring-buffer-client-overwrite.c \
+	lttng-ring-buffer-client-overwrite-rt.c \
 	lttng-ring-buffer-metadata-client.h \
 	lttng-ring-buffer-metadata-client.c
 
@@ -368,12 +369,15 @@ liblttng_ust_la_LDFLAGS = -no-undefined -version-info $(LTTNG_UST_LIBRARY_VERSIO
 liblttng_ust_support_la_LIBADD = \
 	$(top_builddir)/libringbuffer/libringbuffer.la
 
-liblttng_ust_la_LIBADD = -lpthread -lrt -lurcu-cds \
-	-llttng-ust-tracepoint \
+liblttng_ust_la_LIBADD = \
+	-lpthread \
+	-lrt \
+	-lurcu-cds \
 	$(top_builddir)/snprintf/libustsnprintf.la \
 	$(top_builddir)/liblttng-ust-comm/liblttng-ust-comm.la \
-	liblttng-ust-runtime.la liblttng-ust-support.la \
-	$(am__append_1) $(am__append_2)
+	liblttng-ust-tracepoint.la \
+	liblttng-ust-runtime.la liblttng-ust-support.la
+
 liblttng_ust_la_CFLAGS = -DUST_COMPONENT="liblttng_ust" -fno-strict-aliasing
 all: all-am
 
@@ -466,6 +470,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/liblttng_ust_tracepoint_la-tracepoint.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-ip.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-procname.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-pthread-id.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-vpid.Plo@am__quote@
@@ -476,9 +481,10 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-filter-specialize.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-filter-validator.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-filter.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-probe-ust.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-probes.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ring-buffer-client-discard-rt.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ring-buffer-client-discard.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ring-buffer-client-overwrite-rt.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ring-buffer-client-overwrite.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ring-buffer-metadata-client.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-abi.Plo@am__quote@
@@ -505,13 +511,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LTCOMPILE) -c -o $@ $<
-
-lttng-probe-ust.lo: probes/lttng-probe-ust.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT lttng-probe-ust.lo -MD -MP -MF $(DEPDIR)/lttng-probe-ust.Tpo -c -o lttng-probe-ust.lo `test -f 'probes/lttng-probe-ust.c' || echo '$(srcdir)/'`probes/lttng-probe-ust.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/lttng-probe-ust.Tpo $(DEPDIR)/lttng-probe-ust.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='probes/lttng-probe-ust.c' object='lttng-probe-ust.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o lttng-probe-ust.lo `test -f 'probes/lttng-probe-ust.c' || echo '$(srcdir)/'`probes/lttng-probe-ust.c
 
 liblttng_ust_tracepoint_la-tracepoint.lo: tracepoint.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(liblttng_ust_tracepoint_la_CFLAGS) $(CFLAGS) -MT liblttng_ust_tracepoint_la-tracepoint.lo -MD -MP -MF $(DEPDIR)/liblttng_ust_tracepoint_la-tracepoint.Tpo -c -o liblttng_ust_tracepoint_la-tracepoint.lo `test -f 'tracepoint.c' || echo '$(srcdir)/'`tracepoint.c

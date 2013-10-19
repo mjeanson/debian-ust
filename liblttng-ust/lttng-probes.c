@@ -38,68 +38,69 @@
 /*
  * probe list is protected by ust_lock()/ust_unlock().
  */
-CDS_LIST_HEAD(probe_list);
+static CDS_LIST_HEAD(_probe_list);
 
-struct cds_list_head *lttng_get_probe_list_head(void)
-{
-	return &probe_list;
-}
+/*
+ * List of probes registered by not yet processed.
+ */
+static CDS_LIST_HEAD(lazy_probe_init);
 
+/*
+ * lazy_nesting counter ensures we don't trigger lazy probe registration
+ * fixup while we are performing the fixup. It is protected by the ust
+ * mutex.
+ */
+static int lazy_nesting;
+
+/*
+ * Called under ust lock.
+ */
 static
-const struct lttng_probe_desc *find_provider(const char *provider)
+int check_event_provider(struct lttng_probe_desc *desc)
 {
-	struct lttng_probe_desc *iter;
-
-	cds_list_for_each_entry(iter, &probe_list, head) {
-		if (!strcmp(iter->provider, provider))
-			return iter;
-	}
-	return NULL;
-}
-
-static
-const struct lttng_event_desc *find_event(const char *name)
-{
-	struct lttng_probe_desc *probe_desc;
 	int i;
+	size_t provider_name_len;
 
-	cds_list_for_each_entry(probe_desc, &probe_list, head) {
-		for (i = 0; i < probe_desc->nr_events; i++) {
-			if (!strncmp(probe_desc->event_desc[i]->name, name,
-					LTTNG_UST_SYM_NAME_LEN - 1))
-				return probe_desc->event_desc[i];
-		}
-	}
-	return NULL;
-}
-
-int lttng_probe_register(struct lttng_probe_desc *desc)
-{
-	struct lttng_probe_desc *iter;
-	int ret = 0;
-	int i;
-
-	ust_lock();
-	if (find_provider(desc->provider)) {
-		ret = -EEXIST;
-		goto end;
-	}
-	/*
-	 * TODO: This is O(N^2). Turn into a hash table when probe registration
-	 * overhead becomes an issue.
-	 */
+	provider_name_len = strnlen(desc->provider,
+				LTTNG_UST_SYM_NAME_LEN - 1);
 	for (i = 0; i < desc->nr_events; i++) {
-		if (find_event(desc->event_desc[i]->name)) {
-			ret = -EEXIST;
-			goto end;
-		}
+		if (strncmp(desc->event_desc[i]->name,
+				desc->provider,
+				provider_name_len))
+			return 0;	/* provider mismatch */
 	}
+	return 1;
+}
+
+/*
+ * Called under ust lock.
+ */
+static
+void lttng_lazy_probe_register(struct lttng_probe_desc *desc)
+{
+	struct lttng_probe_desc *iter;
+	struct cds_list_head *probe_list;
+
+	/*
+	 * Each provider enforce that every event name begins with the
+	 * provider name. Check this in an assertion for extra
+	 * carefulness. This ensures we cannot have duplicate event
+	 * names across providers.
+	 */
+	assert(check_event_provider(desc));
+
+	/*
+	 * The provider ensures there are no duplicate event names.
+	 * Duplicated TRACEPOINT_EVENT event names would generate a
+	 * compile-time error due to duplicated symbol names.
+	 */
 
 	/*
 	 * We sort the providers by struct lttng_probe_desc pointer
 	 * address.
 	 */
-	cds_list_for_each_entry_reverse(iter, &probe_list, head) {
+	probe_list = &_probe_list;
+	cds_list_for_each_entry_reverse(iter, probe_list, head) {
 		BUG_ON(iter == desc); /* Should never be in the list twice */
 		if (iter < desc) {
 			/* We belong to the location right after iter. */
@@ -108,22 +109,118 @@ int lttng_probe_register(struct lttng_probe_desc *desc)
 		}
 	}
 	/* We should be added at the head of the list */
-	cds_list_add(&desc->head, &probe_list);
+	cds_list_add(&desc->head, probe_list);
 desc_added:
 	DBG("just registered probe %s containing %u events",
 		desc->provider, desc->nr_events);
-	/*
-	 * fix the events awaiting probe load.
-	 */
-	for (i = 0; i < desc->nr_events; i++) {
-		const struct lttng_event_desc *ed;
+}
 
-		ed = desc->event_desc[i];
-		DBG("Registered event probe \"%s\" with signature \"%s\"",
-			ed->name, ed->signature);
-		ret = lttng_fix_pending_event_desc(ed);
-		assert(!ret);
+/*
+ * Called under ust lock.
+ */
+static
+void fixup_lazy_probes(void)
+{
+	struct lttng_probe_desc *iter, *tmp;
+	int ret;
+
+	lazy_nesting++;
+	cds_list_for_each_entry_safe(iter, tmp,
+			&lazy_probe_init, lazy_init_head) {
+		lttng_lazy_probe_register(iter);
+		iter->lazy = 0;
+		cds_list_del(&iter->lazy_init_head);
 	}
+	ret = lttng_fix_pending_events();
+	assert(!ret);
+	lazy_nesting--;
+}
+
+/*
+ * Called under ust lock.
+ */
+struct cds_list_head *lttng_get_probe_list_head(void)
+{
+	if (!lazy_nesting && !cds_list_empty(&lazy_probe_init))
+		fixup_lazy_probes();
+	return &_probe_list;
+}
+
+static
+const struct lttng_probe_desc *find_provider(const char *provider)
+{
+	struct lttng_probe_desc *iter;
+	struct cds_list_head *probe_list;
+
+	probe_list = lttng_get_probe_list_head();
+	cds_list_for_each_entry(iter, probe_list, head) {
+		if (!strcmp(iter->provider, provider))
+			return iter;
+	}
+	return NULL;
+}
+
+static
+int check_provider_version(struct lttng_probe_desc *desc)
+{
+	/*
+	 * Check tracepoint provider version compatibility.
+	 */
+	if (desc->major <= LTTNG_UST_PROVIDER_MAJOR) {
+		DBG("Provider \"%s\" accepted, version %u.%u is compatible "
+			"with LTTng UST provider version %u.%u.",
+			desc->provider, desc->major, desc->minor,
+			LTTNG_UST_PROVIDER_MAJOR,
+			LTTNG_UST_PROVIDER_MINOR);
+		if (desc->major < LTTNG_UST_PROVIDER_MAJOR) {
+			DBG("However, some LTTng UST features might not be "
+				"available for this provider unless it is "
+				"recompiled against a more recent LTTng UST.");
+		}
+		return 1;		/* accept */
+	} else {
+		ERR("Provider \"%s\" rejected, version %u.%u is incompatible "
+			"with LTTng UST provider version %u.%u. Please upgrade "
+			"LTTng UST.",
+			desc->provider, desc->major, desc->minor,
+			LTTNG_UST_PROVIDER_MAJOR,
+			LTTNG_UST_PROVIDER_MINOR);
+		return 0;		/* reject */
+	}
+}
+
+
+int lttng_probe_register(struct lttng_probe_desc *desc)
+{
+	int ret = 0;
+
+	/*
+	 * If version mismatch, don't register, but don't trigger assert
+	 * on caller. The version check just prints an error.
+	 */
+	if (!check_provider_version(desc))
+		return 0;
+
+	ust_lock();
+
+	/*
+	 * Check if the provider has already been registered.
+	 */
+	if (find_provider(desc->provider)) {
+		ret = -EEXIST;
+		goto end;
+	}
+	cds_list_add(&desc->lazy_init_head, &lazy_probe_init);
+	desc->lazy = 1;
+	DBG("adding probe %s containing %u events to lazy registration list",
+		desc->provider, desc->nr_events);
+	/*
+	 * If there is at least one active session, we need to register
+	 * the probe immediately, since we cannot delay event
+	 * registration because they are needed ASAP.
+	 */
+	if (lttng_session_active())
+		fixup_lazy_probes();
 end:
 	ust_unlock();
 	return ret;
@@ -137,8 +234,14 @@ int ltt_probe_register(struct lttng_probe_desc *desc)
 
 void lttng_probe_unregister(struct lttng_probe_desc *desc)
 {
+	if (!check_provider_version(desc))
+		return;
+
 	ust_lock();
-	cds_list_del(&desc->head);
+	if (!desc->lazy)
+		cds_list_del(&desc->head);
+	else
+		cds_list_del(&desc->lazy_init_head);
 	DBG("just unregistered probe %s", desc->provider);
 	ust_unlock();
 }
@@ -147,23 +250,6 @@ void lttng_probe_unregister(struct lttng_probe_desc *desc)
 void ltt_probe_unregister(struct lttng_probe_desc *desc)
 {
 	lttng_probe_unregister(desc);
-}
-
-/*
- * called with UST lock held.
- */
-const struct lttng_event_desc *lttng_event_get(const char *name)
-{
-	const struct lttng_event_desc *event;
-
-	event = find_event(name);
-	if (!event)
-		return NULL;
-	return event;
-}
-
-void lttng_event_put(const struct lttng_event_desc *event)
-{
 }
 
 void lttng_probes_prune_event_list(struct lttng_ust_tracepoint_list *list)
@@ -183,9 +269,11 @@ int lttng_probes_get_event_list(struct lttng_ust_tracepoint_list *list)
 {
 	struct lttng_probe_desc *probe_desc;
 	int i;
+	struct cds_list_head *probe_list;
 
+	probe_list = lttng_get_probe_list_head();
 	CDS_INIT_LIST_HEAD(&list->head);
-	cds_list_for_each_entry(probe_desc, &probe_list, head) {
+	cds_list_for_each_entry(probe_desc, probe_list, head) {
 		for (i = 0; i < probe_desc->nr_events; i++) {
 			struct tp_list_entry *list_entry;
 
@@ -253,9 +341,11 @@ int lttng_probes_get_field_list(struct lttng_ust_field_list *list)
 {
 	struct lttng_probe_desc *probe_desc;
 	int i;
+	struct cds_list_head *probe_list;
 
+	probe_list = lttng_get_probe_list_head();
 	CDS_INIT_LIST_HEAD(&list->head);
-	cds_list_for_each_entry(probe_desc, &probe_list, head) {
+	cds_list_for_each_entry(probe_desc, probe_list, head) {
 		for (i = 0; i < probe_desc->nr_events; i++) {
 			const struct lttng_event_desc *event_desc =
 				probe_desc->event_desc[i];

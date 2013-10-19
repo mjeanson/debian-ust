@@ -598,8 +598,8 @@ uninstall-am: uninstall-libLTLIBRARIES
 @BUILD_JNI_INTERFACE_TRUE@all: LTTngUst.class org_lttng_ust_LTTngUst.h liblttng-ust-java.jar
 
 @BUILD_JNI_INTERFACE_TRUE@clean-local:
-@BUILD_JNI_INTERFACE_TRUE@	rm org_lttng_ust_LTTngUst.h
-@BUILD_JNI_INTERFACE_TRUE@	rm liblttng-ust-java.jar
+@BUILD_JNI_INTERFACE_TRUE@	rm -f org_lttng_ust_LTTngUst.h
+@BUILD_JNI_INTERFACE_TRUE@	rm -f liblttng-ust-java.jar
 @BUILD_JNI_INTERFACE_TRUE@	rm -rf org/
 
 @BUILD_JNI_INTERFACE_TRUE@LTTngUst.c: org_lttng_ust_LTTngUst.h

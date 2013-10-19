@@ -9,31 +9,35 @@
 # Permission to modify the code and to distribute modified code is
 # granted, provided the above notices are retained, and a notice that
 # the code was modified is included with the above copyright notice.
-
-# This makefile is not using automake so that people can see how to make
-# simply. It builds a program with a statically embedded tracepoint
-# provider probe.
+#
+# This makefile is not using automake so that users can see how to build
+# a program with a statically embedded tracepoint provider probe.
 # the "html" target helps for documentation (req. code2html)
+#
+# This makefile is purposefully kept simple to support GNU and BSD make.
 
 CC = gcc
 LIBS = -ldl -llttng-ust		# On Linux
 #LIBS = -lc -llttng-ust		# On BSD
-CFLAGS = -I.
+LOCAL_CPPFLAGS += -I.
 
 all: sample
 
 sample: sample.o tp.o
-	$(CC) -o $@ $^ $(LIBS)
+	$(CC) -o $@ $(LDFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(AM_CFLAGS) \
+		sample.o tp.o $(LIBS)
 
 sample.o: sample.c sample_component_provider.h
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CPPFLAGS) $(LOCAL_CPPFLAGS) $(CFLAGS) $(AM_CPPFLAGS) \
+		$(AM_CFLAGS) -c -o $@ $<
 
 tp.o: tp.c sample_component_provider.h
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CPPFLAGS) $(LOCAL_CPPFLAGS) $(CFLAGS) $(AM_CPPFLAGS) \
+		$(AM_CFLAGS) -c -o $@ $<
 
 html: sample_component_provider.html sample.html tp.html
 
-%.html: %.c 
+%.html: %.c
 	code2html -lc $< $@
 
 %.html : %.h
@@ -41,5 +45,5 @@ html: sample_component_provider.html sample.html tp.html
 
 .PHONY: clean
 clean:
-	rm -f *.html  
+	rm -f *.html
 	rm -f *.o sample

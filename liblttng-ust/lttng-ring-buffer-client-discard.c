@@ -31,4 +31,5 @@
 	lttng_ring_buffer_client_discard_exit
 #define LTTNG_CLIENT_TYPE			LTTNG_CLIENT_DISCARD
 #define LTTNG_CLIENT_CALLBACKS			lttng_client_callbacks_discard
+#define LTTNG_CLIENT_WAKEUP			RING_BUFFER_WAKEUP_BY_WRITER
 #include "lttng-ring-buffer-client.h"

@@ -1,7 +1,7 @@
 .TH "LTTNG-UST" "3" "February 16, 2012" "" ""
 
 .SH "NAME"
-lttng-ust \(em Linux Trace Toolkit Next Generation User-Space Tracer
+lttng-ust \(em Linux Trace Toolkit Next Generation User-Space Tracer 2.x
 
 .SH "SYNOPSIS"
 
@@ -40,11 +40,11 @@ focus on the various types that can be recorded into a trace event:
 TRACEPOINT_EVENT(
 	/*
 	 * provider name, not a variable but a string starting with a
-	 * letter and containing either letters, numbers or underscores. 
+	 * letter and containing either letters, numbers or underscores.
 	 * Needs to be the same as TRACEPOINT_PROVIDER. Needs to
 	 * follow the namespacing guide-lines in lttng/tracepoint.h:
-	 * 
-	 * Must be included before include tracepoint provider 
+	 *
+	 * Must be included before include tracepoint provider
 	 * ex.: project_event
 	 * ex.: project_component_event
 	 *
@@ -59,19 +59,19 @@ TRACEPOINT_EVENT(
 	/*
 	 * tracepoint name, same format as sample provider. Does not
 	 * need to be declared before. in this case the name is
-	 * "message" 
+	 * "message"
 	 */
 	message,
 
 	/*
-	 * TP_ARGS macro contains the arguments passed for the tracepoint 
+	 * TP_ARGS macro contains the arguments passed for the tracepoint
 	 * it is in the following format
 	 *	      TP_ARGS(type1, name1, type2, name2, ... type10,
 				 name10)
-	 * where there can be from zero to ten elements. 
-	 * typeN is the datatype, such as int, struct or double **. 
+	 * where there can be from zero to ten elements.
+	 * typeN is the datatype, such as int, struct or double **.
 	 * name is the variable name (in "int myInt" the name would be
-	 * myint) 
+	 * myint)
 	 *	      TP_ARGS() is valid to mean no arguments
 	 *	      TP_ARGS(void) is valid too
 	 */
@@ -80,7 +80,7 @@ TRACEPOINT_EVENT(
 		 double, doublearg, float, floatarg),
 
 	/*
-	 * TP_FIELDS describes how to write the fields of the trace event. 
+	 * TP_FIELDS describes how to write the fields of the trace event.
 	 * You can put expressions in the "argument expression" area,
 	 * typically using the input arguments from TP_ARGS.
 	 */
@@ -109,27 +109,34 @@ TRACEPOINT_EVENT(
 		/*
 		 * ctf_array: a statically-sized array.
 		 * args: (type, field name, argument expression, value)
-		 */ 
+		 */
 		ctf_array(long, arrfield1, values, 3)
 
 		/*
 		 * ctf_array_text: a statically-sized array, printed as
 		 * a string. No need to be terminated by a null
 		 * character.
-		 */ 
+		 * Behavior is undefined if "text" argument is NULL.
+		 */
 		ctf_array_text(char, arrfield2, text, 10)
 
 		/*
 		 * ctf_sequence: a dynamically-sized array.
 		 * args: (type, field name, argument expression,
 		 *	type of length expression, length expression)
-		 */ 
+		 * The "type of length expression" needs to be an
+		 * unsigned type. As a reminder, "unsigned char" should
+		 * be preferred to "char", since the signedness of
+		 * "char" is implementation-defined.
+		 * Behavior is undefined if "text" argument is NULL.
+		 */
 		ctf_sequence(char, seqfield1, text,
 			     size_t, textlen)
 
 		/*
 		 * ctf_sequence_text: a dynamically-sized array, printed
 		 * as string. No need to be null-terminated.
+		 * Behavior is undefined if "text" argument is NULL.
 		 */
 		ctf_sequence_text(char, seqfield2, text,
 			     size_t, textlen)
@@ -137,6 +144,7 @@ TRACEPOINT_EVENT(
 		/*
 		 * ctf_string: null-terminated string.
 		 * args: (field name, argument expression)
+		 * Behavior is undefined if "text" argument is NULL.
 		 */
 		ctf_string(stringfield, text)
 
@@ -148,6 +156,11 @@ TRACEPOINT_EVENT(
 		ctf_float(double, doublefield, doublearg)
 	)
 )
+
+There can be an arbitrary number of tracepoint providers within an
+application, but they must each have their own provider name. Duplicate
+provider names are not allowed.
+
 .fi
 
 .SH "ASSIGNING LOGLEVEL TO EVENTS"
@@ -168,54 +181,54 @@ declared before declaring a TRACEPOINT_LOGLEVEL.
 
 The loglevels go from 0 to 14. Higher numbers imply the most verbosity
 (higher event throughput expected.
-  
+
 Loglevels 0 through 6, and loglevel 14, match syslog(3) loglevels
 semantic. Loglevels 7 through 13 offer more fine-grained selection of
 debug information.
-  
+
    TRACE_EMERG           0
    system is unusable
-  
+
    TRACE_ALERT           1
    action must be taken immediately
-  
+
    TRACE_CRIT            2
    critical conditions
-  
+
    TRACE_ERR             3
    error conditions
-  
+
    TRACE_WARNING         4
    warning conditions
-  
+
    TRACE_NOTICE          5
    normal, but significant, condition
-  
+
    TRACE_INFO            6
    informational message
-  
+
    TRACE_DEBUG_SYSTEM    7
    debug information with system-level scope (set of programs)
-  
+
    TRACE_DEBUG_PROGRAM   8
    debug information with program-level scope (set of processes)
-  
+
    TRACE_DEBUG_PROCESS   9
    debug information with process-level scope (set of modules)
-  
+
    TRACE_DEBUG_MODULE    10
    debug information with module (executable/library) scope (set of
    units)
-  
+
    TRACE_DEBUG_UNIT      11
    debug information with compilation unit scope (set of functions)
-  
+
    TRACE_DEBUG_FUNCTION  12
    debug information with function-level scope
-  
+
    TRACE_DEBUG_LINE      13
    debug information with line-level scope (TRACEPOINT_EVENT default)
-  
+
    TRACE_DEBUG           14
    debug-level message (trace_printf default)
 
@@ -264,8 +277,10 @@ carefully:
       library with "\-llttng-ust".
     - Include the tracepoint provider header into all C files using
       the provider.
-    - Example:
-        tests/hello/  hello.c tp.c ust_tests_hello.h Makefile.example
+    - Examples:
+      - doc/examples/easy-ust/   sample.c sample_component_provider.h tp.c
+        Makefile
+      - doc/examples/hello-static-lib/   hello.c tp.c ust_test_hello.h Makefile
 
   2) Compile the Tracepoint Provider separately from the application,
      using dynamic linking:
@@ -280,15 +295,15 @@ carefully:
     - Link application with "\-ldl".
     - Set a LD_PRELOAD environment to preload the tracepoint provider
       shared object before starting the application when tracing is
-      needed.
+      needed. Another way is to dlopen the tracepoint probe when needed
+      by the application.
     - Example:
-      - tests/demo/   demo.c  tp*.c ust_tests_demo*.h demo-trace
+      - doc/examples/demo   demo.c  tp*.c ust_tests_demo*.h demo-trace Makefile
 
-  - Note about dlopen() usage: due to locking side-effects due to the
-    way libc lazily resolves Thread-Local Storage (TLS) symbols when a
-    library is dlopen'd, linking the tracepoint probe or liblttng-ust
-    with dlopen() is discouraged. They should be linked with the
-    application using "\-llibname" or loaded with LD_PRELOAD.
+  - Note about dlclose() usage: it is not safe to use dlclose on a
+    provider shared object that is being actively used for tracing due
+    to a lack of reference counting from lttng-ust to the used shared
+    object.
   - Enable instrumentation and control tracing with the "lttng" command
     from lttng-tools. See lttng-tools doc/quickstart.txt.
   - Note for C++ support: although an application instrumented with
@@ -360,12 +375,26 @@ startup time.
 .SH "SEE ALSO"
 
 .PP
-lttng-gen-tp(1), lttng(1), babeltrace(1), lttng-sessiond(8)
+lttng-gen-tp(1), lttng(1), babeltrace(1), lttng-ust-cyg-profile(3),
+lttng-sessiond(8)
 .PP
+
+.SH "COMPATIBILITY"
+
+.PP
+Older lttng-ust libraries reject more recent, and incompatible, probe
+providers. Newer lttng-ust librairies accept older probe providers, even
+though some newer features might not be available with those providers.
+.PP
+
 .SH "BUGS"
 
 .PP
-No knows bugs at this point.
+LTTng-UST 2.0 and 2.1 lttng-ust libraries do not check for probe
+provider version compatibility. This can lead to out-of-bound accesses
+when using a more recent probe provider with an older lttng-ust library.
+These error only trigger when tracing is active. This issue has been
+fixed in LTTng-UST 2.2.
 
 If you encounter any issues or usability problem, please report it on
 our mailing list <lttng-dev@lists.lttng.org> to help improve this

@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([lttng-ust],[2.1.1],[mathieu dot desnoyers at efficios dot com])
+AC_INIT([lttng-ust],[2.3.0],[mathieu dot desnoyers at efficios dot com])
 
 # Following the numbering scheme proposed by libtool for the library version
 # http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
@@ -12,7 +12,7 @@ AC_SUBST([LTTNG_UST_LIBRARY_VERSION], [0:0:0])
 
 # This is the library version of liblttng-ust-ctl, used internally by
 # liblttng-ust, lttng-sessiond, and lttng-consumerd.
-AC_SUBST([LTTNG_UST_CTL_LIBRARY_VERSION], [1:0:0])
+AC_SUBST([LTTNG_UST_CTL_LIBRARY_VERSION], [2:0:0])
 
 AC_CONFIG_AUX_DIR([config])
 AC_CANONICAL_TARGET
@@ -39,8 +39,9 @@ AC_DEFINE_UNQUOTED([VERSION_MAJOR], $major_version, [UST major version number])
 AC_DEFINE_UNQUOTED([VERSION_MINOR], $minor_version, [UST minor version number])
 AC_DEFINE_UNQUOTED([VERSION_PATCHLEVEL], $patchlevel_version, [UST patchlevel version number])
 
-version_name="Basse Messe"
-version_description="Light coloured German ale whose style was named after the city Cologne (Koln) where it was first brewed. It is a rather simple beer with lightly fruity aromas and a delicate hoppy fragrance. The beer has a pronounced malty taste with a subtle bitter aftertaste"
+version_name="Dominus Vobiscum"
+version_description="A very succulent line-up of beers brewed at Microbrasserie Charlevoix. Elaborated starting from special malts and fermented with a Belgian yeast. These beers are refermented in bottle and will make you discover the richness of wheat, amber and triple styles."
+
 AC_DEFINE_UNQUOTED([VERSION_NAME], ["$version_name"], [UST version name])
 AC_DEFINE_UNQUOTED([VERSION_DESCRIPTION], ["$version_description"], [UST version description])
 
@@ -83,8 +84,21 @@ AC_CACHE_CHECK([whether the C++ compiler works],
 		[rw_cv_prog_cxx_works],
 		[AC_LANG_PUSH([C++])
 		AC_LINK_IFELSE([AC_LANG_PROGRAM([], [])],
-				[rw_cv_prog_cxx_works=yes],
+				[check_cxx_designated_initializers=yes],
 				[rw_cv_prog_cxx_works=no])
+		if test "$check_cxx_designated_initializers" = "yes"; then
+			AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
+				struct foo { int a; int b; };
+				void fct(void)
+				{
+					struct foo f = { .a = 0, .b = 1 };
+				}
+			]])],[
+				rw_cv_prog_cxx_works=yes
+			],[
+				rw_cv_prog_cxx_works=no
+			])
+		fi
 		AC_LANG_POP([C++])])
 
 AM_CONDITIONAL([CXX_WORKS], [test "x$rw_cv_prog_cxx_works" = "xyes"])
@@ -108,27 +122,6 @@ AM_CONDITIONAL([LTTNG_UST_BUILD_WITH_LIBDL], [test "x$have_libdl" = "xyes"])
 AM_CONDITIONAL([LTTNG_UST_BUILD_WITH_LIBC_DL], [test "x$have_libc_dl" = "xyes"])
 
 AC_CHECK_LIB([pthread], [pthread_create])
-
-# Check for libuuid
-AC_CHECK_LIB([uuid], [uuid_generate],
-[
-	AC_DEFINE_UNQUOTED([LTTNG_UST_HAVE_LIBUUID], 1, [Has libuuid support.])
-	have_libuuid=yes
-],
-[
-	# libuuid not found, check for uuid_create in libc.
-	AC_CHECK_LIB([c], [uuid_create],
-	[
-		AC_DEFINE_UNQUOTED([LTTNG_UST_HAVE_LIBC_UUID], 1, [Has libc uuid support.])
-		have_libc_uuid=yes
-	],
-	[
-		AC_MSG_ERROR([Cannot find libuuid uuid_generate nor libc uuid_create. Use [LDFLAGS]=-Ldir to specify their location.])
-	])
-]
-)
-AM_CONDITIONAL([LTTNG_UST_BUILD_WITH_LIBUUID], [test "x$have_libuuid" = "xyes"])
-AM_CONDITIONAL([LTTNG_UST_BUILD_WITH_LIBC_UUID], [test "x$have_libc_uuid" = "xyes"])
 
 # Checks for header files.
 #AC_CHECK_HEADERS([fcntl.h stdint.h stdlib.h string.h sys/socket.h sys/time.h unistd.h])
@@ -201,7 +194,8 @@ changequote([,])dnl
 	s390) NO_UNALIGNED_ACCESS=1 ;;
 	s390x) NO_UNALIGNED_ACCESS=1 ;;
         arm*) NO_UNALIGNED_ACCESS=1 ;;
-	mips*) NO_UNALIGNED_ACCESS=1;;
+	mips*) NO_UNALIGNED_ACCESS=1 ;;
+	tile*) NO_UNALIGNED_ACCESS=1 ;;
 	*) AC_MSG_ERROR([unable to detect alignment requirements (unsupported architecture ($host_cpu)?)]) ;;
 esac
 
@@ -268,22 +262,13 @@ AS_IF([test "x$with_sdt" = "xyes"],[
 	])
 ])
 
-#currently disabled.
-	#tests/hello2/Makefile
-	#tests/basic/Makefile
-	#tests/simple_include/Makefile
-	#tests/snprintf/Makefile
-	#tests/test-nevents/Makefile
-	#tests/test-libustinstr-malloc/Makefile
-	#tests/dlopen/Makefile
-	#tests/same_line_marker/Makefile
-	#tests/trace_event/Makefile
-	#tests/tracepoint/Makefile
-	#tests/tracepoint/benchmark/Makefile
-	#tests/register_test/Makefile
-	#tests/libustctl_function_#tests/Makefile
-	#tests/exit-fast/Makefile
-	#tests/basic_long/Makefile
+AC_ARG_WITH([lttng-system-rundir],
+	AS_HELP_STRING([--with-lttng-system-rundir],
+	[Location of the system directory where LTTng-UST expects the system-wide lttng-sessiond runtime files. The default is "/var/run/lttng".]),
+	[lttng_system_rundir="$withval"],
+	[lttng_system_rundir="/var/run/lttng"])
+AC_DEFINE_UNQUOTED([LTTNG_SYSTEM_RUNDIR], ["$lttng_system_rundir"],
+	[LTTng system runtime directory])
 
 AC_CONFIG_FILES([
 	Makefile
@@ -299,16 +284,15 @@ AC_CONFIG_FILES([
 	liblttng-ust-fork/Makefile
 	liblttng-ust-java/Makefile
 	liblttng-ust-libc-wrapper/Makefile
+	liblttng-ust-cyg-profile/Makefile
 	tools/Makefile
 	tests/Makefile
 	tests/hello/Makefile
-	tests/hello-static-lib/Makefile
 	tests/hello.cxx/Makefile
-	tests/daemon/Makefile
-	tests/demo/Makefile
-	tests/fork/Makefile
-	tests/ust-basic-tracing/Makefile
-	tests/ust-multi-test/Makefile
+	tests/same_line_tracepoint/Makefile
+	tests/snprintf/Makefile
+	tests/benchmark/Makefile
+	tests/utils/Makefile
 	lttng-ust.pc
 ])
 
@@ -321,7 +305,6 @@ AS_ECHO("$version_description")
 # Report on the configuration options
 AS_ECHO()
 AS_ECHO("LTTng-UST will be built with the following options:")
-AS_ECHO("Library format: $LIBFORMAT")
 
 AS_ECHO()
 AS_ECHO_N("Java support (JNI): ")

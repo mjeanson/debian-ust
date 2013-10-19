@@ -21,7 +21,7 @@
 
 #include <stdlib.h>
 
-static inline
+static inline __attribute__((always_inline))
 void *zmalloc(size_t len)
 {
 	return calloc(len, 1);
@@ -40,5 +40,7 @@ void *zmalloc(size_t len)
 		type __min2 = (y);              	\
 		__min1 <= __min2 ? __min1: __min2;	\
 	})
+
+#define LTTNG_ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 #endif /* _LTTNG_UST_HELPER_H */

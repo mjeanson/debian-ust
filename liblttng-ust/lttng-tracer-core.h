@@ -41,4 +41,8 @@ void lttng_fixup_event_tls(void);
 void lttng_fixup_vtid_tls(void);
 void lttng_fixup_procname_tls(void);
 
+const char *lttng_ust_obj_get_name(int id);
+
+int lttng_get_notify_socket(void *owner);
+
 #endif /* _LTTNG_TRACER_CORE_H */

@@ -36,14 +36,51 @@ TRACEPOINT_EVENT(ust_libc, malloc,
 	TP_ARGS(size_t, size, void *, ptr),
 	TP_FIELDS(
 		ctf_integer(size_t, size, size)
-		ctf_integer_hex(unsigned long, ptr, (unsigned long) ptr)
+		ctf_integer_hex(void *, ptr, ptr)
 	)
 )
 
 TRACEPOINT_EVENT(ust_libc, free,
 	TP_ARGS(void *, ptr),
 	TP_FIELDS(
-		ctf_integer_hex(unsigned long, ptr, (unsigned long) ptr)
+		ctf_integer_hex(void *, ptr, ptr)
+	)
+)
+
+TRACEPOINT_EVENT(ust_libc, calloc,
+	TP_ARGS(size_t, nmemb, size_t, size, void *, ptr),
+	TP_FIELDS(
+		ctf_integer(size_t, nmemb, nmemb)
+		ctf_integer(size_t, size, size)
+		ctf_integer_hex(void *, ptr, ptr)
+	)
+)
+
+TRACEPOINT_EVENT(ust_libc, realloc,
+	TP_ARGS(void *, in_ptr, size_t, size, void *, ptr),
+	TP_FIELDS(
+		ctf_integer_hex(void *, in_ptr, in_ptr)
+		ctf_integer(size_t, size, size)
+		ctf_integer_hex(void *, ptr, ptr)
+	)
+)
+
+TRACEPOINT_EVENT(ust_libc, memalign,
+	TP_ARGS(size_t, alignment, size_t, size, void *, ptr),
+	TP_FIELDS(
+		ctf_integer(size_t, alignment, alignment)
+		ctf_integer(size_t, size, size)
+		ctf_integer_hex(void *, ptr, ptr)
+	)
+)
+
+TRACEPOINT_EVENT(ust_libc, posix_memalign,
+	TP_ARGS(void *, out_ptr, size_t, alignment, size_t, size, int, result),
+	TP_FIELDS(
+		ctf_integer_hex(void *, out_ptr, out_ptr)
+		ctf_integer(size_t, alignment, alignment)
+		ctf_integer(size_t, size, size)
+		ctf_integer(int, result, result)
 	)
 )
 
@@ -55,6 +92,6 @@ TRACEPOINT_EVENT(ust_libc, free,
 /* This part must be outside ifdef protection */
 #include <lttng/tracepoint-event.h>
 
-#ifdef __cplusplus 
+#ifdef __cplusplus
 }
 #endif

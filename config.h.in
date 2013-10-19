@@ -70,14 +70,11 @@
 /* Define to 1 if you have the <urcu-bp.h> header file. */
 #undef HAVE_URCU_BP_H
 
+/* LTTng system runtime directory */
+#undef LTTNG_SYSTEM_RUNDIR
+
 /* Use efficient unaligned access. */
 #undef LTTNG_UST_HAVE_EFFICIENT_UNALIGNED_ACCESS
-
-/* Has libc uuid support. */
-#undef LTTNG_UST_HAVE_LIBC_UUID
-
-/* Has libuuid support. */
-#undef LTTNG_UST_HAVE_LIBUUID
 
 /* SystemTap integration via sdt.h */
 #undef LTTNG_UST_HAVE_SDT_INTEGRATION

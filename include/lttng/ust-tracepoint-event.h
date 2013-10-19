@@ -21,12 +21,20 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <urcu/compiler.h>
 #include <urcu/rculist.h>
 #include <lttng/ust-events.h>
 #include <lttng/ringbuffer-config.h>
 #include <lttng/ust-compiler.h>
+#include <lttng/tracepoint.h>
 #include <string.h>
+
+#undef tp_list_for_each_entry_rcu
+#define tp_list_for_each_entry_rcu(pos, head, member)	\
+	for (pos = cds_list_entry(tp_rcu_dereference_bp((head)->next), __typeof__(*pos), member);	\
+	     &pos->member != (head);					\
+	     pos = cds_list_entry(tp_rcu_dereference_bp(pos->member.next), __typeof__(*pos), member))
 
 /*
  * TRACEPOINT_EVENT_CLASS declares a class of tracepoints receiving the
@@ -140,11 +148,14 @@ static const char							\
 	  .type =						\
 		{						\
 		  .atype = atype_array,				\
-		  .u.array =					\
+		  .u =						\
 			{					\
-			    .length = _length,			\
-			    .elem_type = __type_integer(_type, BYTE_ORDER, 10, _encoding), \
-			},					\
+			  .array =				\
+				{				\
+				  .elem_type = __type_integer(_type, BYTE_ORDER, 10, _encoding), \
+				  .length = _length,		\
+				}				\
+			}					\
 		},						\
 	  .nowrite = _nowrite,					\
 	},
@@ -157,10 +168,13 @@ static const char							\
 	  .type =						\
 		{						\
 		  .atype = atype_sequence,			\
-		  .u.sequence =					\
+		  .u =						\
 			{					\
-			    .length_type = __type_integer(_length_type, BYTE_ORDER, 10, none), \
-			    .elem_type = __type_integer(_type, BYTE_ORDER, 10, _encoding), \
+			  .sequence =				\
+				{				\
+				  .length_type = __type_integer(_length_type, BYTE_ORDER, 10, none), \
+				  .elem_type = __type_integer(_type, BYTE_ORDER, 10, _encoding), \
+				},				\
 			},					\
 		},						\
 	  .nowrite = _nowrite,					\
@@ -173,7 +187,10 @@ static const char							\
 	  .type =						\
 		{						\
 		  .atype = atype_string,			\
-		  .u.basic.string.encoding = lttng_encode_UTF8,	\
+		  .u =						\
+			{					\
+			  .basic = { .string = { .encoding = lttng_encode_UTF8 } } \
+			},					\
 		},						\
 	  .nowrite = _nowrite,					\
 	},
@@ -476,7 +493,7 @@ void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args));      \
 static									      \
 void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args))	      \
 {									      \
-	struct lttng_event *__event = __tp_data;			      \
+	struct lttng_event *__event = (struct lttng_event *) __tp_data;			      \
 	struct lttng_channel *__chan = __event->chan;			      \
 	struct lttng_ust_lib_ring_buffer_ctx __ctx;			      \
 	size_t __event_len, __event_align;				      \
@@ -495,13 +512,15 @@ void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args))	      \
 		return;							      \
 	if (caa_unlikely(!CMM_ACCESS_ONCE(__event->enabled)))		      \
 		return;							      \
+	if (caa_unlikely(!TP_RCU_LINK_TEST()))				      \
+		return;							      \
 	if (caa_unlikely(!cds_list_empty(&__event->bytecode_runtime_head))) { \
 		struct lttng_bytecode_runtime *bc_runtime;		      \
 		int __filter_record = __event->has_enablers_without_bytecode; \
 									      \
 		__event_prepare_filter_stack__##_provider##___##_name(__stackvar.__filter_stack_data, \
 			_TP_ARGS_DATA_VAR(_args));			      \
-		cds_list_for_each_entry_rcu(bc_runtime, &__event->bytecode_runtime_head, node) { \
+		tp_list_for_each_entry_rcu(bc_runtime, &__event->bytecode_runtime_head, node) { \
 			if (caa_unlikely(bc_runtime->filter(bc_runtime,	      \
 					__stackvar.__filter_stack_data) & LTTNG_FILTER_RECORD_FLAG)) \
 				__filter_record = 1;			      \
@@ -514,6 +533,7 @@ void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args))	      \
 	__event_align = __event_get_align__##_provider##___##_name(_TP_ARGS_VAR(_args)); \
 	lib_ring_buffer_ctx_init(&__ctx, __chan->chan, __event, __event_len,  \
 				 __event_align, -1, __chan->handle);	      \
+	__ctx.ip = __builtin_return_address(0);				      \
 	__ret = __chan->ops->event_reserve(&__ctx, __event->id);	      \
 	if (__ret < 0)							      \
 		return;							      \
@@ -603,13 +623,14 @@ static const char *							       \
 	__ref_model_emf_uri___##_provider##___##_name			       \
 	__attribute__((weakref ("_model_emf_uri___" #_provider "___" #_name)));\
 const struct lttng_event_desc __event_desc___##_provider##_##_name = {	       \
-	.fields = __event_fields___##_provider##___##_template,		       \
 	.name = #_provider ":" #_name,					       \
 	.probe_callback = (void (*)(void)) &__event_probe__##_provider##___##_template,\
+	.ctx = NULL,							       \
+	.fields = __event_fields___##_provider##___##_template,		       \
 	.nr_fields = _TP_ARRAY_SIZE(__event_fields___##_provider##___##_template), \
 	.loglevel = &__ref_loglevel___##_provider##___##_name,		       \
 	.signature = __tp_event_signature___##_provider##___##_template,       \
-	.u.ext.model_emf_uri = &__ref_model_emf_uri___##_provider##___##_name, \
+	.u = { .ext = { .model_emf_uri = &__ref_model_emf_uri___##_provider##___##_name } }, \
 };
 
 #include TRACEPOINT_INCLUDE
@@ -643,6 +664,11 @@ static struct lttng_probe_desc _TP_COMBINE_TOKENS(__probe_desc___, TRACEPOINT_PR
 	.provider = __tp_stringify(TRACEPOINT_PROVIDER),
 	.event_desc = _TP_COMBINE_TOKENS(__event_desc___, TRACEPOINT_PROVIDER),
 	.nr_events = _TP_ARRAY_SIZE(_TP_COMBINE_TOKENS(__event_desc___, TRACEPOINT_PROVIDER)),
+	.head = { NULL, NULL },
+	.lazy_init_head = { NULL, NULL },
+	.lazy = 0,
+	.major = LTTNG_UST_PROVIDER_MAJOR,
+	.minor = LTTNG_UST_PROVIDER_MINOR,
 };
 
 /*
@@ -673,7 +699,10 @@ _TP_COMBINE_TOKENS(__lttng_events_init__, TRACEPOINT_PROVIDER)(void)
 	 */
 	_TP_COMBINE_TOKENS(__tracepoint_provider_check_, TRACEPOINT_PROVIDER)();
 	ret = lttng_probe_register(&_TP_COMBINE_TOKENS(__probe_desc___, TRACEPOINT_PROVIDER));
-	assert(!ret);
+	if (ret) {
+		fprintf(stderr, "LTTng-UST: Error (%d) while registering tracepoint probe. Duplicate registration of tracepoint probes having the same name is not allowed.\n", ret);
+		abort();
+	}
 }
 
 static void lttng_ust_notrace __attribute__((destructor))
