@@ -23,9 +23,20 @@
 
 #include <lttng/ust-events.h>
 #include <lttng/ust-tracer.h>
+#include <usterr-signal-safe.h>
 #include <helper.h>
 #include <string.h>
 #include <assert.h>
+
+/*
+ * The filter implementation requires that two consecutive "get" for the
+ * same context performed by the same thread return the same result.
+ */
+
+/*
+ * Static array of contexts, for $ctx filters.
+ */
+struct lttng_ctx *lttng_static_ctx;
 
 int lttng_find_context(struct lttng_ctx *ctx, const char *name)
 {
@@ -39,6 +50,22 @@ int lttng_find_context(struct lttng_ctx *ctx, const char *name)
 			return 1;
 	}
 	return 0;
+}
+
+int lttng_get_context_index(struct lttng_ctx *ctx, const char *name)
+{
+	unsigned int i;
+
+	if (!ctx)
+		return -1;
+	for (i = 0; i < ctx->nr_fields; i++) {
+		/* Skip allocated (but non-initialized) contexts */
+		if (!ctx->fields[i].event_field.name)
+			continue;
+		if (!strcmp(ctx->fields[i].event_field.name, name))
+			return i;
+	}
+	return -1;
 }
 
 /*
@@ -98,4 +125,32 @@ void lttng_destroy_context(struct lttng_ctx *ctx)
 	}
 	free(ctx->fields);
 	free(ctx);
+}
+
+void lttng_context_init(void)
+{
+	int ret;
+
+	ret = lttng_add_pthread_id_to_ctx(&lttng_static_ctx);
+	if (ret) {
+		WARN("Cannot add context lttng_add_pthread_id_to_ctx");
+	}
+	ret = lttng_add_vtid_to_ctx(&lttng_static_ctx);
+	if (ret) {
+		WARN("Cannot add context lttng_add_vtid_to_ctx");
+	}
+	ret = lttng_add_vpid_to_ctx(&lttng_static_ctx);
+	if (ret) {
+		WARN("Cannot add context lttng_add_vpid_to_ctx");
+	}
+	ret = lttng_add_procname_to_ctx(&lttng_static_ctx);
+	if (ret) {
+		WARN("Cannot add context lttng_add_procname_to_ctx");
+	}
+}
+
+void lttng_context_exit(void)
+{
+	lttng_destroy_context(lttng_static_ctx);
+	lttng_static_ctx = NULL;
 }

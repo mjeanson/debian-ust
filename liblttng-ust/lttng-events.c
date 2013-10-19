@@ -45,6 +45,8 @@
 
 #include <usterr-signal-safe.h>
 #include <helper.h>
+#include <lttng/ust-ctl.h>
+#include <ust-comm.h>
 #include "error.h"
 #include "compat.h"
 #include "lttng-ust-uuid.h"
@@ -76,14 +78,6 @@ void ust_unlock(void)
 static CDS_LIST_HEAD(sessions);
 
 static void _lttng_event_destroy(struct lttng_event *event);
-static void _lttng_channel_destroy(struct lttng_channel *chan);
-static int _lttng_event_unregister(struct lttng_event *event);
-static
-int _lttng_event_metadata_statedump(struct lttng_session *session,
-				  struct lttng_channel *chan,
-				  struct lttng_event *event);
-static
-int _lttng_session_metadata_statedump(struct lttng_session *session);
 
 static
 void lttng_session_lazy_sync_enablers(struct lttng_session *session);
@@ -91,6 +85,20 @@ static
 void lttng_session_sync_enablers(struct lttng_session *session);
 static
 void lttng_enabler_destroy(struct lttng_enabler *enabler);
+
+/*
+ * Called with ust lock held.
+ */
+int lttng_session_active(void)
+{
+	struct lttng_session *iter;
+
+	cds_list_for_each_entry(iter, &sessions, node) {
+		if (iter->active)
+			return 1;
+	}
+	return 0;
+}
 
 static
 int lttng_loglevel_match(int loglevel,
@@ -127,7 +135,7 @@ void synchronize_trace(void)
 struct lttng_session *lttng_session_create(void)
 {
 	struct lttng_session *session;
-	int ret, i;
+	int i;
 
 	session = zmalloc(sizeof(struct lttng_session));
 	if (!session)
@@ -137,12 +145,70 @@ struct lttng_session *lttng_session_create(void)
 	CDS_INIT_LIST_HEAD(&session->enablers_head);
 	for (i = 0; i < LTTNG_UST_EVENT_HT_SIZE; i++)
 		CDS_INIT_HLIST_HEAD(&session->events_ht.table[i]);
-	ret = lttng_ust_uuid_generate(session->uuid);
-	if (ret != 0) {
-		session->uuid[0] = '\0';
-	}
 	cds_list_add(&session->node, &sessions);
 	return session;
+}
+
+/*
+ * Only used internally at session destruction.
+ */
+static
+void _lttng_channel_unmap(struct lttng_channel *lttng_chan)
+{
+	struct channel *chan;
+	struct lttng_ust_shm_handle *handle;
+
+	cds_list_del(&lttng_chan->node);
+	lttng_destroy_context(lttng_chan->ctx);
+	chan = lttng_chan->chan;
+	handle = lttng_chan->handle;
+	/*
+	 * note: lttng_chan is private data contained within handle. It
+	 * will be freed along with the handle.
+	 */
+	channel_destroy(chan, handle, 0);
+}
+
+static
+void register_event(struct lttng_event *event)
+{
+	int ret;
+	const struct lttng_event_desc *desc;
+
+	assert(event->registered == 0);
+	desc = event->desc;
+	ret = __tracepoint_probe_register(desc->name,
+			desc->probe_callback,
+			event, desc->signature);
+	WARN_ON_ONCE(ret);
+	if (!ret)
+		event->registered = 1;
+}
+
+static
+void unregister_event(struct lttng_event *event)
+{
+	int ret;
+	const struct lttng_event_desc *desc;
+
+	assert(event->registered == 1);
+	desc = event->desc;
+	ret = __tracepoint_probe_unregister(desc->name,
+			desc->probe_callback,
+			event);
+	WARN_ON_ONCE(ret);
+	if (!ret)
+		event->registered = 0;
+}
+
+/*
+ * Only used internally at session destruction.
+ */
+static
+void _lttng_event_unregister(struct lttng_event *event)
+{
+	if (event->registered)
+		unregister_event(event);
 }
 
 void lttng_session_destroy(struct lttng_session *session)
@@ -150,12 +216,10 @@ void lttng_session_destroy(struct lttng_session *session)
 	struct lttng_channel *chan, *tmpchan;
 	struct lttng_event *event, *tmpevent;
 	struct lttng_enabler *enabler, *tmpenabler;
-	int ret;
 
 	CMM_ACCESS_ONCE(session->active) = 0;
 	cds_list_for_each_entry(event, &session->events_head, node) {
-		ret = _lttng_event_unregister(event);
-		WARN_ON(ret);
+		_lttng_event_unregister(event);
 	}
 	synchronize_trace();	/* Wait for in-flight events to complete */
 	cds_list_for_each_entry_safe(enabler, tmpenabler,
@@ -165,7 +229,7 @@ void lttng_session_destroy(struct lttng_session *session)
 			&session->events_head, node)
 		_lttng_event_destroy(event);
 	cds_list_for_each_entry_safe(chan, tmpchan, &session->chan_head, node)
-		_lttng_channel_destroy(chan);
+		_lttng_channel_unmap(chan);
 	cds_list_del(&session->node);
 	free(session);
 }
@@ -174,12 +238,19 @@ int lttng_session_enable(struct lttng_session *session)
 {
 	int ret = 0;
 	struct lttng_channel *chan;
+	int notify_socket;
 
 	if (session->active) {
 		ret = -EBUSY;
 		goto end;
 	}
 
+	notify_socket = lttng_get_notify_socket(session->owner);
+	if (notify_socket < 0)
+		return notify_socket;
+
+	/* Set transient enabler state to "enabled" */
+	session->tstate = 1;
 	/* We need to sync enablers with session before activation. */
 	lttng_session_sync_enablers(session);
 
@@ -188,19 +259,40 @@ int lttng_session_enable(struct lttng_session *session)
 	 * we need to use.
 	 */
 	cds_list_for_each_entry(chan, &session->chan_head, node) {
+		const struct lttng_ctx *ctx;
+		const struct lttng_ctx_field *fields = NULL;
+		size_t nr_fields = 0;
+		uint32_t chan_id;
+
+		/* don't change it if session stop/restart */
 		if (chan->header_type)
-			continue;		/* don't change it if session stop/restart */
-		if (chan->free_event_id < 31)
-			chan->header_type = 1;	/* compact */
-		else
-			chan->header_type = 2;	/* large */
+			continue;
+		ctx = chan->ctx;
+		if (ctx) {
+			nr_fields = ctx->nr_fields;
+			fields = ctx->fields;
+		}
+		ret = ustcomm_register_channel(notify_socket,
+			session->objd,
+			chan->objd,
+			nr_fields,
+			fields,
+			&chan_id,
+			&chan->header_type);
+		if (ret) {
+			DBG("Error (%d) registering channel to sessiond", ret);
+			return ret;
+		}
+		if (chan_id != chan->id) {
+			DBG("Error: channel registration id (%u) does not match id assigned at creation (%u)",
+				chan_id, chan->id);
+			return -EINVAL;
+		}
 	}
 
+	/* Set atomically the state to "active" */
 	CMM_ACCESS_ONCE(session->active) = 1;
 	CMM_ACCESS_ONCE(session->been_active) = 1;
-	ret = _lttng_session_metadata_statedump(session);
-	if (ret)
-		CMM_ACCESS_ONCE(session->active) = 0;
 end:
 	return ret;
 }
@@ -213,113 +305,48 @@ int lttng_session_disable(struct lttng_session *session)
 		ret = -EBUSY;
 		goto end;
 	}
+	/* Set atomically the state to "inactive" */
 	CMM_ACCESS_ONCE(session->active) = 0;
+
+	/* Set transient enabler state to "disabled" */
+	session->tstate = 0;
+	lttng_session_sync_enablers(session);
 end:
 	return ret;
 }
 
 int lttng_channel_enable(struct lttng_channel *channel)
 {
-	int old;
+	int ret = 0;
 
-	if (channel == channel->session->metadata)
-		return -EPERM;
-	old = uatomic_xchg(&channel->enabled, 1);
-	if (old)
-		return -EEXIST;
-	return 0;
+	if (channel->enabled) {
+		ret = -EBUSY;
+		goto end;
+	}
+	/* Set transient enabler state to "enabled" */
+	channel->tstate = 1;
+	lttng_session_sync_enablers(channel->session);
+	/* Set atomically the state to "enabled" */
+	CMM_ACCESS_ONCE(channel->enabled) = 1;
+end:
+	return ret;
 }
 
 int lttng_channel_disable(struct lttng_channel *channel)
 {
-	int old;
+	int ret = 0;
 
-	if (channel == channel->session->metadata)
-		return -EPERM;
-	old = uatomic_xchg(&channel->enabled, 0);
-	if (!old)
-		return -EEXIST;
-	return 0;
-}
-
-int lttng_event_enable(struct lttng_event *event)
-{
-	int old;
-
-	if (event->chan == event->chan->session->metadata)
-		return -EPERM;
-	old = uatomic_xchg(&event->enabled, 1);
-	if (old)
-		return -EEXIST;
-	return 0;
-}
-
-int lttng_event_disable(struct lttng_event *event)
-{
-	int old;
-
-	if (event->chan == event->chan->session->metadata)
-		return -EPERM;
-	old = uatomic_xchg(&event->enabled, 0);
-	if (!old)
-		return -EEXIST;
-	return 0;
-}
-
-struct lttng_channel *lttng_channel_create(struct lttng_session *session,
-				       const char *transport_name,
-				       void *buf_addr,
-				       size_t subbuf_size, size_t num_subbuf,
-				       unsigned int switch_timer_interval,
-				       unsigned int read_timer_interval,
-				       int **shm_fd, int **wait_fd,
-				       uint64_t **memory_map_size,
-				       struct lttng_channel *chan_priv_init)
-{
-	struct lttng_channel *chan = NULL;
-	struct lttng_transport *transport;
-
-	if (session->been_active)
-		goto active;	/* Refuse to add channel to active session */
-	transport = lttng_transport_find(transport_name);
-	if (!transport) {
-		DBG("LTTng transport %s not found\n",
-		       transport_name);
-		goto notransport;
+	if (!channel->enabled) {
+		ret = -EBUSY;
+		goto end;
 	}
-	chan_priv_init->id = session->free_chan_id++;
-	chan_priv_init->session = session;
-	/*
-	 * Note: the channel creation op already writes into the packet
-	 * headers. Therefore the "chan" information used as input
-	 * should be already accessible.
-	 */
-	chan = transport->ops.channel_create(transport_name, buf_addr,
-			subbuf_size, num_subbuf, switch_timer_interval,
-			read_timer_interval, shm_fd, wait_fd,
-			memory_map_size, chan_priv_init);
-	if (!chan)
-		goto create_error;
-	chan->enabled = 1;
-	chan->ops = &transport->ops;
-	cds_list_add(&chan->node, &session->chan_head);
-	return chan;
-
-create_error:
-notransport:
-active:
-	return NULL;
-}
-
-/*
- * Only used internally at session destruction.
- */
-static
-void _lttng_channel_destroy(struct lttng_channel *chan)
-{
-	cds_list_del(&chan->node);
-	lttng_destroy_context(chan->ctx);
-	chan->ops->channel_destroy(chan);
+	/* Set atomically the state to "disabled" */
+	CMM_ACCESS_ONCE(channel->enabled) = 0;
+	/* Set transient enabler state to "enabled" */
+	channel->tstate = 0;
+	lttng_session_sync_enablers(channel->session);
+end:
+	return ret;
 }
 
 /*
@@ -331,26 +358,31 @@ int lttng_event_create(const struct lttng_event_desc *desc,
 {
 	const char *event_name = desc->name;
 	struct lttng_event *event;
+	struct lttng_session *session = chan->session;
 	struct cds_hlist_head *head;
 	struct cds_hlist_node *node;
 	int ret = 0;
 	size_t name_len = strlen(event_name);
 	uint32_t hash;
+	int notify_socket, loglevel;
+	const char *uri;
 
-	if (chan->used_event_id == -1U) {
-		ret = -ENOMEM;
-		goto full;
-	}
 	hash = jhash(event_name, name_len, 0);
 	head = &chan->session->events_ht.table[hash & (LTTNG_UST_EVENT_HT_SIZE - 1)];
 	cds_hlist_for_each_entry(event, node, head, hlist) {
 		assert(event->desc);
-		if (!strncmp(event->desc->name,
-				desc->name,
-				LTTNG_UST_SYM_NAME_LEN - 1)) {
+		if (!strncmp(event->desc->name, desc->name,
+					LTTNG_UST_SYM_NAME_LEN - 1)
+				&& chan == event->chan) {
 			ret = -EEXIST;
 			goto exist;
 		}
+	}
+
+	notify_socket = lttng_get_notify_socket(session->owner);
+	if (notify_socket < 0) {
+		ret = notify_socket;
+		goto socket_error;
 	}
 
 	/*
@@ -363,40 +395,49 @@ int lttng_event_create(const struct lttng_event_desc *desc,
 	}
 	event->chan = chan;
 
-	/*
-	 * used_event_id counts the maximum number of event IDs that can
-	 * register if all probes register.
-	 */
-	chan->used_event_id++;
-	event->enabled = 1;
+	/* Event will be enabled by enabler sync. */
+	event->enabled = 0;
+	event->registered = 0;
 	CDS_INIT_LIST_HEAD(&event->bytecode_runtime_head);
 	CDS_INIT_LIST_HEAD(&event->enablers_ref_head);
 	event->desc = desc;
+
+	if (desc->loglevel)
+		loglevel = *(*event->desc->loglevel);
+	else
+		loglevel = TRACE_DEFAULT;
+	if (desc->u.ext.model_emf_uri)
+		uri = *(desc->u.ext.model_emf_uri);
+	else
+		uri = NULL;
+
+	/* Fetch event ID from sessiond */
+	ret = ustcomm_register_event(notify_socket,
+		session->objd,
+		chan->objd,
+		event_name,
+		loglevel,
+		desc->signature,
+		desc->nr_fields,
+		desc->fields,
+		uri,
+		&event->id);
+	if (ret < 0) {
+		DBG("Error (%d) registering event to sessiond", ret);
+		goto sessiond_register_error;
+	}
+
 	/* Populate lttng_event structure before tracepoint registration. */
 	cmm_smp_wmb();
-	ret = __tracepoint_probe_register(event_name,
-			desc->probe_callback,
-			event, desc->signature);
-	if (ret)
-		goto register_error;
-	event->id = chan->free_event_id++;
-	ret = _lttng_event_metadata_statedump(chan->session, chan, event);
-	if (ret)
-		goto statedump_error;
 	cds_list_add(&event->node, &chan->session->events_head);
 	cds_hlist_add_head(&event->hlist, head);
 	return 0;
 
-statedump_error:
-	WARN_ON_ONCE(__tracepoint_probe_unregister(event_name,
-				desc->probe_callback,
-				event));
-	lttng_event_put(event->desc);
-register_error:
+sessiond_register_error:
 	free(event);
 cache_error:
+socket_error:
 exist:
-full:
 	return ret;
 }
 
@@ -405,7 +446,7 @@ int lttng_desc_match_wildcard_enabler(const struct lttng_event_desc *desc,
 		struct lttng_enabler *enabler)
 {
 	int loglevel = 0;
-	unsigned int has_loglevel;
+	unsigned int has_loglevel = 0;
 
 	assert(enabler->type == LTTNG_ENABLER_WILDCARD);
 	/* Compare excluding final '*' */
@@ -464,7 +505,11 @@ static
 int lttng_event_match_enabler(struct lttng_event *event,
 		struct lttng_enabler *enabler)
 {
-	return lttng_desc_match_enabler(event->desc, enabler);
+	if (lttng_desc_match_enabler(event->desc, enabler)
+			&& event->chan == enabler->chan)
+		return 1;
+	else
+		return 0;
 }
 
 static
@@ -522,7 +567,8 @@ void lttng_create_event_if_missing(struct lttng_enabler *enabler)
 			hash = jhash(event_name, name_len, 0);
 			head = &session->events_ht.table[hash & (LTTNG_UST_EVENT_HT_SIZE - 1)];
 			cds_hlist_for_each_entry(event, node, head, hlist) {
-				if (event->desc == desc)
+				if (event->desc == desc
+						&& event->chan == enabler->chan)
 					found = 1;
 			}
 			if (found)
@@ -535,8 +581,8 @@ void lttng_create_event_if_missing(struct lttng_enabler *enabler)
 			ret = lttng_event_create(probe_desc->event_desc[i],
 					enabler->chan);
 			if (ret) {
-				DBG("Unable to create event %s\n",
-					probe_desc->event_desc[i]->name);
+				DBG("Unable to create event %s, error %d\n",
+					probe_desc->event_desc[i]->name, ret);
 			}
 		}
 	}
@@ -589,12 +635,9 @@ int lttng_enabler_ref_events(struct lttng_enabler *enabler)
 /*
  * Called at library load: connect the probe on all enablers matching
  * this event.
- * called with session mutex held.
- * TODO: currently, for each desc added, we iterate on all event desc
- * (inefficient). We should create specific code that only target the
- * added desc.
+ * Called with session mutex held.
  */
-int lttng_fix_pending_event_desc(const struct lttng_event_desc *desc)
+int lttng_fix_pending_events(void)
 {
 	struct lttng_session *session;
 
@@ -607,22 +650,11 @@ int lttng_fix_pending_event_desc(const struct lttng_event_desc *desc)
 /*
  * Only used internally at session destruction.
  */
-int _lttng_event_unregister(struct lttng_event *event)
-{
-	return __tracepoint_probe_unregister(event->desc->name,
-					  event->desc->probe_callback,
-					  event);
-}
-
-/*
- * Only used internally at session destruction.
- */
 static
 void _lttng_event_destroy(struct lttng_event *event)
 {
 	struct lttng_enabler_ref *enabler_ref, *tmp_enabler_ref;
 
-	lttng_event_put(event->desc);
 	cds_list_del(&event->node);
 	lttng_destroy_context(event->ctx);
 	lttng_free_event_filter_runtime(event);
@@ -631,629 +663,6 @@ void _lttng_event_destroy(struct lttng_event *event)
 			&event->enablers_ref_head, node)
 		free(enabler_ref);
 	free(event);
-}
-
-/*
- * We have exclusive access to our metadata buffer (protected by the
- * ust_lock), so we can do racy operations such as looking for
- * remaining space left in packet and write, since mutual exclusion
- * protects us from concurrent writes.
- */
-int lttng_metadata_printf(struct lttng_session *session,
-			  const char *fmt, ...)
-{
-	struct lttng_ust_lib_ring_buffer_ctx ctx;
-	struct lttng_channel *chan = session->metadata;
-	char *str = NULL;
-	int ret = 0, waitret;
-	size_t len, reserve_len, pos;
-	va_list ap;
-
-	WARN_ON_ONCE(!CMM_ACCESS_ONCE(session->active));
-
-	va_start(ap, fmt);
-	ret = vasprintf(&str, fmt, ap);
-	va_end(ap);
-	if (ret < 0)
-		return -ENOMEM;
-
-	len = strlen(str);
-	pos = 0;
-
-	for (pos = 0; pos < len; pos += reserve_len) {
-		reserve_len = min_t(size_t,
-				chan->ops->packet_avail_size(chan->chan, chan->handle),
-				len - pos);
-		lib_ring_buffer_ctx_init(&ctx, chan->chan, NULL, reserve_len,
-					 sizeof(char), -1, chan->handle);
-		/*
-		 * We don't care about metadata buffer's records lost
-		 * count, because we always retry here. Report error if
-		 * we need to bail out after timeout or being
-		 * interrupted.
-		 */
-		waitret = wait_cond_interruptible_timeout(
-			({
-				ret = chan->ops->event_reserve(&ctx, 0);
-				ret != -ENOBUFS || !ret;
-			}),
-			LTTNG_METADATA_TIMEOUT_MSEC);
-		if (waitret == -ETIMEDOUT || waitret == -EINTR || ret) {
-			DBG("LTTng: Failure to write metadata to buffers (%s)\n",
-				waitret == -EINTR ? "interrupted" :
-					(ret == -ENOBUFS ? "timeout" : "I/O error"));
-			if (waitret == -EINTR)
-				ret = waitret;
-			goto end;
-		}
-		chan->ops->event_write(&ctx, &str[pos], reserve_len);
-		chan->ops->event_commit(&ctx);
-	}
-end:
-	free(str);
-	return ret;
-}
-
-static
-int _lttng_field_statedump(struct lttng_session *session,
-			 const struct lttng_event_field *field)
-{
-	int ret = 0;
-
-	if (field->nowrite)
-		return 0;
-
-	switch (field->type.atype) {
-	case atype_integer:
-		ret = lttng_metadata_printf(session,
-			"		integer { size = %u; align = %u; signed = %u; encoding = %s; base = %u;%s } _%s;\n",
-			field->type.u.basic.integer.size,
-			field->type.u.basic.integer.alignment,
-			field->type.u.basic.integer.signedness,
-			(field->type.u.basic.integer.encoding == lttng_encode_none)
-				? "none"
-				: (field->type.u.basic.integer.encoding == lttng_encode_UTF8)
-					? "UTF8"
-					: "ASCII",
-			field->type.u.basic.integer.base,
-#if (BYTE_ORDER == BIG_ENDIAN)
-			field->type.u.basic.integer.reverse_byte_order ? " byte_order = le;" : "",
-#else
-			field->type.u.basic.integer.reverse_byte_order ? " byte_order = be;" : "",
-#endif
-			field->name);
-		break;
-	case atype_float:
-		ret = lttng_metadata_printf(session,
-			"		floating_point { exp_dig = %u; mant_dig = %u; align = %u;%s } _%s;\n",
-			field->type.u.basic._float.exp_dig,
-			field->type.u.basic._float.mant_dig,
-			field->type.u.basic._float.alignment,
-#if (BYTE_ORDER == BIG_ENDIAN)
-			field->type.u.basic.integer.reverse_byte_order ? " byte_order = le;" : "",
-#else
-			field->type.u.basic.integer.reverse_byte_order ? " byte_order = be;" : "",
-#endif
-			field->name);
-		break;
-	case atype_enum:
-		ret = lttng_metadata_printf(session,
-			"		%s %s;\n",
-			field->type.u.basic.enumeration.name,
-			field->name);
-		break;
-	case atype_array:
-	{
-		const struct lttng_basic_type *elem_type;
-
-		elem_type = &field->type.u.array.elem_type;
-		ret = lttng_metadata_printf(session,
-			"		integer { size = %u; align = %u; signed = %u; encoding = %s; base = %u;%s } _%s[%u];\n",
-			elem_type->u.basic.integer.size,
-			elem_type->u.basic.integer.alignment,
-			elem_type->u.basic.integer.signedness,
-			(elem_type->u.basic.integer.encoding == lttng_encode_none)
-				? "none"
-				: (elem_type->u.basic.integer.encoding == lttng_encode_UTF8)
-					? "UTF8"
-					: "ASCII",
-			elem_type->u.basic.integer.base,
-#if (BYTE_ORDER == BIG_ENDIAN)
-			elem_type->u.basic.integer.reverse_byte_order ? " byte_order = le;" : "",
-#else
-			elem_type->u.basic.integer.reverse_byte_order ? " byte_order = be;" : "",
-#endif
-			field->name, field->type.u.array.length);
-		break;
-	}
-	case atype_sequence:
-	{
-		const struct lttng_basic_type *elem_type;
-		const struct lttng_basic_type *length_type;
-
-		elem_type = &field->type.u.sequence.elem_type;
-		length_type = &field->type.u.sequence.length_type;
-		ret = lttng_metadata_printf(session,
-			"		integer { size = %u; align = %u; signed = %u; encoding = %s; base = %u;%s } __%s_length;\n",
-			length_type->u.basic.integer.size,
-			(unsigned int) length_type->u.basic.integer.alignment,
-			length_type->u.basic.integer.signedness,
-			(length_type->u.basic.integer.encoding == lttng_encode_none)
-				? "none"
-				: ((length_type->u.basic.integer.encoding == lttng_encode_UTF8)
-					? "UTF8"
-					: "ASCII"),
-			length_type->u.basic.integer.base,
-#if (BYTE_ORDER == BIG_ENDIAN)
-			length_type->u.basic.integer.reverse_byte_order ? " byte_order = le;" : "",
-#else
-			length_type->u.basic.integer.reverse_byte_order ? " byte_order = be;" : "",
-#endif
-			field->name);
-		if (ret)
-			return ret;
-
-		ret = lttng_metadata_printf(session,
-			"		integer { size = %u; align = %u; signed = %u; encoding = %s; base = %u;%s } _%s[ __%s_length ];\n",
-			elem_type->u.basic.integer.size,
-			(unsigned int) elem_type->u.basic.integer.alignment,
-			elem_type->u.basic.integer.signedness,
-			(elem_type->u.basic.integer.encoding == lttng_encode_none)
-				? "none"
-				: ((elem_type->u.basic.integer.encoding == lttng_encode_UTF8)
-					? "UTF8"
-					: "ASCII"),
-			elem_type->u.basic.integer.base,
-#if (BYTE_ORDER == BIG_ENDIAN)
-			elem_type->u.basic.integer.reverse_byte_order ? " byte_order = le;" : "",
-#else
-			elem_type->u.basic.integer.reverse_byte_order ? " byte_order = be;" : "",
-#endif
-			field->name,
-			field->name);
-		break;
-	}
-
-	case atype_string:
-		/* Default encoding is UTF8 */
-		ret = lttng_metadata_printf(session,
-			"		string%s _%s;\n",
-			field->type.u.basic.string.encoding == lttng_encode_ASCII ?
-				" { encoding = ASCII; }" : "",
-			field->name);
-		break;
-	default:
-		WARN_ON_ONCE(1);
-		return -EINVAL;
-	}
-	return ret;
-}
-
-static
-int _lttng_context_metadata_statedump(struct lttng_session *session,
-				    struct lttng_ctx *ctx)
-{
-	int ret = 0;
-	int i;
-
-	if (!ctx)
-		return 0;
-	for (i = 0; i < ctx->nr_fields; i++) {
-		const struct lttng_ctx_field *field = &ctx->fields[i];
-
-		ret = _lttng_field_statedump(session, &field->event_field);
-		if (ret)
-			return ret;
-	}
-	return ret;
-}
-
-static
-int _lttng_fields_metadata_statedump(struct lttng_session *session,
-				   struct lttng_event *event)
-{
-	const struct lttng_event_desc *desc = event->desc;
-	int ret = 0;
-	int i;
-
-	for (i = 0; i < desc->nr_fields; i++) {
-		const struct lttng_event_field *field = &desc->fields[i];
-
-		ret = _lttng_field_statedump(session, field);
-		if (ret)
-			return ret;
-	}
-	return ret;
-}
-
-static
-int _lttng_event_metadata_statedump(struct lttng_session *session,
-				  struct lttng_channel *chan,
-				  struct lttng_event *event)
-{
-	int ret = 0;
-	int loglevel = TRACE_DEFAULT;
-
-	if (event->metadata_dumped || !CMM_ACCESS_ONCE(session->active))
-		return 0;
-	if (chan == session->metadata)
-		return 0;
-	/*
-	 * Don't print events for which probe load is pending.
-	 */
-	if (!event->desc)
-		return 0;
-
-	ret = lttng_metadata_printf(session,
-		"event {\n"
-		"	name = \"%s\";\n"
-		"	id = %u;\n"
-		"	stream_id = %u;\n",
-		event->desc->name,
-		event->id,
-		event->chan->id);
-	if (ret)
-		goto end;
-
-	if (event->desc->loglevel)
-		loglevel = *(*event->desc->loglevel);
-
-	ret = lttng_metadata_printf(session,
-		"	loglevel = %d;\n",
-		loglevel);
-	if (ret)
-		goto end;
-
-	if (event->desc->u.ext.model_emf_uri) {
-		ret = lttng_metadata_printf(session,
-			"	model.emf.uri = \"%s\";\n",
-			*(event->desc->u.ext.model_emf_uri));
-		if (ret)
-			goto end;
-	}
-
-	if (event->ctx) {
-		ret = lttng_metadata_printf(session,
-			"	context := struct {\n");
-		if (ret)
-			goto end;
-	}
-	ret = _lttng_context_metadata_statedump(session, event->ctx);
-	if (ret)
-		goto end;
-	if (event->ctx) {
-		ret = lttng_metadata_printf(session,
-			"	};\n");
-		if (ret)
-			goto end;
-	}
-
-	ret = lttng_metadata_printf(session,
-		"	fields := struct {\n"
-		);
-	if (ret)
-		goto end;
-
-	ret = _lttng_fields_metadata_statedump(session, event);
-	if (ret)
-		goto end;
-
-	/*
-	 * LTTng space reservation can only reserve multiples of the
-	 * byte size.
-	 */
-	ret = lttng_metadata_printf(session,
-		"	};\n"
-		"};\n\n");
-	if (ret)
-		goto end;
-
-	event->metadata_dumped = 1;
-end:
-	return ret;
-
-}
-
-static
-int _lttng_channel_metadata_statedump(struct lttng_session *session,
-				    struct lttng_channel *chan)
-{
-	int ret = 0;
-
-	if (chan->metadata_dumped || !CMM_ACCESS_ONCE(session->active))
-		return 0;
-	if (chan == session->metadata)
-		return 0;
-
-	WARN_ON_ONCE(!chan->header_type);
-	ret = lttng_metadata_printf(session,
-		"stream {\n"
-		"	id = %u;\n"
-		"	event.header := %s;\n"
-		"	packet.context := struct packet_context;\n",
-		chan->id,
-		chan->header_type == 1 ? "struct event_header_compact" :
-			"struct event_header_large");
-	if (ret)
-		goto end;
-
-	if (chan->ctx) {
-		ret = lttng_metadata_printf(session,
-			"	event.context := struct {\n");
-		if (ret)
-			goto end;
-	}
-	ret = _lttng_context_metadata_statedump(session, chan->ctx);
-	if (ret)
-		goto end;
-	if (chan->ctx) {
-		ret = lttng_metadata_printf(session,
-			"	};\n");
-		if (ret)
-			goto end;
-	}
-
-	ret = lttng_metadata_printf(session,
-		"};\n\n");
-
-	chan->metadata_dumped = 1;
-end:
-	return ret;
-}
-
-static
-int _lttng_stream_packet_context_declare(struct lttng_session *session)
-{
-	return lttng_metadata_printf(session,
-		"struct packet_context {\n"
-		"	uint64_clock_monotonic_t timestamp_begin;\n"
-		"	uint64_clock_monotonic_t timestamp_end;\n"
-		"	uint64_t content_size;\n"
-		"	uint64_t packet_size;\n"
-		"	unsigned long events_discarded;\n"
-		"	uint32_t cpu_id;\n"
-		"};\n\n"
-		);
-}
-
-/*
- * Compact header:
- * id: range: 0 - 30.
- * id 31 is reserved to indicate an extended header.
- *
- * Large header:
- * id: range: 0 - 65534.
- * id 65535 is reserved to indicate an extended header.
- */
-static
-int _lttng_event_header_declare(struct lttng_session *session)
-{
-	return lttng_metadata_printf(session,
-	"struct event_header_compact {\n"
-	"	enum : uint5_t { compact = 0 ... 30, extended = 31 } id;\n"
-	"	variant <id> {\n"
-	"		struct {\n"
-	"			uint27_clock_monotonic_t timestamp;\n"
-	"		} compact;\n"
-	"		struct {\n"
-	"			uint32_t id;\n"
-	"			uint64_clock_monotonic_t timestamp;\n"
-	"		} extended;\n"
-	"	} v;\n"
-	"} align(%u);\n"
-	"\n"
-	"struct event_header_large {\n"
-	"	enum : uint16_t { compact = 0 ... 65534, extended = 65535 } id;\n"
-	"	variant <id> {\n"
-	"		struct {\n"
-	"			uint32_clock_monotonic_t timestamp;\n"
-	"		} compact;\n"
-	"		struct {\n"
-	"			uint32_t id;\n"
-	"			uint64_clock_monotonic_t timestamp;\n"
-	"		} extended;\n"
-	"	} v;\n"
-	"} align(%u);\n\n",
-	lttng_alignof(uint32_t) * CHAR_BIT,
-	lttng_alignof(uint16_t) * CHAR_BIT
-	);
-}
-
-/*
- * Approximation of NTP time of day to clock monotonic correlation,
- * taken at start of trace.
- * Yes, this is only an approximation. Yes, we can (and will) do better
- * in future versions.
- */
-static
-uint64_t measure_clock_offset(void)
-{
-	uint64_t offset, monotonic[2], realtime;
-	struct timespec rts = { 0, 0 };
-	int ret;
-
-	monotonic[0] = trace_clock_read64();
-	ret = clock_gettime(CLOCK_REALTIME, &rts);	
-	if (ret < 0)
-		return 0;
-	monotonic[1] = trace_clock_read64();
-	offset = (monotonic[0] + monotonic[1]) >> 1;
-	realtime = (uint64_t) rts.tv_sec * 1000000000ULL;
-	realtime += rts.tv_nsec;
-	offset = realtime - offset;
-	return offset;
-}
-
-/*
- * Output metadata into this session's metadata buffers.
- */
-static
-int _lttng_session_metadata_statedump(struct lttng_session *session)
-{
-	unsigned char *uuid_c = session->uuid;
-	char uuid_s[LTTNG_UST_UUID_STR_LEN],
-		clock_uuid_s[LTTNG_UST_UUID_STR_LEN];
-	struct lttng_channel *chan;
-	struct lttng_event *event;
-	int ret = 0;
-	char procname[LTTNG_UST_PROCNAME_LEN] = "";
-	char hostname[HOST_NAME_MAX];
-
-	if (!CMM_ACCESS_ONCE(session->active))
-		return 0;
-	if (session->metadata_dumped)
-		goto skip_session;
-	if (!session->metadata) {
-		DBG("LTTng: attempt to start tracing, but metadata channel is not found. Operation abort.\n");
-		return -EPERM;
-	}
-
-	snprintf(uuid_s, sizeof(uuid_s),
-		"%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-		uuid_c[0], uuid_c[1], uuid_c[2], uuid_c[3],
-		uuid_c[4], uuid_c[5], uuid_c[6], uuid_c[7],
-		uuid_c[8], uuid_c[9], uuid_c[10], uuid_c[11],
-		uuid_c[12], uuid_c[13], uuid_c[14], uuid_c[15]);
-
-	ret = lttng_metadata_printf(session,
-		"typealias integer { size = 8; align = %u; signed = false; } := uint8_t;\n"
-		"typealias integer { size = 16; align = %u; signed = false; } := uint16_t;\n"
-		"typealias integer { size = 32; align = %u; signed = false; } := uint32_t;\n"
-		"typealias integer { size = 64; align = %u; signed = false; } := uint64_t;\n"
-		"typealias integer { size = %u; align = %u; signed = false; } := unsigned long;\n"
-		"typealias integer { size = 5; align = 1; signed = false; } := uint5_t;\n"
-		"typealias integer { size = 27; align = 1; signed = false; } := uint27_t;\n"
-		"\n"
-		"trace {\n"
-		"	major = %u;\n"
-		"	minor = %u;\n"
-		"	uuid = \"%s\";\n"
-		"	byte_order = %s;\n"
-		"	packet.header := struct {\n"
-		"		uint32_t magic;\n"
-		"		uint8_t  uuid[16];\n"
-		"		uint32_t stream_id;\n"
-		"	};\n"
-		"};\n\n",
-		lttng_alignof(uint8_t) * CHAR_BIT,
-		lttng_alignof(uint16_t) * CHAR_BIT,
-		lttng_alignof(uint32_t) * CHAR_BIT,
-		lttng_alignof(uint64_t) * CHAR_BIT,
-		sizeof(unsigned long) * CHAR_BIT,
-		lttng_alignof(unsigned long) * CHAR_BIT,
-		CTF_SPEC_MAJOR,
-		CTF_SPEC_MINOR,
-		uuid_s,
-#if (BYTE_ORDER == BIG_ENDIAN)
-		"be"
-#else
-		"le"
-#endif
-		);
-	if (ret)
-		goto end;
-
-	/* ignore error, just use empty string if error. */
-	hostname[0] = '\0';
-	ret = gethostname(hostname, sizeof(hostname));
-	if (ret && errno == ENAMETOOLONG)
-		hostname[HOST_NAME_MAX - 1] = '\0';
-	lttng_ust_getprocname(procname);
-	procname[LTTNG_UST_PROCNAME_LEN - 1] = '\0';
-	ret = lttng_metadata_printf(session,
-		"env {\n"
-		"	hostname = \"%s\";\n"
-		"	vpid = %d;\n"
-		"	procname = \"%s\";\n"
-		"	domain = \"ust\";\n"
-		"	tracer_name = \"lttng-ust\";\n"
-		"	tracer_major = %u;\n"
-		"	tracer_minor = %u;\n"
-		"	tracer_patchlevel = %u;\n"
-		"};\n\n",
-		hostname,
-		(int) getpid(),
-		procname,
-		LTTNG_UST_MAJOR_VERSION,
-		LTTNG_UST_MINOR_VERSION,
-		LTTNG_UST_PATCHLEVEL_VERSION
-		);
-	if (ret)
-		goto end;
-
-	ret = lttng_metadata_printf(session,
-		"clock {\n"
-		"	name = %s;\n",
-		"monotonic"
-		);
-	if (ret)
-		goto end;
-
-	if (!trace_clock_uuid(clock_uuid_s)) {
-		ret = lttng_metadata_printf(session,
-			"	uuid = \"%s\";\n",
-			clock_uuid_s
-			);
-		if (ret)
-			goto end;
-	}
-
-	ret = lttng_metadata_printf(session,
-		"	description = \"Monotonic Clock\";\n"
-		"	freq = %" PRIu64 "; /* Frequency, in Hz */\n"
-		"	/* clock value offset from Epoch is: offset * (1/freq) */\n"
-		"	offset = %" PRIu64 ";\n"
-		"};\n\n",
-		trace_clock_freq(),
-		measure_clock_offset()
-		);
-	if (ret)
-		goto end;
-
-	ret = lttng_metadata_printf(session,
-		"typealias integer {\n"
-		"	size = 27; align = 1; signed = false;\n"
-		"	map = clock.monotonic.value;\n"
-		"} := uint27_clock_monotonic_t;\n"
-		"\n"
-		"typealias integer {\n"
-		"	size = 32; align = %u; signed = false;\n"
-		"	map = clock.monotonic.value;\n"
-		"} := uint32_clock_monotonic_t;\n"
-		"\n"
-		"typealias integer {\n"
-		"	size = 64; align = %u; signed = false;\n"
-		"	map = clock.monotonic.value;\n"
-		"} := uint64_clock_monotonic_t;\n\n",
-		lttng_alignof(uint32_t) * CHAR_BIT,
-		lttng_alignof(uint64_t) * CHAR_BIT
-		);
-	if (ret)
-		goto end;
-
-	ret = _lttng_stream_packet_context_declare(session);
-	if (ret)
-		goto end;
-
-	ret = _lttng_event_header_declare(session);
-	if (ret)
-		goto end;
-
-skip_session:
-	cds_list_for_each_entry(chan, &session->chan_head, node) {
-		ret = _lttng_channel_metadata_statedump(session, chan);
-		if (ret)
-			goto end;
-	}
-
-	cds_list_for_each_entry(event, &session->events_head, node) {
-		ret = _lttng_event_metadata_statedump(session, event->chan, event);
-		if (ret)
-			goto end;
-	}
-	session->metadata_dumped = 1;
-end:
-	return ret;
 }
 
 void lttng_ust_events_exit(void)
@@ -1297,8 +706,6 @@ int lttng_enabler_enable(struct lttng_enabler *enabler)
 
 int lttng_enabler_disable(struct lttng_enabler *enabler)
 {
-	if (enabler->chan == enabler->chan->session->metadata)
-		return -EPERM;
 	enabler->enabled = 0;
 	lttng_session_lazy_sync_enablers(enabler->chan->session);
 	return 0;
@@ -1333,6 +740,8 @@ int lttng_attach_context(struct lttng_ust_context *context_param,
 		return lttng_add_vpid_to_ctx(ctx);
 	case LTTNG_UST_CONTEXT_PROCNAME:
 		return lttng_add_procname_to_ctx(ctx);
+	case LTTNG_UST_CONTEXT_IP:
+		return lttng_add_ip_to_ctx(ctx);
 	default:
 		return -EINVAL;
 	}
@@ -1386,7 +795,8 @@ void lttng_session_sync_enablers(struct lttng_session *session)
 		lttng_enabler_ref_events(enabler);
 	/*
 	 * For each event, if at least one of its enablers is enabled,
-	 * we enable the event, else we disable it.
+	 * and its channel and session transient states are enabled, we
+	 * enable the event, else we disable it.
 	 */
 	cds_list_for_each_entry(event, &session->events_head, node) {
 		struct lttng_enabler_ref *enabler_ref;
@@ -1401,7 +811,25 @@ void lttng_session_sync_enablers(struct lttng_session *session)
 				break;
 			}
 		}
-		event->enabled = enabled;
+		/*
+		 * Enabled state is based on union of enablers, with
+		 * intesection of session and channel transient enable
+		 * states.
+		 */
+		enabled = enabled && session->tstate && event->chan->tstate;
+
+		CMM_STORE_SHARED(event->enabled, enabled);
+		/*
+		 * Sync tracepoint registration with event enabled
+		 * state.
+		 */
+		if (enabled) {
+			if (!event->registered)
+				register_event(event);
+		} else {
+			if (event->registered)
+				unregister_event(event);
+		}
 
 		/* Check if has enablers without bytecode enabled */
 		cds_list_for_each_entry(enabler_ref,
@@ -1436,17 +864,4 @@ void lttng_session_lazy_sync_enablers(struct lttng_session *session)
 	if (!session->active)
 		return;
 	lttng_session_sync_enablers(session);
-}
-
-/*
- * Take the TLS "fault" in libuuid if dlopen'd, which can take the
- * dynamic linker mutex, outside of the UST lock, since the UST lock is
- * taken in constructors, which are called with dynamic linker mutex
- * held.
- */
-void lttng_fixup_event_tls(void)
-{
-	unsigned char uuid[LTTNG_UST_UUID_STR_LEN];
-
-	(void) lttng_ust_uuid_generate(uuid);
 }

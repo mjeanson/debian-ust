@@ -42,6 +42,8 @@
 #include <lttng/ust-abi.h>
 #include <lttng/ust.h>
 #include <lttng/ust-error.h>
+#include <lttng/ust-ctl.h>
+#include <urcu/tls-compat.h>
 #include <ust-comm.h>
 #include <usterr-signal-safe.h>
 #include <helper.h>
@@ -84,7 +86,7 @@ static int sem_count = { 2 };
  * Counting nesting within lttng-ust. Used to ensure that calling fork()
  * from liblttng-ust does not execute the pre/post fork handlers.
  */
-static int __thread lttng_ust_nest_count;
+static DEFINE_URCU_TLS(int, lttng_ust_nest_count);
 
 /*
  * Info about socket and associated listener thread.
@@ -96,9 +98,11 @@ struct sock_info {
 	int constructor_sem_posted;
 	int allowed;
 	int global;
+	int thread_active;
 
 	char sock_path[PATH_MAX];
 	int socket;
+	int notify_socket;
 
 	char wait_shm_path[PATH_MAX];
 	char *wait_shm_mmap;
@@ -111,11 +115,13 @@ struct sock_info global_apps = {
 
 	.root_handle = -1,
 	.allowed = 1,
+	.thread_active = 0,
 
-	.sock_path = DEFAULT_GLOBAL_APPS_UNIX_SOCK,
+	.sock_path = LTTNG_DEFAULT_RUNDIR "/" LTTNG_UST_SOCK_FILENAME,
 	.socket = -1,
+	.notify_socket = -1,
 
-	.wait_shm_path = DEFAULT_GLOBAL_APPS_WAIT_SHM_PATH,
+	.wait_shm_path = "/" LTTNG_UST_WAIT_FILENAME,
 };
 
 /* TODO: allow global_apps_sock_path override */
@@ -125,18 +131,78 @@ struct sock_info local_apps = {
 	.global = 0,
 	.root_handle = -1,
 	.allowed = 0,	/* Check setuid bit first */
+	.thread_active = 0,
 
 	.socket = -1,
+	.notify_socket = -1,
 };
 
 static int wait_poll_fallback;
 
+static const char *cmd_name_mapping[] = {
+	[ LTTNG_UST_RELEASE ] = "Release",
+	[ LTTNG_UST_SESSION ] = "Create Session",
+	[ LTTNG_UST_TRACER_VERSION ] = "Get Tracer Version",
+
+	[ LTTNG_UST_TRACEPOINT_LIST ] = "Create Tracepoint List",
+	[ LTTNG_UST_WAIT_QUIESCENT ] = "Wait for Quiescent State",
+	[ LTTNG_UST_REGISTER_DONE ] = "Registration Done",
+	[ LTTNG_UST_TRACEPOINT_FIELD_LIST ] = "Create Tracepoint Field List",
+
+	/* Session FD commands */
+	[ LTTNG_UST_CHANNEL ] = "Create Channel",
+	[ LTTNG_UST_SESSION_START ] = "Start Session",
+	[ LTTNG_UST_SESSION_STOP ] = "Stop Session",
+
+	/* Channel FD commands */
+	[ LTTNG_UST_STREAM ] = "Create Stream",
+	[ LTTNG_UST_EVENT ] = "Create Event",
+
+	/* Event and Channel FD commands */
+	[ LTTNG_UST_CONTEXT ] = "Create Context",
+	[ LTTNG_UST_FLUSH_BUFFER ] = "Flush Buffer",
+
+	/* Event, Channel and Session commands */
+	[ LTTNG_UST_ENABLE ] = "Enable",
+	[ LTTNG_UST_DISABLE ] = "Disable",
+
+	/* Tracepoint list commands */
+	[ LTTNG_UST_TRACEPOINT_LIST_GET ] = "List Next Tracepoint",
+	[ LTTNG_UST_TRACEPOINT_FIELD_LIST_GET ] = "List Next Tracepoint Field",
+
+	/* Event FD commands */
+	[ LTTNG_UST_FILTER ] = "Create Filter",
+};
+
+static const char *str_timeout;
+static int got_timeout_env;
+
 extern void lttng_ring_buffer_client_overwrite_init(void);
+extern void lttng_ring_buffer_client_overwrite_rt_init(void);
 extern void lttng_ring_buffer_client_discard_init(void);
+extern void lttng_ring_buffer_client_discard_rt_init(void);
 extern void lttng_ring_buffer_metadata_client_init(void);
 extern void lttng_ring_buffer_client_overwrite_exit(void);
+extern void lttng_ring_buffer_client_overwrite_rt_exit(void);
 extern void lttng_ring_buffer_client_discard_exit(void);
+extern void lttng_ring_buffer_client_discard_rt_exit(void);
 extern void lttng_ring_buffer_metadata_client_exit(void);
+
+/*
+ * Returns the HOME directory path. Caller MUST NOT free(3) the returned
+ * pointer.
+ */
+static
+const char *get_lttng_home_dir(void)
+{
+       const char *val;
+
+       val = (const char *) getenv("LTTNG_HOME");
+       if (val != NULL) {
+               return val;
+       }
+       return (const char *) getenv("HOME");
+}
 
 /*
  * Force a read (imply TLS fixup for dlopen) of TLS variables.
@@ -144,7 +210,28 @@ extern void lttng_ring_buffer_metadata_client_exit(void);
 static
 void lttng_fixup_nest_count_tls(void)
 {
-	asm volatile ("" : : "m" (lttng_ust_nest_count));
+	asm volatile ("" : : "m" (URCU_TLS(lttng_ust_nest_count)));
+}
+
+int lttng_get_notify_socket(void *owner)
+{
+	struct sock_info *info = owner;
+
+	return info->notify_socket;
+}
+
+static
+void print_cmd(int cmd, int handle)
+{
+	const char *cmd_name = "Unknown";
+
+	if (cmd >= 0 && cmd < LTTNG_ARRAY_SIZE(cmd_name_mapping)
+			&& cmd_name_mapping[cmd]) {
+		cmd_name = cmd_name_mapping[cmd];
+	}
+	DBG("Message Received \"%s\" (%d), Handle \"%s\" (%d)",
+		cmd_name, cmd,
+		lttng_ust_obj_get_name(handle), handle);
 }
 
 static
@@ -161,48 +248,94 @@ int setup_local_apps(void)
 		assert(local_apps.allowed == 0);
 		return 0;
 	}
-	home_dir = (const char *) getenv("HOME");
+	home_dir = get_lttng_home_dir();
 	if (!home_dir) {
 		WARN("HOME environment variable not set. Disabling LTTng-UST per-user tracing.");
 		assert(local_apps.allowed == 0);
 		return -ENOENT;
 	}
 	local_apps.allowed = 1;
-	snprintf(local_apps.sock_path, PATH_MAX,
-		 DEFAULT_HOME_APPS_UNIX_SOCK, home_dir);
-	snprintf(local_apps.wait_shm_path, PATH_MAX,
-		 DEFAULT_HOME_APPS_WAIT_SHM_PATH, uid);
+	snprintf(local_apps.sock_path, PATH_MAX, "%s/%s/%s",
+		home_dir,
+		LTTNG_DEFAULT_HOME_RUNDIR,
+		LTTNG_UST_SOCK_FILENAME);
+	snprintf(local_apps.wait_shm_path, PATH_MAX, "/%s-%u",
+		LTTNG_UST_WAIT_FILENAME,
+		uid);
 	return 0;
 }
 
+/*
+ * Get notify_sock timeout, in ms.
+ * -1: don't wait. 0: wait forever. >0: timeout, in ms.
+ */
 static
-int register_app_to_sessiond(int socket)
+long get_timeout(void)
 {
-	ssize_t ret;
-	struct {
-		uint32_t major;
-		uint32_t minor;
-		pid_t pid;
-		pid_t ppid;
-		uid_t uid;
-		gid_t gid;
-		uint32_t bits_per_long;
-		char name[16];	/* process name */
-	} reg_msg;
+	long constructor_delay_ms = LTTNG_UST_DEFAULT_CONSTRUCTOR_TIMEOUT_MS;
 
-	reg_msg.major = LTTNG_UST_COMM_VERSION_MAJOR;
-	reg_msg.minor = LTTNG_UST_COMM_VERSION_MINOR;
-	reg_msg.pid = getpid();
-	reg_msg.ppid = getppid();
-	reg_msg.uid = getuid();
-	reg_msg.gid = getgid();
-	reg_msg.bits_per_long = CAA_BITS_PER_LONG;
-	lttng_ust_getprocname(reg_msg.name);
+	if (!got_timeout_env) {
+		str_timeout = getenv("LTTNG_UST_REGISTER_TIMEOUT");
+		got_timeout_env = 1;
+	}
+	if (str_timeout)
+		constructor_delay_ms = strtol(str_timeout, NULL, 10);
+	return constructor_delay_ms;
+}
 
-	ret = ustcomm_send_unix_sock(socket, &reg_msg, sizeof(reg_msg));
-	if (ret >= 0 && ret != sizeof(reg_msg))
-		return -EIO;
-	return ret;
+static
+long get_notify_sock_timeout(void)
+{
+	return get_timeout();
+}
+
+/*
+ * Return values: -1: don't wait. 0: wait forever. 1: timeout wait.
+ */
+static
+int get_constructor_timeout(struct timespec *constructor_timeout)
+{
+	long constructor_delay_ms;
+	int ret;
+
+	constructor_delay_ms = get_timeout();
+
+	switch (constructor_delay_ms) {
+	case -1:/* fall-through */
+	case 0:
+		return constructor_delay_ms;
+	default:
+		break;
+	}
+
+	/*
+	 * If we are unable to find the current time, don't wait.
+	 */
+	ret = clock_gettime(CLOCK_REALTIME, constructor_timeout);
+	if (ret) {
+		return -1;
+	}
+	constructor_timeout->tv_sec += constructor_delay_ms / 1000UL;
+	constructor_timeout->tv_nsec +=
+		(constructor_delay_ms % 1000UL) * 1000000UL;
+	if (constructor_timeout->tv_nsec >= 1000000000UL) {
+		constructor_timeout->tv_sec++;
+		constructor_timeout->tv_nsec -= 1000000000UL;
+	}
+	return 1;
+}
+
+static
+int register_to_sessiond(int socket, enum ustctl_socket_type type)
+{
+	return ustcomm_send_reg_msg(socket,
+		type,
+		CAA_BITS_PER_LONG,
+		lttng_alignof(uint8_t) * CHAR_BIT,
+		lttng_alignof(uint16_t) * CHAR_BIT,
+		lttng_alignof(uint32_t) * CHAR_BIT,
+		lttng_alignof(uint64_t) * CHAR_BIT,
+		lttng_alignof(unsigned long) * CHAR_BIT);
 }
 
 static
@@ -253,7 +386,6 @@ int handle_message(struct sock_info *sock_info,
 	int ret = 0;
 	const struct lttng_ust_objd_ops *ops;
 	struct ustcomm_ust_reply lur;
-	int shm_fd, wait_fd;
 	union ust_args args;
 	ssize_t len;
 
@@ -262,7 +394,7 @@ int handle_message(struct sock_info *sock_info,
 	memset(&lur, 0, sizeof(lur));
 
 	if (lttng_ust_comm_should_quit) {
-		ret = -EPERM;
+		ret = -LTTNG_UST_ERR_EXITING;
 		goto end;
 	}
 
@@ -283,7 +415,7 @@ int handle_message(struct sock_info *sock_info,
 		if (lum->handle == LTTNG_UST_ROOT_HANDLE)
 			ret = -EPERM;
 		else
-			ret = lttng_ust_objd_unref(lum->handle);
+			ret = lttng_ust_objd_unref(lum->handle, 1);
 		break;
 	case LTTNG_UST_FILTER:
 	{
@@ -329,6 +461,7 @@ int handle_message(struct sock_info *sock_info,
 					goto error;
 				}
 				ret = len;
+				free(bytecode);
 				goto end;
 			} else {
 				DBG("incorrect filter data message size: %zd", len);
@@ -352,6 +485,65 @@ int handle_message(struct sock_info *sock_info,
 			ret = -ENOSYS;
 			free(bytecode);
 		}
+		break;
+	}
+	case LTTNG_UST_CHANNEL:
+	{
+		void *chan_data;
+		int wakeup_fd;
+
+		len = ustcomm_recv_channel_from_sessiond(sock,
+				&chan_data, lum->u.channel.len,
+				&wakeup_fd);
+		switch (len) {
+		case 0:	/* orderly shutdown */
+			ret = 0;
+			goto error;
+		default:
+			if (len == lum->u.channel.len) {
+				DBG("channel data received");
+				break;
+			} else if (len < 0) {
+				DBG("Receive failed from lttng-sessiond with errno %d", (int) -len);
+				if (len == -ECONNRESET) {
+					ERR("%s remote end closed connection", sock_info->name);
+					ret = len;
+					goto error;
+				}
+				ret = len;
+				goto end;
+			} else {
+				DBG("incorrect channel data message size: %zd", len);
+				ret = -EINVAL;
+				goto end;
+			}
+		}
+		args.channel.chan_data = chan_data;
+		args.channel.wakeup_fd = wakeup_fd;
+		if (ops->cmd)
+			ret = ops->cmd(lum->handle, lum->cmd,
+					(unsigned long) &lum->u,
+					&args, sock_info);
+		else
+			ret = -ENOSYS;
+		break;
+	}
+	case LTTNG_UST_STREAM:
+	{
+		/* Receive shm_fd, wakeup_fd */
+		ret = ustcomm_recv_stream_from_sessiond(sock,
+			&lum->u.stream.len,
+			&args.stream.shm_fd,
+			&args.stream.wakeup_fd);
+		if (ret) {
+			goto end;
+		}
+		if (ops->cmd)
+			ret = ops->cmd(lum->handle, lum->cmd,
+					(unsigned long) &lum->u,
+					&args, sock_info);
+		else
+			ret = -ENOSYS;
 		break;
 	}
 	default:
@@ -405,21 +597,6 @@ end:
 	}
 	if (ret >= 0) {
 		switch (lum->cmd) {
-		case LTTNG_UST_STREAM:
-			/*
-			 * Special-case reply to send stream info.
-			 * Use lum.u output.
-			 */
-			lur.u.stream.memory_map_size = *args.stream.memory_map_size;
-			shm_fd = *args.stream.shm_fd;
-			wait_fd = *args.stream.wait_fd;
-			break;
-		case LTTNG_UST_METADATA:
-		case LTTNG_UST_CHANNEL:
-			lur.u.channel.memory_map_size = *args.channel.memory_map_size;
-			shm_fd = *args.channel.shm_fd;
-			wait_fd = *args.channel.wait_fd;
-			break;
 		case LTTNG_UST_TRACER_VERSION:
 			lur.u.version = lum->u.version;
 			break;
@@ -428,42 +605,13 @@ end:
 			break;
 		}
 	}
+	DBG("Return value: %d", lur.ret_val);
 	ret = send_reply(sock, &lur);
 	if (ret < 0) {
 		DBG("error sending reply");
 		goto error;
 	}
 
-	if ((lum->cmd == LTTNG_UST_STREAM
-	     || lum->cmd == LTTNG_UST_CHANNEL
-	     || lum->cmd == LTTNG_UST_METADATA)
-			&& lur.ret_code == LTTNG_UST_OK) {
-		int sendret = 0;
-
-		/* we also need to send the file descriptors. */
-		ret = ustcomm_send_fds_unix_sock(sock,
-			&shm_fd, &shm_fd,
-			1, sizeof(int));
-		if (ret < 0) {
-			ERR("send shm_fd");
-			sendret = ret;
-		}
-		/*
-		 * The sessiond expects 2 file descriptors, even upon
-		 * error.
-		 */
-		ret = ustcomm_send_fds_unix_sock(sock,
-			&wait_fd, &wait_fd,
-			1, sizeof(int));
-		if (ret < 0) {
-			perror("send wait_fd");
-			goto error;
-		}
-		if (sendret) {
-			ret = sendret;
-			goto error;
-		}
-	}
 	/*
 	 * LTTNG_UST_TRACEPOINT_FIELD_LIST_GET needs to send the field
 	 * after the reply.
@@ -484,49 +632,6 @@ end:
 			}
 		}
 	}
-	/*
-	 * We still have the memory map reference, and the fds have been
-	 * sent to the sessiond. We can therefore close those fds. Note
-	 * that we keep the write side of the wait_fd open, but close
-	 * the read side.
-	 */
-	if (lur.ret_code == LTTNG_UST_OK) {
-		switch (lum->cmd) {
-		case LTTNG_UST_STREAM:
-			if (shm_fd >= 0) {
-				ret = close(shm_fd);
-				if (ret) {
-					PERROR("Error closing stream shm_fd");
-				}
-				*args.stream.shm_fd = -1;
-			}
-			if (wait_fd >= 0) {
-				ret = close(wait_fd);
-				if (ret) {
-					PERROR("Error closing stream wait_fd");
-				}
-				*args.stream.wait_fd = -1;
-			}
-			break;
-		case LTTNG_UST_METADATA:
-		case LTTNG_UST_CHANNEL:
-			if (shm_fd >= 0) {
-				ret = close(shm_fd);
-				if (ret) {
-					PERROR("Error closing channel shm_fd");
-				}
-				*args.channel.shm_fd = -1;
-			}
-			if (wait_fd >= 0) {
-				ret = close(wait_fd);
-				if (ret) {
-					PERROR("Error closing channel wait_fd");
-				}
-				*args.channel.wait_fd = -1;
-			}
-			break;
-		}
-	}
 
 error:
 	ust_unlock();
@@ -538,28 +643,40 @@ void cleanup_sock_info(struct sock_info *sock_info, int exiting)
 {
 	int ret;
 
-	if (sock_info->socket != -1) {
-		ret = ustcomm_close_unix_sock(sock_info->socket);
-		if (ret) {
-			ERR("Error closing apps socket");
-		}
-		sock_info->socket = -1;
-	}
 	if (sock_info->root_handle != -1) {
-		ret = lttng_ust_objd_unref(sock_info->root_handle);
+		ret = lttng_ust_objd_unref(sock_info->root_handle, 1);
 		if (ret) {
 			ERR("Error unref root handle");
 		}
 		sock_info->root_handle = -1;
 	}
 	sock_info->constructor_sem_posted = 0;
+
 	/*
-	 * wait_shm_mmap is used by listener threads outside of the
-	 * ust lock, so we cannot tear it down ourselves, because we
-	 * cannot join on these threads. Leave this task to the OS
+	 * wait_shm_mmap, socket and notify socket are used by listener
+	 * threads outside of the ust lock, so we cannot tear them down
+	 * ourselves, because we cannot join on these threads. Leave
+	 * responsibility of cleaning up these resources to the OS
 	 * process exit.
 	 */
-	if (!exiting && sock_info->wait_shm_mmap) {
+	if (exiting)
+		return;
+
+	if (sock_info->socket != -1) {
+		ret = ustcomm_close_unix_sock(sock_info->socket);
+		if (ret) {
+			ERR("Error closing ust cmd socket");
+		}
+		sock_info->socket = -1;
+	}
+	if (sock_info->notify_socket != -1) {
+		ret = ustcomm_close_unix_sock(sock_info->notify_socket);
+		if (ret) {
+			ERR("Error closing ust notify socket");
+		}
+		sock_info->notify_socket = -1;
+	}
+	if (sock_info->wait_shm_mmap) {
 		ret = munmap(sock_info->wait_shm_mmap, sysconf(_SC_PAGE_SIZE));
 		if (ret) {
 			ERR("Error unmapping wait shm");
@@ -602,9 +719,9 @@ int get_wait_shm(struct sock_info *sock_info, size_t mmap_size)
 	 * If the open failed because the file did not exist, try
 	 * creating it ourself.
 	 */
-	lttng_ust_nest_count++;
+	URCU_TLS(lttng_ust_nest_count)++;
 	pid = fork();
-	lttng_ust_nest_count--;
+	URCU_TLS(lttng_ust_nest_count)--;
 	if (pid > 0) {
 		int status;
 
@@ -795,6 +912,9 @@ void *ust_listener_thread(void *arg)
 {
 	struct sock_info *sock_info = arg;
 	int sock, ret, prev_connect_failed = 0, has_waited = 0;
+	int open_sock[2];
+	int i;
+	long timeout;
 
 	/* Restart trying to connect to the session daemon */
 restart:
@@ -813,37 +933,79 @@ restart:
 		has_waited = 1;
 		prev_connect_failed = 0;
 	}
-	ust_lock();
-
-	if (lttng_ust_comm_should_quit) {
-		ust_unlock();
-		goto quit;
-	}
 
 	if (sock_info->socket != -1) {
 		ret = ustcomm_close_unix_sock(sock_info->socket);
 		if (ret) {
-			ERR("Error closing %s apps socket", sock_info->name);
+			ERR("Error closing %s ust cmd socket",
+				sock_info->name);
 		}
 		sock_info->socket = -1;
 	}
-
-	/* Register */
-	ret = ustcomm_connect_unix_sock(sock_info->sock_path);
-	if (ret < 0) {
-		DBG("Info: sessiond not accepting connections to %s apps socket", sock_info->name);
-		prev_connect_failed = 1;
-		/*
-		 * If we cannot find the sessiond daemon, don't delay
-		 * constructor execution.
-		 */
-		ret = handle_register_done(sock_info);
-		assert(!ret);
-		ust_unlock();
-		goto restart;
+	if (sock_info->notify_socket != -1) {
+		ret = ustcomm_close_unix_sock(sock_info->notify_socket);
+		if (ret) {
+			ERR("Error closing %s ust notify socket",
+				sock_info->name);
+		}
+		sock_info->notify_socket = -1;
 	}
 
-	sock_info->socket = sock = ret;
+	/* Register */
+	for (i = 0; i < 2; i++) {
+		ret = ustcomm_connect_unix_sock(sock_info->sock_path);
+		if (ret < 0) {
+			DBG("Info: sessiond not accepting connections to %s apps socket", sock_info->name);
+			prev_connect_failed = 1;
+
+			ust_lock();
+
+			if (lttng_ust_comm_should_quit) {
+				goto quit;
+			}
+
+			/*
+			 * If we cannot find the sessiond daemon, don't delay
+			 * constructor execution.
+			 */
+			ret = handle_register_done(sock_info);
+			assert(!ret);
+			ust_unlock();
+			goto restart;
+		}
+		open_sock[i] = ret;
+	}
+
+	sock_info->socket = open_sock[0];
+	sock_info->notify_socket = open_sock[1];
+
+	timeout = get_notify_sock_timeout();
+	if (timeout >= 0) {
+		/*
+		 * Give at least 10ms to sessiond to reply to
+		 * notifications.
+		 */
+		if (timeout < 10)
+			timeout = 10;
+		ret = ustcomm_setsockopt_rcv_timeout(sock_info->notify_socket,
+				timeout);
+		if (ret < 0) {
+			WARN("Error setting socket receive timeout");
+		}
+		ret = ustcomm_setsockopt_snd_timeout(sock_info->notify_socket,
+				timeout);
+		if (ret < 0) {
+			WARN("Error setting socket send timeout");
+		}
+	} else if (timeout < -1) {
+		WARN("Unsuppoorted timeout value %ld", timeout);
+	}
+
+	ust_lock();
+
+	if (lttng_ust_comm_should_quit) {
+		goto quit;
+	}
 
 	/*
 	 * Create only one root handle per listener thread for the whole
@@ -854,15 +1016,15 @@ restart:
 		ret = lttng_abi_create_root_handle();
 		if (ret < 0) {
 			ERR("Error creating root handle");
-			ust_unlock();
 			goto quit;
 		}
 		sock_info->root_handle = ret;
 	}
 
-	ret = register_app_to_sessiond(sock);
+	ret = register_to_sessiond(sock_info->socket, USTCTL_SOCKET_CMD);
 	if (ret < 0) {
-		ERR("Error registering to %s apps socket", sock_info->name);
+		ERR("Error registering to %s ust cmd socket",
+			sock_info->name);
 		prev_connect_failed = 1;
 		/*
 		 * If we cannot register to the sessiond daemon, don't
@@ -873,6 +1035,23 @@ restart:
 		ust_unlock();
 		goto restart;
 	}
+	ret = register_to_sessiond(sock_info->notify_socket,
+			USTCTL_SOCKET_NOTIFY);
+	if (ret < 0) {
+		ERR("Error registering to %s ust notify socket",
+			sock_info->name);
+		prev_connect_failed = 1;
+		/*
+		 * If we cannot register to the sessiond daemon, don't
+		 * delay constructor execution.
+		 */
+		ret = handle_register_done(sock_info);
+		assert(!ret);
+		ust_unlock();
+		goto restart;
+	}
+	sock = sock_info->socket;
+
 	ust_unlock();
 
 	for (;;) {
@@ -884,6 +1063,9 @@ restart:
 		case 0:	/* orderly shutdown */
 			DBG("%s lttng-sessiond has performed an orderly shutdown", sock_info->name);
 			ust_lock();
+			if (lttng_ust_comm_should_quit) {
+				goto quit;
+			}
 			/*
 			 * Either sessiond has shutdown or refused us by closing the socket.
 			 * In either case, we don't want to delay construction execution,
@@ -899,7 +1081,7 @@ restart:
 			ust_unlock();
 			goto end;
 		case sizeof(lum):
-			DBG("message received");
+			print_cmd(lum.cmd, lum.handle);
 			ret = handle_message(sock_info, sock, &lum);
 			if (ret) {
 				ERR("Error handling message for %s socket", sock_info->name);
@@ -921,52 +1103,18 @@ restart:
 	}
 end:
 	ust_lock();
+	if (lttng_ust_comm_should_quit) {
+		goto quit;
+	}
 	/* Cleanup socket handles before trying to reconnect */
 	lttng_ust_objd_table_owner_cleanup(sock_info);
 	ust_unlock();
 	goto restart;	/* try to reconnect */
+
 quit:
+	sock_info->thread_active = 0;
+	ust_unlock();
 	return NULL;
-}
-
-/*
- * Return values: -1: don't wait. 0: wait forever. 1: timeout wait.
- */
-static
-int get_timeout(struct timespec *constructor_timeout)
-{
-	long constructor_delay_ms = LTTNG_UST_DEFAULT_CONSTRUCTOR_TIMEOUT_MS;
-	char *str_delay;
-	int ret;
-
-	str_delay = getenv("LTTNG_UST_REGISTER_TIMEOUT");
-	if (str_delay) {
-		constructor_delay_ms = strtol(str_delay, NULL, 10);
-	}
-
-	switch (constructor_delay_ms) {
-	case -1:/* fall-through */
-	case 0:
-		return constructor_delay_ms;
-	default:
-		break;
-	}
-
-	/*
-	 * If we are unable to find the current time, don't wait.
-	 */
-	ret = clock_gettime(CLOCK_REALTIME, constructor_timeout);
-	if (ret) {
-		return -1;
-	}
-	constructor_timeout->tv_sec += constructor_delay_ms / 1000UL;
-	constructor_timeout->tv_nsec +=
-		(constructor_delay_ms % 1000UL) * 1000000UL;
-	if (constructor_timeout->tv_nsec >= 1000000000UL) {
-		constructor_timeout->tv_sec++;
-		constructor_timeout->tv_nsec -= 1000000000UL;
-	}
-	return 1;
 }
 
 /*
@@ -989,7 +1137,6 @@ void __attribute__((constructor)) lttng_ust_init(void)
 	 * to be the dynamic linker mutex) and ust_lock, taken within
 	 * the ust lock.
 	 */
-	lttng_fixup_event_tls();
 	lttng_fixup_ringbuffer_tls();
 	lttng_fixup_vtid_tls();
 	lttng_fixup_nest_count_tls();
@@ -1005,9 +1152,12 @@ void __attribute__((constructor)) lttng_ust_init(void)
 	init_tracepoint();
 	lttng_ring_buffer_metadata_client_init();
 	lttng_ring_buffer_client_overwrite_init();
+	lttng_ring_buffer_client_overwrite_rt_init();
 	lttng_ring_buffer_client_discard_init();
+	lttng_ring_buffer_client_discard_rt_init();
+	lttng_context_init();
 
-	timeout_mode = get_timeout(&constructor_timeout);
+	timeout_mode = get_constructor_timeout(&constructor_timeout);
 
 	ret = sem_init(&constructor_wait, 0, 0);
 	assert(!ret);
@@ -1037,17 +1187,24 @@ void __attribute__((constructor)) lttng_ust_init(void)
 		ERR("pthread_attr_setdetachstate: %s", strerror(ret));
 	}
 
+	ust_lock();
 	ret = pthread_create(&global_apps.ust_listener, &thread_attr,
 			ust_listener_thread, &global_apps);
 	if (ret) {
 		ERR("pthread_create global: %s", strerror(ret));
 	}
+	global_apps.thread_active = 1;
+	ust_unlock();
+
 	if (local_apps.allowed) {
+		ust_lock();
 		ret = pthread_create(&local_apps.ust_listener, &thread_attr,
 				ust_listener_thread, &local_apps);
 		if (ret) {
 			ERR("pthread_create local: %s", strerror(ret));
 		}
+		local_apps.thread_active = 1;
+		ust_unlock();
 	} else {
 		handle_register_done(&local_apps);
 	}
@@ -1101,7 +1258,10 @@ void lttng_ust_cleanup(int exiting)
 	 */
 	lttng_ust_abi_exit();
 	lttng_ust_events_exit();
+	lttng_context_exit();
+	lttng_ring_buffer_client_discard_rt_exit();
 	lttng_ring_buffer_client_discard_exit();
+	lttng_ring_buffer_client_overwrite_rt_exit();
 	lttng_ring_buffer_client_overwrite_exit();
 	lttng_ring_buffer_metadata_client_exit();
 	exit_tracepoint();
@@ -1130,21 +1290,28 @@ void __attribute__((destructor)) lttng_ust_exit(void)
 	 */
 	ust_lock();
 	lttng_ust_comm_should_quit = 1;
-	ust_unlock();
 
 	/* cancel threads */
-	ret = pthread_cancel(global_apps.ust_listener);
-	if (ret) {
-		ERR("Error cancelling global ust listener thread: %s",
-			strerror(ret));
+	if (global_apps.thread_active) {
+		ret = pthread_cancel(global_apps.ust_listener);
+		if (ret) {
+			ERR("Error cancelling global ust listener thread: %s",
+				strerror(ret));
+		} else {
+			global_apps.thread_active = 0;
+		}
 	}
-	if (local_apps.allowed) {
+	if (local_apps.thread_active) {
 		ret = pthread_cancel(local_apps.ust_listener);
 		if (ret) {
 			ERR("Error cancelling local ust listener thread: %s",
 				strerror(ret));
+		} else {
+			local_apps.thread_active = 0;
 		}
 	}
+	ust_unlock();
+
 	/*
 	 * Do NOT join threads: use of sys_futex makes it impossible to
 	 * join the threads without using async-cancel, but async-cancel
@@ -1174,7 +1341,7 @@ void ust_before_fork(sigset_t *save_sigset)
 	sigset_t all_sigs;
 	int ret;
 
-	if (lttng_ust_nest_count)
+	if (URCU_TLS(lttng_ust_nest_count))
 		return;
 	/* Disable signals */
 	sigfillset(&all_sigs);
@@ -1201,7 +1368,7 @@ static void ust_after_fork_common(sigset_t *restore_sigset)
 
 void ust_after_fork_parent(sigset_t *restore_sigset)
 {
-	if (lttng_ust_nest_count)
+	if (URCU_TLS(lttng_ust_nest_count))
 		return;
 	DBG("process %d", getpid());
 	rcu_bp_after_fork_parent();
@@ -1220,7 +1387,7 @@ void ust_after_fork_parent(sigset_t *restore_sigset)
  */
 void ust_after_fork_child(sigset_t *restore_sigset)
 {
-	if (lttng_ust_nest_count)
+	if (URCU_TLS(lttng_ust_nest_count))
 		return;
 	DBG("process %d", getpid());
 	/* Release urcu mutexes */

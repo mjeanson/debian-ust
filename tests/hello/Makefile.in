@@ -15,7 +15,6 @@
 
 @SET_MAKE@
 
-
 VPATH = @srcdir@
 am__make_dryrun = \
   { \
@@ -83,7 +82,6 @@ am__v_lt_0 = --silent
 hello_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(hello_CFLAGS) $(CFLAGS) \
 	$(AM_LDFLAGS) $(LDFLAGS) -o $@
-SCRIPTS = $(noinst_SCRIPTS)
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir) -I$(top_builddir)/include/lttng
 depcomp = $(SHELL) $(top_srcdir)/config/depcomp
 am__depfiles_maybe = depfiles
@@ -253,8 +251,6 @@ hello_SOURCES = hello.c tp.c ust_tests_hello.h
 hello_LDADD = $(top_builddir)/liblttng-ust/liblttng-ust.la \
 	$(am__append_1) $(am__append_2)
 hello_CFLAGS = -Werror=old-style-definition
-noinst_SCRIPTS = run
-EXTRA_DIST = run
 all: all-am
 
 .SUFFIXES:
@@ -450,7 +446,7 @@ distdir: $(DISTFILES)
 	done
 check-am: all-am
 check: check-am
-all-am: Makefile $(PROGRAMS) $(SCRIPTS)
+all-am: Makefile $(PROGRAMS)
 installdirs:
 install: install-am
 install-exec: install-exec-am
