@@ -1,3 +1,11 @@
+ust (2.3.0-1) unstable; urgency=low
+
+  * [f244fc1] New upstream version 2.3.0
+  * [e895d50] Bump standards version, no changes necessary
+  * [79a2884] Bump soname and remove old transitional packages
+
+ -- Jon Bernard <jbernard@debian.org>  Sun, 20 Oct 2013 08:55:33 -0400
+
 ust (2.1.1-6) unstable; urgency=low
 
   * [c06ec11] Restrict liblttng-ust-dev's systemtap-sdt-dev dependency
