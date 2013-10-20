@@ -9,14 +9,11 @@ Vcs-Git: git://git.debian.org/git/collab-maint/ust.git
 Vcs-Browser: http://git.debian.org/?p=collab-maint/ust.git;a=summary
 Homepage: http://lttng.org/
 
-Package: liblttng-ust0
+Package: liblttng-ust2
 Architecture: amd64 armel armhf i386 mips mipsel powerpc s390x
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Replaces: libust0 (<< 2.0.4-1~)
-Breaks: libust0 (<< 2.0.4-1~)
-Provides: libust0
 Description: LTTng 2.0 Userspace Tracer (libraries)
  The userspace tracer is designed to provide detailed information about
  userspace activity. Like the kernel tracer, performance is the main goal.
@@ -26,24 +23,13 @@ Description: LTTng 2.0 Userspace Tracer (libraries)
  This package contains the UST runtime libraries needed to execute applications
  linked against liblttng-ust.
 
-Package: libust0
-Section: oldlibs
-Architecture: amd64 armel armhf i386 mips mipsel powerpc s390x
-Depends: ${misc:Depends}, liblttng-ust0
-Description: Transitional package for liblttng-ust0
- This is a transitional package to ease upgrades to the liblttng-ust0 package.
- It can safely be removed.
-
 Package: liblttng-ust-dev
 Section: libdevel
 Architecture: amd64 armel armhf i386 mips mipsel powerpc s390x
 Multi-Arch: same
-Depends: ${misc:Depends}, liblttng-ust0 (= ${binary:Version}),
+Depends: ${misc:Depends}, liblttng-ust2 (= ${binary:Version}),
  liburcu-dev (>= 0.6.6), uuid-dev, systemtap-sdt-dev (>= 1.6) [amd64 armel armhf i386 powerpc]
 Recommends: python
-Replaces: libust-dev (<< 2.0.4-1~)
-Breaks: libust-dev (<< 2.0.4-1~)
-Provides: libust-dev
 Description: LTTng 2.0 Userspace Tracer (development files)
  The userspace tracer is designed to provide detailed information about
  userspace activity. Like the kernel tracer, performance is the main goal.
@@ -52,19 +38,3 @@ Description: LTTng 2.0 Userspace Tracer (development files)
  .
  This package contains the UST library development files necessary to compile
  and link applications against liblttng-ust.
-
-Package: libust-dev
-Section: oldlibs
-Architecture: amd64 armel armhf i386 mips mipsel powerpc s390x
-Depends: ${misc:Depends}, liblttng-ust-dev
-Description: Transitional package for liblttng-ust-dev
- This is a transitional package to ease upgrades to the liblttng-ust-dev
- package.  It can safely be removed.
-
-Package: ust-bin
-Section: oldlibs
-Architecture: amd64 armel armhf i386 mips mipsel powerpc s390x
-Depends: ${misc:Depends}, lttng-tools
-Description: Transitional package for lttng-tools
- This is a transitional package to ease upgrades to the lttng-tools package.
- It can safely be removed.
