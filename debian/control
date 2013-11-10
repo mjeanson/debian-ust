@@ -1,7 +1,7 @@
 Source: ust
 Priority: extra
 Maintainer: Jon Bernard <jbernard@debian.org>
-Build-Depends: debhelper (>= 9), liburcu-dev (>= 0.6.6), uuid-dev, texinfo,
+Build-Depends: debhelper (>= 9), liburcu-dev (>= 0.7.2), uuid-dev, texinfo,
   systemtap-sdt-dev (>= 1.6) [amd64 armel armhf i386 powerpc]
 Standards-Version: 3.9.5
 Section: libs
@@ -28,7 +28,7 @@ Section: libdevel
 Architecture: amd64 armel armhf i386 mips mipsel powerpc s390x
 Multi-Arch: same
 Depends: ${misc:Depends}, liblttng-ust2 (= ${binary:Version}),
- liburcu-dev (>= 0.6.6), uuid-dev, systemtap-sdt-dev (>= 1.6) [amd64 armel armhf i386 powerpc]
+ liburcu-dev (>= 0.7.2), uuid-dev, systemtap-sdt-dev (>= 1.6) [amd64 armel armhf i386 powerpc]
 Recommends: python
 Description: LTTng 2.0 Userspace Tracer (development files)
  The userspace tracer is designed to provide detailed information about
