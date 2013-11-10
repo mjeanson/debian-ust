@@ -3,7 +3,7 @@ Priority: extra
 Maintainer: Jon Bernard <jbernard@debian.org>
 Build-Depends: debhelper (>= 9), liburcu-dev (>= 0.6.6), uuid-dev, texinfo,
   systemtap-sdt-dev (>= 1.6) [amd64 armel armhf i386 powerpc]
-Standards-Version: 3.9.4
+Standards-Version: 3.9.5
 Section: libs
 Vcs-Git: git://git.debian.org/git/collab-maint/ust.git
 Vcs-Browser: http://git.debian.org/?p=collab-maint/ust.git;a=summary
