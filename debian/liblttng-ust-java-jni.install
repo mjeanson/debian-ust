@@ -1,0 +1,4 @@
+usr/lib/*/liblttng-ust-java.a
+usr/lib/*/liblttng-ust-java.so
+usr/lib/*/liblttng-ust-java.so.0
+usr/lib/*/liblttng-ust-java.so.0.*
