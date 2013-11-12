@@ -9,27 +9,44 @@ Vcs-Git: git://anonscm.debian.org/collab-maint/ust.git
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/ust.git;a=summary
 Homepage: http://lttng.org/
 
-Package: liblttng-ust2
+Package: liblttng-ust0
 Architecture: amd64 armel armhf i386 mips mipsel powerpc s390x
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: LTTng 2.0 Userspace Tracer (libraries)
+Depends: ${shlibs:Depends}, ${misc:Depends},
+  liblttng-ust-ctl2 (= ${binary:Version})
+Description: LTTng 2.0 Userspace Tracer (tracing libraries)
  The userspace tracer is designed to provide detailed information about
  userspace activity. Like the kernel tracer, performance is the main goal.
  Tracing does not require system calls or traps. UST instrumentation points may
  be added in any userspace code including signal handlers and libraries.
  .
- This package contains the UST runtime libraries needed to execute applications
- linked against liblttng-ust.
+ This package contains the actual userspace tracing library that must be linked
+ to the instrumented programs.
+
+Package: liblttng-ust-ctl2
+Architecture: amd64 armel armhf i386 mips mipsel powerpc s390x
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: LTTng 2.0 Userspace Tracer (trace control library)
+ The userspace tracer is designed to provide detailed information about
+ userspace activity. Like the kernel tracer, performance is the main goal.
+ Tracing does not require system calls or traps. UST instrumentation points may
+ be added in any userspace code including signal handlers and libraries.
+ .
+ This package contains a library to control tracing in other processes. Used by
+ lttng-tools.
 
 Package: liblttng-ust-dev
 Section: libdevel
 Architecture: amd64 armel armhf i386 mips mipsel powerpc s390x
 Multi-Arch: same
-Depends: ${misc:Depends}, liblttng-ust2 (= ${binary:Version}),
- liburcu-dev (>= 0.7.2), uuid-dev, systemtap-sdt-dev (>= 1.6) [amd64 armel armhf i386 powerpc]
+Depends: ${misc:Depends},
+  liblttng-ust0 (= ${binary:Version}), liblttng-ust-ctl2 (= ${binary:Version}),
+  liburcu-dev (>= 0.7.2), uuid-dev, systemtap-sdt-dev (>= 1.6) [amd64 armel armhf i386 powerpc]
 Recommends: python
+Breaks: liblttng-ust0 (<< 2.3.0)
 Description: LTTng 2.0 Userspace Tracer (development files)
  The userspace tracer is designed to provide detailed information about
  userspace activity. Like the kernel tracer, performance is the main goal.

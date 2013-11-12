@@ -3,4 +3,4 @@ usr/lib/*/liblttng-ust*.a
 usr/lib/*/liblttng-ust*.so
 usr/lib/*/pkgconfig
 usr/bin
-usr/share/man/man1
+usr/share/man
