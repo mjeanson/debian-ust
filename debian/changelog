@@ -1,3 +1,13 @@
+ust (2.3.0-2) unstable; urgency=low
+
+  * [63eb27d] Bump standards version, no changes necessary
+  * [c0c304b] Correct version dependency on liburcu
+  * [539c38c] Update copyright holder email address
+  * [351faa2] Correct VCS links in control file
+  * [872f563] Move ctl library into its own package (Closes: #728256)
+
+ -- Jon Bernard <jbernard@debian.org>  Thu, 14 Nov 2013 15:38:30 -0500
+
 ust (2.3.0-1) unstable; urgency=low
 
   * [f244fc1] New upstream version 2.3.0
