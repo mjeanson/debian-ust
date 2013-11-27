@@ -15,6 +15,8 @@ Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends}, ${misc:Depends},
   liblttng-ust-ctl2 (= ${binary:Version})
+Conflicts: liblttng-ust2
+Replaces: liblttng-ust2
 Description: LTTng 2.0 Userspace Tracer (tracing libraries)
  The userspace tracer is designed to provide detailed information about
  userspace activity. Like the kernel tracer, performance is the main goal.
@@ -29,6 +31,8 @@ Architecture: amd64 armel armhf i386 mips mipsel powerpc s390x
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Conflicts: liblttng-ust2
+Replaces: liblttng-ust2
 Description: LTTng 2.0 Userspace Tracer (trace control library)
  The userspace tracer is designed to provide detailed information about
  userspace activity. Like the kernel tracer, performance is the main goal.
@@ -46,6 +50,8 @@ Depends: ${misc:Depends},
   liblttng-ust0 (= ${binary:Version}), liblttng-ust-ctl2 (= ${binary:Version}),
   liburcu-dev (>= 0.7.2), uuid-dev, systemtap-sdt-dev (>= 1.6) [amd64 armel armhf i386 powerpc]
 Recommends: python
+Conflicts: liblttng-ust2
+Replaces: liblttng-ust2
 Breaks: liblttng-ust0 (<< 2.3.0)
 Description: LTTng 2.0 Userspace Tracer (development files)
  The userspace tracer is designed to provide detailed information about
