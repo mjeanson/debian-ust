@@ -1,3 +1,10 @@
+ust (2.3.0-4) unstable; urgency=low
+
+  * [3474a19] Fix upgrade from older liblttng-ust2 package.
+    Thanks to Andreas Beckmann (Closes: #730278, #730300)
+
+ -- Jon Bernard <jbernard@debian.org>  Wed, 27 Nov 2013 16:40:23 -0500
+
 ust (2.3.0-3) unstable; urgency=low
 
   * [2891d68] Update copyright information (Closes: #728170)
