@@ -102,7 +102,8 @@ am_liblttng_ust_runtime_la_OBJECTS = lttng-ust-comm.lo \
 	lttng-context-vpid.lo lttng-context-pthread-id.lo \
 	lttng-context-procname.lo lttng-context-ip.lo lttng-context.lo \
 	lttng-events.lo lttng-filter.lo lttng-filter-validator.lo \
-	lttng-filter-specialize.lo lttng-filter-interpreter.lo
+	lttng-filter-specialize.lo lttng-filter-interpreter.lo \
+	lttng-ust-baddr.lo
 liblttng_ust_runtime_la_OBJECTS =  \
 	$(am_liblttng_ust_runtime_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -216,6 +217,7 @@ INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
+JAVA_JDK = @JAVA_JDK@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
@@ -290,6 +292,7 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
+lttnglibjavadir = @lttnglibjavadir@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -344,6 +347,9 @@ liblttng_ust_runtime_la_SOURCES = \
 	lttng-filter-interpreter.c \
 	filter-bytecode.h \
 	lttng-hash-helper.h \
+	lttng-ust-baddr.c \
+	lttng-ust-baddr.h \
+	ust_baddr_statedump.h \
 	tracepoint-internal.h \
 	clock.h \
 	compat.h \
@@ -356,6 +362,7 @@ liblttng_ust_support_la_SOURCES = \
 	lttng-tracer.h \
 	lttng-tracer-core.h \
 	ust-core.c \
+	lttng-rb-clients.h \
 	lttng-ring-buffer-client.h \
 	lttng-ring-buffer-client-discard.c \
 	lttng-ring-buffer-client-discard-rt.c \
@@ -488,6 +495,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ring-buffer-client-overwrite.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ring-buffer-metadata-client.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-abi.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-baddr.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-comm.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ust-core.Plo@am__quote@
 

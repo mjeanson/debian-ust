@@ -14,6 +14,7 @@
 # PARTICULAR PURPOSE.
 
 @SET_MAKE@
+
 VPATH = @srcdir@
 am__make_dryrun = \
   { \
@@ -52,7 +53,7 @@ build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
 subdir = doc
-DIST_COMMON = $(dist_man_MANS) $(srcdir)/Makefile.am \
+DIST_COMMON = $(dist_doc_DATA) $(dist_man_MANS) $(srcdir)/Makefile.am \
 	$(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/config/libtool.m4 \
@@ -115,10 +116,12 @@ am__uninstall_files_from_dir = { \
          $(am__cd) "$$dir" && rm -f $$files; }; \
   }
 man1dir = $(mandir)/man1
-am__installdirs = "$(DESTDIR)$(man1dir)" "$(DESTDIR)$(man3dir)"
+am__installdirs = "$(DESTDIR)$(man1dir)" "$(DESTDIR)$(man3dir)" \
+	"$(DESTDIR)$(docdir)"
 man3dir = $(mandir)/man3
 NROFF = nroff
 MANS = $(dist_man_MANS)
+DATA = $(dist_doc_DATA)
 RECURSIVE_CLEAN_TARGETS = mostlyclean-recursive clean-recursive	\
   distclean-recursive maintainer-clean-recursive
 AM_RECURSIVE_TARGETS = $(RECURSIVE_TARGETS:-recursive=) \
@@ -188,6 +191,7 @@ INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
+JAVA_JDK = @JAVA_JDK@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
@@ -262,6 +266,7 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
+lttnglibjavadir = @lttnglibjavadir@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -284,8 +289,10 @@ top_srcdir = @top_srcdir@
 SUBDIRS = . examples
 dist_man_MANS = man/lttng-gen-tp.1 \
 	man/lttng-ust.3 \
+	man/lttng-ust-dl.3 \
 	man/lttng-ust-cyg-profile.3
 
+dist_doc_DATA = java-util-logging.txt
 all: all-recursive
 
 .SUFFIXES:
@@ -411,6 +418,27 @@ uninstall-man3:
 	} | sed -e 's,.*/,,;h;s,.*\.,,;s,^[^3][0-9a-z]*$$,3,;x' \
 	      -e 's,\.[0-9a-z]*$$,,;$(transform);G;s,\n,.,'`; \
 	dir='$(DESTDIR)$(man3dir)'; $(am__uninstall_files_from_dir)
+install-dist_docDATA: $(dist_doc_DATA)
+	@$(NORMAL_INSTALL)
+	@list='$(dist_doc_DATA)'; test -n "$(docdir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(docdir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(docdir)" || exit 1; \
+	fi; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  echo "$$d$$p"; \
+	done | $(am__base_list) | \
+	while read files; do \
+	  echo " $(INSTALL_DATA) $$files '$(DESTDIR)$(docdir)'"; \
+	  $(INSTALL_DATA) $$files "$(DESTDIR)$(docdir)" || exit $$?; \
+	done
+
+uninstall-dist_docDATA:
+	@$(NORMAL_UNINSTALL)
+	@list='$(dist_doc_DATA)'; test -n "$(docdir)" || list=; \
+	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(docdir)'; $(am__uninstall_files_from_dir)
 
 # This directory's subdirectories are mostly independent; you can cd
 # into them and run `make' without going through this Makefile.
@@ -617,10 +645,10 @@ distdir: $(DISTFILES)
 	done
 check-am: all-am
 check: check-recursive
-all-am: Makefile $(MANS)
+all-am: Makefile $(MANS) $(DATA)
 installdirs: installdirs-recursive
 installdirs-am:
-	for dir in "$(DESTDIR)$(man1dir)" "$(DESTDIR)$(man3dir)"; do \
+	for dir in "$(DESTDIR)$(man1dir)" "$(DESTDIR)$(man3dir)" "$(DESTDIR)$(docdir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: install-recursive
@@ -673,7 +701,7 @@ info: info-recursive
 
 info-am:
 
-install-data-am: install-man
+install-data-am: install-dist_docDATA install-man
 
 install-dvi: install-dvi-recursive
 
@@ -717,7 +745,7 @@ ps: ps-recursive
 
 ps-am:
 
-uninstall-am: uninstall-man
+uninstall-am: uninstall-dist_docDATA uninstall-man
 
 uninstall-man: uninstall-man1 uninstall-man3
 
@@ -729,15 +757,16 @@ uninstall-man: uninstall-man1 uninstall-man3
 	ctags ctags-recursive distclean distclean-generic \
 	distclean-libtool distclean-tags distdir dvi dvi-am html \
 	html-am info info-am install install-am install-data \
-	install-data-am install-dvi install-dvi-am install-exec \
-	install-exec-am install-html install-html-am install-info \
-	install-info-am install-man install-man1 install-man3 \
-	install-pdf install-pdf-am install-ps install-ps-am \
-	install-strip installcheck installcheck-am installdirs \
-	installdirs-am maintainer-clean maintainer-clean-generic \
-	mostlyclean mostlyclean-generic mostlyclean-libtool pdf pdf-am \
-	ps ps-am tags tags-recursive uninstall uninstall-am \
-	uninstall-man uninstall-man1 uninstall-man3
+	install-data-am install-dist_docDATA install-dvi \
+	install-dvi-am install-exec install-exec-am install-html \
+	install-html-am install-info install-info-am install-man \
+	install-man1 install-man3 install-pdf install-pdf-am \
+	install-ps install-ps-am install-strip installcheck \
+	installcheck-am installdirs installdirs-am maintainer-clean \
+	maintainer-clean-generic mostlyclean mostlyclean-generic \
+	mostlyclean-libtool pdf pdf-am ps ps-am tags tags-recursive \
+	uninstall uninstall-am uninstall-dist_docDATA uninstall-man \
+	uninstall-man1 uninstall-man3
 
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.

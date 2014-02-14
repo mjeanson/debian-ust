@@ -480,6 +480,18 @@ size_t __event_get_align__##_provider##___##_name(_TP_ARGS_PROTO(_args))      \
 #define TP_FIELDS(...) __VA_ARGS__
 
 /*
+ * For state dump, check that "session" argument (mandatory) matches the
+ * session this event belongs to. Ensures that we write state dump data only
+ * into the started session, not into all sessions.
+ */
+#undef _TP_SESSION_CHECK
+#ifdef TP_SESSION_CHECK
+#define _TP_SESSION_CHECK(session, csession)   (session == csession)
+#else /* TP_SESSION_CHECK */
+#define _TP_SESSION_CHECK(session, csession)   1
+#endif /* TP_SESSION_CHECK */
+
+/*
  * Using twice size for filter stack data to hold size and pointer for
  * each field (worse case). For integers, max size required is 64-bit.
  * Same for double-precision floats. Those fit within
@@ -506,6 +518,8 @@ void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args))	      \
 									      \
 	if (0)								      \
 		(void) __dynamic_len_idx;	/* don't warn if unused */    \
+	if (!_TP_SESSION_CHECK(session, __chan->session))		      \
+		return;							      \
 	if (caa_unlikely(!CMM_ACCESS_ONCE(__chan->session->active)))	      \
 		return;							      \
 	if (caa_unlikely(!CMM_ACCESS_ONCE(__chan->enabled)))		      \
@@ -671,6 +685,8 @@ static struct lttng_probe_desc _TP_COMBINE_TOKENS(__probe_desc___, TRACEPOINT_PR
 	.minor = LTTNG_UST_PROVIDER_MINOR,
 };
 
+static int _TP_COMBINE_TOKENS(__probe_register_refcount___, TRACEPOINT_PROVIDER);
+
 /*
  * Stage 9 of tracepoint event generation.
  *
@@ -678,6 +694,8 @@ static struct lttng_probe_desc _TP_COMBINE_TOKENS(__probe_desc___, TRACEPOINT_PR
  *
  * Generate the constructor as an externally visible symbol for use when
  * linking the probe statically.
+ *
+ * Register refcount is protected by libc dynamic loader mutex.
  */
 
 /* Reset all macros within TRACEPOINT_EVENT */
@@ -689,6 +707,10 @@ _TP_COMBINE_TOKENS(__lttng_events_init__, TRACEPOINT_PROVIDER)(void)
 {
 	int ret;
 
+	if (_TP_COMBINE_TOKENS(__probe_register_refcount___,
+			TRACEPOINT_PROVIDER)++) {
+		return;
+	}
 	/*
 	 * __tracepoint_provider_check_ ## TRACEPOINT_PROVIDER() is a
 	 * static inline function that ensures every probe PROVIDER
@@ -710,6 +732,10 @@ _TP_COMBINE_TOKENS(__lttng_events_exit__, TRACEPOINT_PROVIDER)(void);
 static void
 _TP_COMBINE_TOKENS(__lttng_events_exit__, TRACEPOINT_PROVIDER)(void)
 {
+	if (--_TP_COMBINE_TOKENS(__probe_register_refcount___,
+			TRACEPOINT_PROVIDER)) {
+		return;
+	}
 	lttng_probe_unregister(&_TP_COMBINE_TOKENS(__probe_desc___, TRACEPOINT_PROVIDER));
 }
 

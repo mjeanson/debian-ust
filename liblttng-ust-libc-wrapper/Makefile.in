@@ -54,7 +54,9 @@ build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
 @LTTNG_UST_BUILD_WITH_LIBDL_TRUE@am__append_1 = -ldl
-@LTTNG_UST_BUILD_WITH_LIBC_DL_TRUE@am__append_2 = -lc
+@LTTNG_UST_BUILD_WITH_LIBDL_TRUE@am__append_2 = -ldl
+@LTTNG_UST_BUILD_WITH_LIBC_DL_TRUE@am__append_3 = -lc
+@LTTNG_UST_BUILD_WITH_LIBC_DL_TRUE@am__append_4 = -lc
 subdir = liblttng-ust-libc-wrapper
 DIST_COMMON = README $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -108,6 +110,11 @@ liblttng_ust_libc_wrapper_la_OBJECTS =  \
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
+liblttng_ust_pthread_wrapper_la_DEPENDENCIES = $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_1)
+am_liblttng_ust_pthread_wrapper_la_OBJECTS = lttng-ust-pthread.lo
+liblttng_ust_pthread_wrapper_la_OBJECTS =  \
+	$(am_liblttng_ust_pthread_wrapper_la_OBJECTS)
 SCRIPTS = $(noinst_SCRIPTS)
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir) -I$(top_builddir)/include/lttng
 depcomp = $(SHELL) $(top_srcdir)/config/depcomp
@@ -135,8 +142,10 @@ am__v_CCLD_0 = @echo "  CCLD  " $@;
 AM_V_GEN = $(am__v_GEN_@AM_V@)
 am__v_GEN_ = $(am__v_GEN_@AM_DEFAULT_V@)
 am__v_GEN_0 = @echo "  GEN   " $@;
-SOURCES = $(liblttng_ust_libc_wrapper_la_SOURCES)
-DIST_SOURCES = $(liblttng_ust_libc_wrapper_la_SOURCES)
+SOURCES = $(liblttng_ust_libc_wrapper_la_SOURCES) \
+	$(liblttng_ust_pthread_wrapper_la_SOURCES)
+DIST_SOURCES = $(liblttng_ust_libc_wrapper_la_SOURCES) \
+	$(liblttng_ust_pthread_wrapper_la_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -180,6 +189,7 @@ INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
+JAVA_JDK = @JAVA_JDK@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
@@ -254,6 +264,7 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
+lttnglibjavadir = @lttnglibjavadir@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -275,14 +286,23 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_builddir)/include
 AM_CFLAGS = -fno-strict-aliasing
-lib_LTLIBRARIES = liblttng-ust-libc-wrapper.la
+lib_LTLIBRARIES = liblttng-ust-libc-wrapper.la \
+  liblttng-ust-pthread-wrapper.la
+
 liblttng_ust_libc_wrapper_la_SOURCES = \
 	lttng-ust-malloc.c \
 	ust_libc.h
 
 liblttng_ust_libc_wrapper_la_LIBADD =  \
 	-L$(top_builddir)/liblttng-ust/.libs -llttng-ust \
-	$(am__append_1) $(am__append_2)
+	$(am__append_1) $(am__append_3)
+liblttng_ust_pthread_wrapper_la_SOURCES = \
+	lttng-ust-pthread.c \
+	ust_pthread.h
+
+liblttng_ust_pthread_wrapper_la_LIBADD =  \
+	-L$(top_builddir)/liblttng-ust/.libs -llttng-ust \
+	$(am__append_2) $(am__append_4)
 noinst_SCRIPTS = run
 EXTRA_DIST = run
 all: all-am
@@ -353,6 +373,8 @@ clean-libLTLIBRARIES:
 	done
 liblttng-ust-libc-wrapper.la: $(liblttng_ust_libc_wrapper_la_OBJECTS) $(liblttng_ust_libc_wrapper_la_DEPENDENCIES) $(EXTRA_liblttng_ust_libc_wrapper_la_DEPENDENCIES) 
 	$(AM_V_CCLD)$(LINK) -rpath $(libdir) $(liblttng_ust_libc_wrapper_la_OBJECTS) $(liblttng_ust_libc_wrapper_la_LIBADD) $(LIBS)
+liblttng-ust-pthread-wrapper.la: $(liblttng_ust_pthread_wrapper_la_OBJECTS) $(liblttng_ust_pthread_wrapper_la_DEPENDENCIES) $(EXTRA_liblttng_ust_pthread_wrapper_la_DEPENDENCIES) 
+	$(AM_V_CCLD)$(LINK) -rpath $(libdir) $(liblttng_ust_pthread_wrapper_la_OBJECTS) $(liblttng_ust_pthread_wrapper_la_LIBADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -361,6 +383,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-malloc.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-pthread.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<

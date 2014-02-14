@@ -52,7 +52,7 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
-@BUILD_JNI_INTERFACE_TRUE@am__append_1 = liblttng-ust-java
+@BUILD_JNI_INTERFACE_TRUE@am__append_1 = liblttng-ust-java liblttng-ust-jul
 subdir = .
 DIST_COMMON = README $(am__configure_deps) $(dist_doc_DATA) \
 	$(dist_noinst_DATA) $(srcdir)/Makefile.am \
@@ -135,8 +135,9 @@ ETAGS = etags
 CTAGS = ctags
 DIST_SUBDIRS = . include snprintf libringbuffer liblttng-ust-comm \
 	liblttng-ust liblttng-ust-ctl liblttng-ust-fork \
-	liblttng-ust-libc-wrapper liblttng-ust-cyg-profile tools tests \
-	doc liblttng-ust-java
+	liblttng-ust-dl liblttng-ust-libc-wrapper \
+	liblttng-ust-cyg-profile tools liblttng-ust-java \
+	liblttng-ust-jul tests doc
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 distdir = $(PACKAGE)-$(VERSION)
 top_distdir = $(distdir)
@@ -212,6 +213,7 @@ INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
+JAVA_JDK = @JAVA_JDK@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
@@ -286,6 +288,7 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
+lttnglibjavadir = @lttnglibjavadir@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -308,8 +311,8 @@ top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I config
 SUBDIRS = . include snprintf libringbuffer liblttng-ust-comm \
 	liblttng-ust liblttng-ust-ctl liblttng-ust-fork \
-	liblttng-ust-libc-wrapper liblttng-ust-cyg-profile tools tests \
-	doc $(am__append_1)
+	liblttng-ust-dl liblttng-ust-libc-wrapper \
+	liblttng-ust-cyg-profile tools $(am__append_1) tests doc
 
 #temporarily disabled
 # liblttng-ust-malloc

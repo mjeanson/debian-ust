@@ -34,7 +34,8 @@ struct lttng_session;
 struct lttng_channel;
 struct lttng_event;
 
-void ust_lock(void);
+int ust_lock(void) __attribute__ ((warn_unused_result));
+void ust_lock_nocheck(void);
 void ust_unlock(void);
 
 void lttng_fixup_event_tls(void);
@@ -44,5 +45,9 @@ void lttng_fixup_procname_tls(void);
 const char *lttng_ust_obj_get_name(int id);
 
 int lttng_get_notify_socket(void *owner);
+
+void lttng_ust_sockinfo_session_enabled(void *owner);
+
+void lttng_ust_malloc_wrapper_init(void);
 
 #endif /* _LTTNG_TRACER_CORE_H */

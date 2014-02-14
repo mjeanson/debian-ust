@@ -73,6 +73,8 @@ int ustctl_add_context(int sock, struct lttng_ust_context *ctx,
 		struct lttng_ust_object_data **context_data);
 int ustctl_set_filter(int sock, struct lttng_ust_filter_bytecode *bytecode,
 		struct lttng_ust_object_data *obj_data);
+int ustctl_set_exclusion(int sock, struct lttng_ust_event_exclusion *exclusion,
+		struct lttng_ust_object_data *obj_data);
 
 int ustctl_enable(int sock, struct lttng_ust_object_data *object);
 int ustctl_disable(int sock, struct lttng_ust_object_data *object);
@@ -219,6 +221,22 @@ int ustctl_put_subbuf(struct ustctl_consumer_stream *stream);
 
 void ustctl_flush_buffer(struct ustctl_consumer_stream *stream,
 		int producer_active);
+
+/* index */
+int ustctl_get_timestamp_begin(struct ustctl_consumer_stream *stream,
+		uint64_t *timestamp_begin);
+int ustctl_get_timestamp_end(struct ustctl_consumer_stream *stream,
+	uint64_t *timestamp_end);
+int ustctl_get_events_discarded(struct ustctl_consumer_stream *stream,
+	uint64_t *events_discarded);
+int ustctl_get_content_size(struct ustctl_consumer_stream *stream,
+	uint64_t *content_size);
+int ustctl_get_packet_size(struct ustctl_consumer_stream *stream,
+	uint64_t *packet_size);
+int ustctl_get_stream_id(struct ustctl_consumer_stream *stream,
+		uint64_t *stream_id);
+int ustctl_get_current_timestamp(struct ustctl_consumer_stream *stream,
+		uint64_t *ts);
 
 /* event registry management */
 

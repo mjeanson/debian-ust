@@ -1,3 +1,89 @@
+2014-02-14 lttng-ust 2.4.0-rc4
+	* Cleanup: remove extra space in dlerror wrapper
+	* Fix: work-around glibc lying about dlsym()/dlerror() leafness
+	* Cleanup: add lttng_ust_malloc_wrapper_init prototype to header
+	* Fix: malloc libc instrumentation wrapper
+	* Fix: add LTTngEvent class to fix delayed logger
+	* Fix: FD leak in liblttng-ust-ctl
+	* Fix: liblttng-ust-dl Makefile flags mismatch
+	* Fix: liblttng-ust-fork Makefile flags mismatch
+	* Fix: out of tree examples build
+	* Fix: C++: incomplete extern C guard transition
+
+2014-01-29 lttng-ust 2.4.0-rc3
+	* Fix: add missing JUL loglevel handling
+	* Cleanup gen-tp: add quotes around AM_CC
+	* Pass the CC variable to the example Makefiles
+	* cleanup ust_baddr and ust_baddr_statedump doc
+	* baddr: add ust_baddr and ust_baddr_statedump doc
+	* Fix: baddr_statedump tracepoint registration
+	* Fix: baddr out of tree build
+
+2013-12-10 lttng-ust 2.4.0-rc2
+	* Fix: baddr_statedump tracepoint registration
+	* Fix: baddr deadlocks and RCU races
+	* Fix: lock exit mutex when creating threads
+	* Fix: baddr deadlock with lttng-ust destructor
+	* baddr: include missing header
+	* baddr: get session under lock
+	* Fix: take the ust lock around session iteration in statedump
+	* Fix: baddr_statedump deadlock with JUL tracing
+	* Fix: client_packet_header() uses wrong packet
+	* Cleanup: fix typo in ring buffer backend comment
+	* Compile liblttng-ust-baddr c files into liblttng-ust
+	* Allow suppressing of base-address-state tracing
+	* Integrate base-address statedump into lttng-ust
+	* Fix: eliminate timestamp overlap between packets
+	* Fix: lttng-gen-tp to build out of tree
+	* Fix: compile doc/ after JUL/Java
+	* JUL: add Hello.java in doc/examples
+	* Fix lttng-ust(3) manpage
+	* JUL: fix enable all event for delayed Logger
+	* Fix: typo in JNICALL for the JUL tracepoint
+	* Fix: move va_end to outermost label
+	* Fix: add missing NULL check after allocation
+	* Fix cleanup: all spaces before flags
+	* fix: lttng-gen-tp: add missing spaces around flags
+
+2013-11-15 lttng-ust 2.4.0-rc1
+	* doc/examples: error out when a subdir make fails
+	* JUL: fix out of tree build
+	* Java/jul: fix make dist
+	* JUL: install documentation and jar file
+	* Add missing copyrights to test scripts
+	* Escape minus signs in lttng-ust-cyg-profile manpage
+	* Fix spelling mistake in lttng-ust manpage
+	* Fix tests/benchmark
+	* Implement base-address-state tracing
+	* Base-address tracing for dlopen and dlclose
+	* Add a check against excluders
+	* Add handler for LTTNG_UST_EXCLUSION in UST ABI
+	* Store exclusions to enablers
+	* Add excluders to enabler structure
+	* Send exclusion data through ustcomm
+	* Define exclusion structure for UST ABI
+	* Define a new command LTTNG_UST_EXCLUSION
+	* Fix: package of LTTngUst.h was renamed without renaming target in makefile
+	* Fix: check for java .class in package subfolders
+	* Fix: java library to use user define JDK at compile time
+	* Add liblttng-ust-jul for JUL support
+	* Fix: application SIGBUS when starting in parallel with sessiond
+	* Fix: Minor corrections to the lttng-ust man page
+	* Documentation cleanup: Overhaul of the lttng-gen-tp man page
+	* Warning cleanup: add missing padding initializer
+	* Fix: socket connect hang on heavy loads
+	* Cleanup: fix typo
+	* Fix: ust-comm recvmsg should handle partial receive
+	* gcc warning fix: -Wextra
+	* Add usage reference count for tracepoints
+	* tracepoint.c: Move add_callsite/remove_callsite further down in file
+	* Store the callsites into the library callsite list
+	* Fix linking warning
+	* Per-stream ioctl to get the current timestamp
+	* LTTng ringbuffer ABI calls for index generation
+	* Specialize lttng_ust_lib_ring_buffer_client_cb
+	* Add tracing instrumentation for pthread mutex lock functions
+
 2013-09-03 lttng-ust 2.3.0
 	* No change
 

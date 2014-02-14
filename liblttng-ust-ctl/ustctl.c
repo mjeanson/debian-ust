@@ -31,6 +31,7 @@
 #include "../libringbuffer/backend.h"
 #include "../libringbuffer/frontend.h"
 #include "../liblttng-ust/wait.h"
+#include "../liblttng-ust/lttng-rb-clients.h"
 
 /*
  * Number of milliseconds to retry before failing metadata writes on
@@ -269,6 +270,40 @@ int ustctl_set_filter(int sock, struct lttng_ust_filter_bytecode *bytecode,
 	}
 	if (ret != bytecode->len)
 		return -EINVAL;
+	return ustcomm_recv_app_reply(sock, &lur, lum.handle, lum.cmd);
+}
+
+int ustctl_set_exclusion(int sock, struct lttng_ust_event_exclusion *exclusion,
+		struct lttng_ust_object_data *obj_data)
+{
+	struct ustcomm_ust_msg lum;
+	struct ustcomm_ust_reply lur;
+	int ret;
+
+	if (!obj_data) {
+		return -EINVAL;
+	}
+
+	memset(&lum, 0, sizeof(lum));
+	lum.handle = obj_data->handle;
+	lum.cmd = LTTNG_UST_EXCLUSION;
+	lum.u.exclusion.count = exclusion->count;
+
+	ret = ustcomm_send_app_msg(sock, &lum);
+	if (ret) {
+		return ret;
+	}
+
+	/* send var len bytecode */
+	ret = ustcomm_send_unix_sock(sock,
+			exclusion->names,
+			exclusion->count * LTTNG_UST_SYM_NAME_LEN);
+	if (ret < 0) {
+		return ret;
+	}
+	if (ret != exclusion->count * LTTNG_UST_SYM_NAME_LEN) {
+		return -EINVAL;
+	}
 	return ustcomm_recv_app_reply(sock, &lur, lum.handle, lum.cmd);
 }
 
@@ -977,6 +1012,8 @@ chan_error:
 
 void ustctl_destroy_channel(struct ustctl_consumer_channel *chan)
 {
+	(void) ustctl_channel_close_wait_fd(chan);
+	(void) ustctl_channel_close_wakeup_fd(chan);
 	chan->chan->ops->channel_destroy(chan->chan);
 	free(chan);
 }
@@ -1185,6 +1222,8 @@ void ustctl_destroy_stream(struct ustctl_consumer_stream *stream)
 	assert(stream);
 	buf = stream->buf;
 	consumer_chan = stream->chan;
+	(void) ustctl_stream_close_wait_fd(stream);
+	(void) ustctl_stream_close_wakeup_fd(stream);
 	lib_ring_buffer_release_read(buf, consumer_chan->chan->handle);
 	free(stream);
 }
@@ -1459,6 +1498,130 @@ void ustctl_flush_buffer(struct ustctl_consumer_stream *stream,
 	lib_ring_buffer_switch_slow(buf,
 		producer_active ? SWITCH_ACTIVE : SWITCH_FLUSH,
 		consumer_chan->chan->handle);
+}
+
+static
+struct lttng_ust_client_lib_ring_buffer_client_cb *get_client_cb(
+		struct lttng_ust_lib_ring_buffer *buf,
+		struct lttng_ust_shm_handle *handle)
+{
+	struct channel *chan;
+	const struct lttng_ust_lib_ring_buffer_config *config;
+	struct lttng_ust_client_lib_ring_buffer_client_cb *client_cb;
+
+	chan = shmp(handle, buf->backend.chan);
+	config = &chan->backend.config;
+	if (!config->cb_ptr)
+		return NULL;
+	client_cb = caa_container_of(config->cb_ptr,
+			struct lttng_ust_client_lib_ring_buffer_client_cb,
+			parent);
+	return client_cb;
+}
+
+int ustctl_get_timestamp_begin(struct ustctl_consumer_stream *stream,
+		uint64_t *timestamp_begin)
+{
+	struct lttng_ust_client_lib_ring_buffer_client_cb *client_cb;
+	struct lttng_ust_lib_ring_buffer *buf = stream->buf;
+	struct lttng_ust_shm_handle *handle = stream->chan->chan->handle;
+
+	if (!stream || !timestamp_begin)
+		return -EINVAL;
+	client_cb = get_client_cb(buf, handle);
+	if (!client_cb)
+		return -ENOSYS;
+	return client_cb->timestamp_begin(buf, handle, timestamp_begin);
+}
+
+int ustctl_get_timestamp_end(struct ustctl_consumer_stream *stream,
+	uint64_t *timestamp_end)
+{
+	struct lttng_ust_client_lib_ring_buffer_client_cb *client_cb;
+	struct lttng_ust_lib_ring_buffer *buf = stream->buf;
+	struct lttng_ust_shm_handle *handle = stream->chan->chan->handle;
+
+	if (!stream || !timestamp_end)
+		return -EINVAL;
+	client_cb = get_client_cb(buf, handle);
+	if (!client_cb)
+		return -ENOSYS;
+	return client_cb->timestamp_end(buf, handle, timestamp_end);
+}
+
+int ustctl_get_events_discarded(struct ustctl_consumer_stream *stream,
+	uint64_t *events_discarded)
+{
+	struct lttng_ust_client_lib_ring_buffer_client_cb *client_cb;
+	struct lttng_ust_lib_ring_buffer *buf = stream->buf;
+	struct lttng_ust_shm_handle *handle = stream->chan->chan->handle;
+
+	if (!stream || !events_discarded)
+		return -EINVAL;
+	client_cb = get_client_cb(buf, handle);
+	if (!client_cb)
+		return -ENOSYS;
+	return client_cb->events_discarded(buf, handle, events_discarded);
+}
+
+int ustctl_get_content_size(struct ustctl_consumer_stream *stream,
+	uint64_t *content_size)
+{
+	struct lttng_ust_client_lib_ring_buffer_client_cb *client_cb;
+	struct lttng_ust_lib_ring_buffer *buf = stream->buf;
+	struct lttng_ust_shm_handle *handle = stream->chan->chan->handle;
+
+	if (!stream || !content_size)
+		return -EINVAL;
+	client_cb = get_client_cb(buf, handle);
+	if (!client_cb)
+		return -ENOSYS;
+	return client_cb->content_size(buf, handle, content_size);
+}
+
+int ustctl_get_packet_size(struct ustctl_consumer_stream *stream,
+	uint64_t *packet_size)
+{
+	struct lttng_ust_client_lib_ring_buffer_client_cb *client_cb;
+	struct lttng_ust_lib_ring_buffer *buf = stream->buf;
+	struct lttng_ust_shm_handle *handle = stream->chan->chan->handle;
+
+	if (!stream || !packet_size)
+		return -EINVAL;
+	client_cb = get_client_cb(buf, handle);
+	if (!client_cb)
+		return -ENOSYS;
+	return client_cb->packet_size(buf, handle, packet_size);
+}
+
+int ustctl_get_stream_id(struct ustctl_consumer_stream *stream,
+		uint64_t *stream_id)
+{
+	struct lttng_ust_client_lib_ring_buffer_client_cb *client_cb;
+	struct lttng_ust_lib_ring_buffer *buf = stream->buf;
+	struct lttng_ust_shm_handle *handle = stream->chan->chan->handle;
+
+	if (!stream || !stream_id)
+		return -EINVAL;
+	client_cb = get_client_cb(buf, handle);
+	if (!client_cb)
+		return -ENOSYS;
+	return client_cb->stream_id(buf, handle, stream_id);
+}
+
+int ustctl_get_current_timestamp(struct ustctl_consumer_stream *stream,
+		uint64_t *ts)
+{
+	struct lttng_ust_client_lib_ring_buffer_client_cb *client_cb;
+	struct lttng_ust_lib_ring_buffer *buf = stream->buf;
+	struct lttng_ust_shm_handle *handle = stream->chan->chan->handle;
+
+	if (!stream || !ts)
+		return -EINVAL;
+	client_cb = get_client_cb(buf, handle);
+	if (!client_cb || !client_cb->current_timestamp)
+		return -ENOSYS;
+	return client_cb->current_timestamp(buf, handle, ts);
 }
 
 /*

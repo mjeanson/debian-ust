@@ -12,7 +12,7 @@ Link liblttng-ust.so with applications, following this manpage.
 .SH "DESCRIPTION"
 
 .PP
-LTTng-UST, the Linux Trace Toolkit Next Generation Userspace Tracer, is
+LTTng-UST, the Linux Trace Toolkit Next Generation Userspace Tracer, is a
 port of the low-overhead tracing capabilities of the LTTng kernel tracer
 to user-space. The library "liblttng-ust" enables tracing of
 applications and libraries.
@@ -33,9 +33,13 @@ script, through an example:
 .nf
 
 To create a tracepoint provider, within a build tree similar to
-examples/easy-ust installed with lttng-ust documentation, a
-sample_component_provider.h for the general layout. This manpage will
-focus on the various types that can be recorded into a trace event:
+examples/easy-ust installed with lttng-ust documentation, see
+sample_component_provider.h for the general layout. You will need to
+define TRACEPOINT_CREATE_PROBES before including your tracepoint
+provider probe in one source file of your application. See tp.c from
+easy-ust for an example of a tracepoint probe source file. This manpage
+will focus on the various types that can be recorded into a trace
+event:
 
 TRACEPOINT_EVENT(
 	/*
@@ -173,7 +177,7 @@ following construct:
 	TRACEPOINT_LOGLEVEL(< [com_company_]project[_component] >,
 		< event >, < loglevel_name >)
 
- The first field is the provider name, the second field is the name of
+The first field is the provider name, the second field is the name of
 the tracepoint, and the third field is the loglevel name.  A
 TRACEPOINT_EVENT should be declared prior to the the TRACEPOINT_LOGLEVEL
 for a given tracepoint name. The TRACEPOINT_PROVIDER must be already
@@ -254,7 +258,7 @@ lttng(1) through lttng-sessiond(8).
 Even though LTTng-UST supports tracepoint() call site duplicates having
 the same provider and event name, it is recommended to use a
 provider event name pair only once within the source code to help
-mapping events back to their call sites when analyzing the trace.
+map events back to their call sites when analyzing the trace.
 .fi
 
 .SH "BUILDING/LINKING THE TRACEPOINT PROVIDER"
@@ -343,6 +347,13 @@ process namespace.
 .PP
 
 .PP
+.IP "ip"
+Instruction pointer: Enables recording of the exact location where a tracepoint
+was emitted. Can be used to reverse-lookup the source location that caused the
+event to be emitted.
+.PP
+
+.PP
 .IP "procname"
 Thread name, as set by exec() or prctl(). It is recommended that
 programs set their thread name with prctl() before hitting the first
@@ -355,6 +366,29 @@ Pthread identifier. Can be used on architectures where pthread_t maps
 nicely to an unsigned long type.
 .PP
 
+.SH "BASE ADDRESS STATEDUMP"
+
+.PP
+If an application that uses liblttng-ust.so becomes part of a session,
+information about its currently loaded shared objects will be traced to the
+session at session-enable time. To record this information, the following event
+needs to be enabled:
+.PP
+.IP "ust_baddr_statedump:soinfo"
+This event is used to trace a currently loaded shared object. The base address
+(where the dynamic linker has placed the shared object) is recorded in the
+"baddr" field. The path to the shared object gets recorded in the
+"sopath" field (as string). The file size of the loaded object (in
+bytes) is recorded to the "size" field and its time of last modification
+(in seconds since Epoch) is recorded in the "mtime" field.
+.PP
+If the event above is enabled, a series of "ust_baddr_statedump:soinfo"
+events is recorded at session-enable time. It represents the state of
+currently loaded shared objects for the traced process. If this
+information gets combined with the lttng-ust-dl(3) instrumentation, all
+aspects of dynamic loading that are relevant for symbol and
+line number lookup are traced by LTTng.
+.PP
 .SH "ENVIRONMENT VARIABLES"
 
 .PP
@@ -371,19 +405,22 @@ specified in milliseconds. The value 0 means "don't wait". The value
 recommended for applications with time constraints on the process
 startup time.
 .PP
+.IP "LTTNG_UST_WITHOUT_BADDR_STATEDUMP"
+Prevent liblttng-ust to perform a base-address statedump on session-enable.
+.PP
 
 .SH "SEE ALSO"
 
 .PP
 lttng-gen-tp(1), lttng(1), babeltrace(1), lttng-ust-cyg-profile(3),
-lttng-sessiond(8)
+lttng-ust-dl(3), lttng-sessiond(8)
 .PP
 
 .SH "COMPATIBILITY"
 
 .PP
 Older lttng-ust libraries reject more recent, and incompatible, probe
-providers. Newer lttng-ust librairies accept older probe providers, even
+providers. Newer lttng-ust libraries accept older probe providers, even
 though some newer features might not be available with those providers.
 .PP
 
