@@ -161,6 +161,7 @@ unsigned char record_header_size(const struct lttng_ust_lib_ring_buffer_config *
 }
 
 #include "../libringbuffer/api.h"
+#include "lttng-rb-clients.h"
 
 static
 void lttng_write_event_header_slow(const struct lttng_ust_lib_ring_buffer_config *config,
@@ -385,6 +386,110 @@ static void client_buffer_finalize(struct lttng_ust_lib_ring_buffer *buf, void *
 {
 }
 
+static struct packet_header *client_packet_header(struct lttng_ust_lib_ring_buffer *buf,
+		struct lttng_ust_shm_handle *handle)
+{
+	return lib_ring_buffer_read_offset_address(&buf->backend, 0, handle);
+}
+
+static int client_timestamp_begin(struct lttng_ust_lib_ring_buffer *buf,
+		struct lttng_ust_shm_handle *handle,
+		uint64_t *timestamp_begin)
+{
+	struct packet_header *header;
+
+	header = client_packet_header(buf, handle);
+	*timestamp_begin = header->ctx.timestamp_begin;
+	return 0;
+}
+
+static int client_timestamp_end(struct lttng_ust_lib_ring_buffer *buf,
+		struct lttng_ust_shm_handle *handle,
+		uint64_t *timestamp_end)
+{
+	struct packet_header *header;
+
+	header = client_packet_header(buf, handle);
+	*timestamp_end = header->ctx.timestamp_end;
+	return 0;
+}
+
+static int client_events_discarded(struct lttng_ust_lib_ring_buffer *buf,
+		struct lttng_ust_shm_handle *handle,
+		uint64_t *events_discarded)
+{
+	struct packet_header *header;
+
+	header = client_packet_header(buf, handle);
+	*events_discarded = header->ctx.events_discarded;
+	return 0;
+}
+
+static int client_content_size(struct lttng_ust_lib_ring_buffer *buf,
+		struct lttng_ust_shm_handle *handle,
+		uint64_t *content_size)
+{
+	struct packet_header *header;
+
+	header = client_packet_header(buf, handle);
+	*content_size = header->ctx.content_size;
+	return 0;
+}
+
+static int client_packet_size(struct lttng_ust_lib_ring_buffer *buf,
+		struct lttng_ust_shm_handle *handle,
+		uint64_t *packet_size)
+{
+	struct packet_header *header;
+
+	header = client_packet_header(buf, handle);
+	*packet_size = header->ctx.packet_size;
+	return 0;
+}
+
+static int client_stream_id(struct lttng_ust_lib_ring_buffer *buf,
+		struct lttng_ust_shm_handle *handle,
+		uint64_t *stream_id)
+{
+	struct packet_header *header;
+
+	header = client_packet_header(buf, handle);
+	*stream_id = header->stream_id;
+	return 0;
+}
+
+static int client_current_timestamp(struct lttng_ust_lib_ring_buffer *buf,
+		struct lttng_ust_shm_handle *handle,
+		uint64_t *ts)
+{
+	struct channel *chan;
+
+	chan = shmp(handle, handle->chan);
+	*ts = client_ring_buffer_clock_read(chan);
+
+	return 0;
+}
+
+static const
+struct lttng_ust_client_lib_ring_buffer_client_cb client_cb = {
+	.parent = {
+		.ring_buffer_clock_read = client_ring_buffer_clock_read,
+		.record_header_size = client_record_header_size,
+		.subbuffer_header_size = client_packet_header_size,
+		.buffer_begin = client_buffer_begin,
+		.buffer_end = client_buffer_end,
+		.buffer_create = client_buffer_create,
+		.buffer_finalize = client_buffer_finalize,
+	},
+	.timestamp_begin = client_timestamp_begin,
+	.timestamp_end = client_timestamp_end,
+	.events_discarded = client_events_discarded,
+	.content_size = client_content_size,
+	.packet_size = client_packet_size,
+	.stream_id = client_stream_id,
+	.current_timestamp = client_current_timestamp,
+};
+
 static const struct lttng_ust_lib_ring_buffer_config client_config = {
 	.cb.ring_buffer_clock_read = client_ring_buffer_clock_read,
 	.cb.record_header_size = client_record_header_size,
@@ -404,9 +509,11 @@ static const struct lttng_ust_lib_ring_buffer_config client_config = {
 	.ipi = RING_BUFFER_NO_IPI_BARRIER,
 	.wakeup = LTTNG_CLIENT_WAKEUP,
 	.client_type = LTTNG_CLIENT_TYPE,
+
+	.cb_ptr = &client_cb.parent,
 };
 
-const struct lttng_ust_lib_ring_buffer_client_cb *LTTNG_CLIENT_CALLBACKS = &client_config.cb;
+const struct lttng_ust_client_lib_ring_buffer_client_cb *LTTNG_CLIENT_CALLBACKS = &client_cb;
 
 static
 struct lttng_channel *_channel_create(const char *name,

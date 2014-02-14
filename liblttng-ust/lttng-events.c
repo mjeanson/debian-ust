@@ -54,28 +54,22 @@
 #include "tracepoint-internal.h"
 #include "lttng-tracer.h"
 #include "lttng-tracer-core.h"
+#include "lttng-ust-baddr.h"
 #include "wait.h"
 #include "../libringbuffer/shm.h"
 #include "jhash.h"
 
 /*
- * The sessions mutex is the centralized mutex across UST tracing
- * control and probe registration. All operations within this file are
- * called by the communication thread, under ust_lock protection.
+ * All operations within this file are called by the communication
+ * thread, under ust_lock protection.
  */
-static pthread_mutex_t sessions_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-void ust_lock(void)
-{
-	pthread_mutex_lock(&sessions_mutex);
-}
-
-void ust_unlock(void)
-{
-	pthread_mutex_unlock(&sessions_mutex);
-}
 
 static CDS_LIST_HEAD(sessions);
+
+struct cds_list_head *_lttng_get_sessions(void)
+{
+	return &sessions;
+}
 
 static void _lttng_event_destroy(struct lttng_event *event);
 
@@ -293,6 +287,9 @@ int lttng_session_enable(struct lttng_session *session)
 	/* Set atomically the state to "active" */
 	CMM_ACCESS_ONCE(session->active) = 1;
 	CMM_ACCESS_ONCE(session->been_active) = 1;
+
+	session->statedump_pending = 1;
+	lttng_ust_sockinfo_session_enabled(session->owner);
 end:
 	return ret;
 }
@@ -491,6 +488,31 @@ static
 int lttng_desc_match_enabler(const struct lttng_event_desc *desc,
 		struct lttng_enabler *enabler)
 {
+	struct lttng_ust_excluder_node *excluder;
+
+	/* If event matches with an excluder, return 'does not match' */
+	cds_list_for_each_entry(excluder, &enabler->excluder_head, node) {
+		int count;
+
+		for (count = 0; count < excluder->excluder.count; count++) {
+			int found, len;
+			char *excluder_name;
+
+			excluder_name = (char *) (excluder->excluder.names)
+					+ count * LTTNG_UST_SYM_NAME_LEN;
+			len = strnlen(excluder_name, LTTNG_UST_SYM_NAME_LEN);
+			if (len > 0 && excluder_name[len - 1] == '*') {
+				found = !strncmp(desc->name, excluder_name,
+						len - 1);
+			} else {
+				found = !strncmp(desc->name, excluder_name,
+						LTTNG_UST_SYM_NAME_LEN - 1);
+			}
+			if (found) {
+				return 0;
+			}
+		}
+	}
 	switch (enabler->type) {
 	case LTTNG_ENABLER_WILDCARD:
 		return lttng_desc_match_wildcard_enabler(desc, enabler);
@@ -648,6 +670,34 @@ int lttng_fix_pending_events(void)
 }
 
 /*
+ * For each session of the owner thread, execute pending statedump.
+ * Only dump state for the sessions owned by the caller thread, because
+ * we don't keep ust_lock across the entire iteration.
+ */
+void lttng_handle_pending_statedump(void *owner)
+{
+	struct lttng_session *session;
+
+	/* Execute state dump */
+	lttng_ust_baddr_statedump(owner);
+
+	/* Clear pending state dump */
+	if (ust_lock()) {
+		goto end;
+	}
+	cds_list_for_each_entry(session, &sessions, node) {
+		if (session->owner != owner)
+			continue;
+		if (!session->statedump_pending)
+			continue;
+		session->statedump_pending = 0;
+	}
+end:
+	ust_unlock();
+	return;
+}
+
+/*
  * Only used internally at session destruction.
  */
 static
@@ -687,6 +737,7 @@ struct lttng_enabler *lttng_enabler_create(enum lttng_enabler_type type,
 		return NULL;
 	enabler->type = type;
 	CDS_INIT_LIST_HEAD(&enabler->filter_bytecode_head);
+	CDS_INIT_LIST_HEAD(&enabler->excluder_head);
 	memcpy(&enabler->event_param, event_param,
 		sizeof(enabler->event_param));
 	enabler->chan = chan;
@@ -716,6 +767,15 @@ int lttng_enabler_attach_bytecode(struct lttng_enabler *enabler,
 {
 	bytecode->enabler = enabler;
 	cds_list_add_tail(&bytecode->node, &enabler->filter_bytecode_head);
+	lttng_session_lazy_sync_enablers(enabler->chan->session);
+	return 0;
+}
+
+int lttng_enabler_attach_exclusion(struct lttng_enabler *enabler,
+		struct lttng_ust_excluder_node *excluder)
+{
+	excluder->enabler = enabler;
+	cds_list_add_tail(&excluder->node, &enabler->excluder_head);
 	lttng_session_lazy_sync_enablers(enabler->chan->session);
 	return 0;
 }
@@ -767,11 +827,18 @@ static
 void lttng_enabler_destroy(struct lttng_enabler *enabler)
 {
 	struct lttng_ust_filter_bytecode_node *filter_node, *tmp_filter_node;
+	struct lttng_ust_excluder_node *excluder_node, *tmp_excluder_node;
 
 	/* Destroy filter bytecode */
 	cds_list_for_each_entry_safe(filter_node, tmp_filter_node,
 			&enabler->filter_bytecode_head, node) {
 		free(filter_node);
+	}
+
+	/* Destroy excluders */
+	cds_list_for_each_entry_safe(excluder_node, tmp_excluder_node,
+			&enabler->excluder_head, node) {
+		free(excluder_node);
 	}
 
 	/* Destroy contexts */

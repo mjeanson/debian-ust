@@ -102,11 +102,15 @@ am__DEPENDENCIES_1 =
 liblttng_ust_fork_la_DEPENDENCIES =  \
 	$(top_builddir)/liblttng-ust/liblttng-ust.la \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
-am_liblttng_ust_fork_la_OBJECTS = ustfork.lo
+am_liblttng_ust_fork_la_OBJECTS = liblttng_ust_fork_la-ustfork.lo
 liblttng_ust_fork_la_OBJECTS = $(am_liblttng_ust_fork_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
+liblttng_ust_fork_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
+	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
+	$(liblttng_ust_fork_la_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
+	$(LDFLAGS) -o $@
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir) -I$(top_builddir)/include/lttng
 depcomp = $(SHELL) $(top_srcdir)/config/depcomp
 am__depfiles_maybe = depfiles
@@ -178,6 +182,7 @@ INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
+JAVA_JDK = @JAVA_JDK@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
@@ -252,6 +257,7 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
+lttnglibjavadir = @lttnglibjavadir@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -278,7 +284,7 @@ liblttng_ust_fork_la_SOURCES = ustfork.c
 liblttng_ust_fork_la_LIBADD =  \
 	$(top_builddir)/liblttng-ust/liblttng-ust.la $(am__append_1) \
 	$(am__append_2)
-libustfork_CFLAGS = -DUST_COMPONENT=liblttng-ust-fork -fno-strict-aliasing
+liblttng_ust_fork_la_CFLAGS = -DUST_COMPONENT=liblttng-ust-fork -fno-strict-aliasing
 all: all-am
 
 .SUFFIXES:
@@ -346,7 +352,7 @@ clean-libLTLIBRARIES:
 	  rm -f "$${dir}/so_locations"; \
 	done
 liblttng-ust-fork.la: $(liblttng_ust_fork_la_OBJECTS) $(liblttng_ust_fork_la_DEPENDENCIES) $(EXTRA_liblttng_ust_fork_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(LINK) -rpath $(libdir) $(liblttng_ust_fork_la_OBJECTS) $(liblttng_ust_fork_la_LIBADD) $(LIBS)
+	$(AM_V_CCLD)$(liblttng_ust_fork_la_LINK) -rpath $(libdir) $(liblttng_ust_fork_la_OBJECTS) $(liblttng_ust_fork_la_LIBADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -354,7 +360,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ustfork.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/liblttng_ust_fork_la-ustfork.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -376,6 +382,13 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LTCOMPILE) -c -o $@ $<
+
+liblttng_ust_fork_la-ustfork.lo: ustfork.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(liblttng_ust_fork_la_CFLAGS) $(CFLAGS) -MT liblttng_ust_fork_la-ustfork.lo -MD -MP -MF $(DEPDIR)/liblttng_ust_fork_la-ustfork.Tpo -c -o liblttng_ust_fork_la-ustfork.lo `test -f 'ustfork.c' || echo '$(srcdir)/'`ustfork.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/liblttng_ust_fork_la-ustfork.Tpo $(DEPDIR)/liblttng_ust_fork_la-ustfork.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='ustfork.c' object='liblttng_ust_fork_la-ustfork.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(liblttng_ust_fork_la_CFLAGS) $(CFLAGS) -c -o liblttng_ust_fork_la-ustfork.lo `test -f 'ustfork.c' || echo '$(srcdir)/'`ustfork.c
 
 mostlyclean-libtool:
 	-rm -f *.lo

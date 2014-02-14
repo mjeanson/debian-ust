@@ -53,6 +53,7 @@ build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
 @CXX_WORKS_TRUE@am__append_1 = hello.cxx
+@BUILD_JNI_INTERFACE_TRUE@am__append_2 = java-jul
 subdir = tests
 DIST_COMMON = README $(dist_noinst_SCRIPTS) $(srcdir)/Makefile.am \
 	$(srcdir)/Makefile.in
@@ -98,7 +99,7 @@ AM_RECURSIVE_TARGETS = $(RECURSIVE_TARGETS:-recursive=) \
 ETAGS = etags
 CTAGS = ctags
 DIST_SUBDIRS = utils hello same_line_tracepoint snprintf benchmark \
-	hello.cxx
+	hello.cxx java-jul
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 am__relativize = \
   dir0=`pwd`; \
@@ -160,6 +161,7 @@ INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
+JAVA_JDK = @JAVA_JDK@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
@@ -234,6 +236,7 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
+lttnglibjavadir = @lttnglibjavadir@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -254,7 +257,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 SUBDIRS = utils hello same_line_tracepoint snprintf benchmark \
-	$(am__append_1)
+	$(am__append_1) $(am__append_2)
 SCRIPT_LIST = test_loop run.sh unit_tests
 dist_noinst_SCRIPTS = $(SCRIPT_LIST)
 all: all-recursive

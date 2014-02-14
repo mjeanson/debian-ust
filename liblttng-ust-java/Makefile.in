@@ -144,7 +144,7 @@ am__can_run_installinfo = \
     n|no|NO) false;; \
     *) (install-info --version) >/dev/null 2>&1;; \
   esac
-am__dist_noinst_DATA_DIST = LTTngUst.java
+am__dist_noinst_DATA_DIST = $(LTTNG_JUST_SRCDIR)/LTTngUst.java
 DATA = $(dist_noinst_DATA)
 ETAGS = etags
 CTAGS = ctags
@@ -184,6 +184,7 @@ INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
+JAVA_JDK = @JAVA_JDK@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
@@ -258,6 +259,7 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
+lttnglibjavadir = @lttnglibjavadir@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -277,12 +279,16 @@ target_vendor = @target_vendor@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
+LTTNG_JUST_SRCDIR = $(srcdir)/org/lttng/ust
+LTTNG_JUST_DESTDIR = $(builddir)/org/lttng/ust
 @BUILD_JNI_INTERFACE_TRUE@AM_CPPFLAGS = -I$(top_srcdir)/include
 @BUILD_JNI_INTERFACE_TRUE@lib_LTLIBRARIES = liblttng-ust-java.la
 @BUILD_JNI_INTERFACE_TRUE@liblttng_ust_java_la_SOURCES = LTTngUst.c lttng_ust_java.h
 @BUILD_JNI_INTERFACE_TRUE@nodist_liblttng_ust_java_la_SOURCES = org_lttng_ust_LTTngUst.h
-@BUILD_JNI_INTERFACE_TRUE@dist_noinst_DATA = LTTngUst.java
+@BUILD_JNI_INTERFACE_TRUE@dist_noinst_DATA = $(LTTNG_JUST_SRCDIR)/LTTngUst.java
 @BUILD_JNI_INTERFACE_TRUE@liblttng_ust_java_la_LIBADD = -lc -L$(top_builddir)/liblttng-ust/.libs -llttng-ust
+@BUILD_JNI_INTERFACE_TRUE@@HAVE_JAVA_JDK_FALSE@JCC = javac
+@BUILD_JNI_INTERFACE_TRUE@@HAVE_JAVA_JDK_TRUE@JCC = $(JAVA_JDK)/bin
 all: all-am
 
 .SUFFIXES:
@@ -595,23 +601,23 @@ uninstall-am: uninstall-libLTLIBRARIES
 	tags uninstall uninstall-am uninstall-libLTLIBRARIES
 
 
-@BUILD_JNI_INTERFACE_TRUE@all: LTTngUst.class org_lttng_ust_LTTngUst.h liblttng-ust-java.jar
+@BUILD_JNI_INTERFACE_TRUE@all: $(LTTNG_JUST_DESTDIR)/LTTngUst.class org_lttng_ust_LTTngUst.h liblttng-ust-java.jar
 
 @BUILD_JNI_INTERFACE_TRUE@clean-local:
 @BUILD_JNI_INTERFACE_TRUE@	rm -f org_lttng_ust_LTTngUst.h
 @BUILD_JNI_INTERFACE_TRUE@	rm -f liblttng-ust-java.jar
-@BUILD_JNI_INTERFACE_TRUE@	rm -rf org/
+@BUILD_JNI_INTERFACE_TRUE@	rm -rf org/lttng/ust/*.class
 
 @BUILD_JNI_INTERFACE_TRUE@LTTngUst.c: org_lttng_ust_LTTngUst.h
 
-@BUILD_JNI_INTERFACE_TRUE@LTTngUst.class: LTTngUst.java
-@BUILD_JNI_INTERFACE_TRUE@	javac -d "$(builddir)" "$(srcdir)/LTTngUst.java"
+@BUILD_JNI_INTERFACE_TRUE@$(LTTNG_JUST_DESTDIR)/LTTngUst.class: $(LTTNG_JUST_SRCDIR)/LTTngUst.java
+@BUILD_JNI_INTERFACE_TRUE@	$(JCC)/javac -d "$(builddir)" "$(LTTNG_JUST_SRCDIR)/LTTngUst.java"
 
-@BUILD_JNI_INTERFACE_TRUE@org_lttng_ust_LTTngUst.h: LTTngUst.class
-@BUILD_JNI_INTERFACE_TRUE@	javah org.lttng.ust.LTTngUst
+@BUILD_JNI_INTERFACE_TRUE@org_lttng_ust_LTTngUst.h: $(LTTNG_JUST_DESTDIR)/LTTngUst.class
+@BUILD_JNI_INTERFACE_TRUE@	$(JCC)/javah org.lttng.ust.LTTngUst
 
-@BUILD_JNI_INTERFACE_TRUE@liblttng-ust-java.jar: LTTngUst.class
-@BUILD_JNI_INTERFACE_TRUE@	jar cf liblttng-ust-java.jar org/*
+@BUILD_JNI_INTERFACE_TRUE@liblttng-ust-java.jar: $(LTTNG_JUST_DESTDIR)/LTTngUst.class
+@BUILD_JNI_INTERFACE_TRUE@	$(JCC)/jar cf liblttng-ust-java.jar $(LTTNG_JUST_DESTDIR)/*.class
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

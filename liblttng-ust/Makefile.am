@@ -35,6 +35,9 @@ liblttng_ust_runtime_la_SOURCES = \
 	lttng-filter-interpreter.c \
 	filter-bytecode.h \
 	lttng-hash-helper.h \
+	lttng-ust-baddr.c \
+	lttng-ust-baddr.h \
+	ust_baddr_statedump.h \
 	tracepoint-internal.h \
 	clock.h \
 	compat.h \
@@ -47,6 +50,7 @@ liblttng_ust_support_la_SOURCES = \
 	lttng-tracer.h \
 	lttng-tracer-core.h \
 	ust-core.c \
+	lttng-rb-clients.h \
 	lttng-ring-buffer-client.h \
 	lttng-ring-buffer-client-discard.c \
 	lttng-ring-buffer-client-discard-rt.c \

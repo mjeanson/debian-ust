@@ -15,6 +15,7 @@
 
 @SET_MAKE@
 
+
 VPATH = @srcdir@
 am__make_dryrun = \
   { \
@@ -53,8 +54,8 @@ build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
 subdir = doc/examples
-DIST_COMMON = README $(dist_doc_examples_DATA) \
-	$(dist_doc_examples_demo_DATA) \
+DIST_COMMON = README $(am__dist_doc_examples_java_jul_DATA_DIST) \
+	$(dist_doc_examples_DATA) $(dist_doc_examples_demo_DATA) \
 	$(dist_doc_examples_easy_ust_DATA) \
 	$(dist_doc_examples_gen_tp_DATA) \
 	$(dist_doc_examples_hello_static_lib_DATA) \
@@ -72,19 +73,6 @@ CONFIG_HEADER = $(top_builddir)/config.h \
 	$(top_builddir)/include/lttng/ust-config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
-AM_V_GEN = $(am__v_GEN_@AM_V@)
-am__v_GEN_ = $(am__v_GEN_@AM_DEFAULT_V@)
-am__v_GEN_0 = @echo "  GEN   " $@;
-AM_V_at = $(am__v_at_@AM_V@)
-am__v_at_ = $(am__v_at_@AM_DEFAULT_V@)
-am__v_at_0 = @
-SOURCES =
-DIST_SOURCES =
-am__can_run_installinfo = \
-  case $$AM_UPDATE_INFO_DIR in \
-    n|no|NO) false;; \
-    *) (install-info --version) >/dev/null 2>&1;; \
-  esac
 am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
 am__vpath_adj = case $$p in \
     $(srcdir)/*) f=`echo "$$p" | sed "s|^$$srcdirstrip/||"`;; \
@@ -112,15 +100,33 @@ am__uninstall_files_from_dir = { \
     || { echo " ( cd '$$dir' && rm -f" $$files ")"; \
          $(am__cd) "$$dir" && rm -f $$files; }; \
   }
-am__installdirs = "$(DESTDIR)$(doc_examplesdir)" \
+am__installdirs = "$(DESTDIR)$(bindir)" "$(DESTDIR)$(doc_examplesdir)" \
 	"$(DESTDIR)$(doc_examples_demodir)" \
 	"$(DESTDIR)$(doc_examples_easy_ustdir)" \
 	"$(DESTDIR)$(doc_examples_gen_tpdir)" \
-	"$(DESTDIR)$(doc_examples_hello_static_libdir)"
+	"$(DESTDIR)$(doc_examples_hello_static_libdir)" \
+	"$(DESTDIR)$(doc_examples_java_juldir)"
+SCRIPTS = $(bin_SCRIPTS)
+AM_V_GEN = $(am__v_GEN_@AM_V@)
+am__v_GEN_ = $(am__v_GEN_@AM_DEFAULT_V@)
+am__v_GEN_0 = @echo "  GEN   " $@;
+AM_V_at = $(am__v_at_@AM_V@)
+am__v_at_ = $(am__v_at_@AM_DEFAULT_V@)
+am__v_at_0 = @
+SOURCES =
+DIST_SOURCES =
+am__can_run_installinfo = \
+  case $$AM_UPDATE_INFO_DIR in \
+    n|no|NO) false;; \
+    *) (install-info --version) >/dev/null 2>&1;; \
+  esac
+am__dist_doc_examples_java_jul_DATA_DIST = java-jul/Makefile \
+	java-jul/Hello.java java-jul/run
 DATA = $(dist_doc_examples_DATA) $(dist_doc_examples_demo_DATA) \
 	$(dist_doc_examples_easy_ust_DATA) \
 	$(dist_doc_examples_gen_tp_DATA) \
-	$(dist_doc_examples_hello_static_lib_DATA)
+	$(dist_doc_examples_hello_static_lib_DATA) \
+	$(dist_doc_examples_java_jul_DATA)
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
@@ -157,6 +163,7 @@ INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
+JAVA_JDK = @JAVA_JDK@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
@@ -231,6 +238,7 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
+lttnglibjavadir = @lttnglibjavadir@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -255,6 +263,13 @@ doc_examples_easy_ustdir = ${docdir}/examples/easy-ust
 doc_examples_gen_tpdir = ${docdir}/examples/gen-tp
 doc_examples_demodir = ${docdir}/examples/demo
 doc_examples_hello_static_libdir = ${docdir}/examples/hello-static-lib
+@BUILD_JNI_INTERFACE_TRUE@doc_examples_java_juldir = ${docdir}/examples/java-jul
+@BUILD_JNI_INTERFACE_TRUE@dist_doc_examples_java_jul_DATA = java-jul/Makefile \
+@BUILD_JNI_INTERFACE_TRUE@								  java-jul/Hello.java \
+@BUILD_JNI_INTERFACE_TRUE@								  java-jul/run
+
+@BUILD_JNI_INTERFACE_TRUE@SUBDIRS_JUL = java-jul
+@BUILD_JNI_INTERFACE_TRUE@bin_SCRIPTS = java-jul/Makefile
 dist_doc_examples_DATA = README
 dist_doc_examples_easy_ust_DATA = easy-ust/Makefile \
 	easy-ust/sample.c \
@@ -318,6 +333,41 @@ $(top_srcdir)/configure:  $(am__configure_deps)
 $(ACLOCAL_M4):  $(am__aclocal_m4_deps)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 $(am__aclocal_m4_deps):
+install-binSCRIPTS: $(bin_SCRIPTS)
+	@$(NORMAL_INSTALL)
+	@list='$(bin_SCRIPTS)'; test -n "$(bindir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(bindir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(bindir)" || exit 1; \
+	fi; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  if test -f "$$d$$p"; then echo "$$d$$p"; echo "$$p"; else :; fi; \
+	done | \
+	sed -e 'p;s,.*/,,;n' \
+	    -e 'h;s|.*|.|' \
+	    -e 'p;x;s,.*/,,;$(transform)' | sed 'N;N;N;s,\n, ,g' | \
+	$(AWK) 'BEGIN { files["."] = ""; dirs["."] = 1; } \
+	  { d=$$3; if (dirs[d] != 1) { print "d", d; dirs[d] = 1 } \
+	    if ($$2 == $$4) { files[d] = files[d] " " $$1; \
+	      if (++n[d] == $(am__install_max)) { \
+		print "f", d, files[d]; n[d] = 0; files[d] = "" } } \
+	    else { print "f", d "/" $$4, $$1 } } \
+	  END { for (d in files) print "f", d, files[d] }' | \
+	while read type dir files; do \
+	     if test "$$dir" = .; then dir=; else dir=/$$dir; fi; \
+	     test -z "$$files" || { \
+	       echo " $(INSTALL_SCRIPT) $$files '$(DESTDIR)$(bindir)$$dir'"; \
+	       $(INSTALL_SCRIPT) $$files "$(DESTDIR)$(bindir)$$dir" || exit $$?; \
+	     } \
+	; done
+
+uninstall-binSCRIPTS:
+	@$(NORMAL_UNINSTALL)
+	@list='$(bin_SCRIPTS)'; test -n "$(bindir)" || exit 0; \
+	files=`for p in $$list; do echo "$$p"; done | \
+	       sed -e 's,.*/,,;$(transform)'`; \
+	dir='$(DESTDIR)$(bindir)'; $(am__uninstall_files_from_dir)
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -429,6 +479,27 @@ uninstall-dist_doc_examples_hello_static_libDATA:
 	@list='$(dist_doc_examples_hello_static_lib_DATA)'; test -n "$(doc_examples_hello_static_libdir)" || list=; \
 	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
 	dir='$(DESTDIR)$(doc_examples_hello_static_libdir)'; $(am__uninstall_files_from_dir)
+install-dist_doc_examples_java_julDATA: $(dist_doc_examples_java_jul_DATA)
+	@$(NORMAL_INSTALL)
+	@list='$(dist_doc_examples_java_jul_DATA)'; test -n "$(doc_examples_java_juldir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(doc_examples_java_juldir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(doc_examples_java_juldir)" || exit 1; \
+	fi; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  echo "$$d$$p"; \
+	done | $(am__base_list) | \
+	while read files; do \
+	  echo " $(INSTALL_DATA) $$files '$(DESTDIR)$(doc_examples_java_juldir)'"; \
+	  $(INSTALL_DATA) $$files "$(DESTDIR)$(doc_examples_java_juldir)" || exit $$?; \
+	done
+
+uninstall-dist_doc_examples_java_julDATA:
+	@$(NORMAL_UNINSTALL)
+	@list='$(dist_doc_examples_java_jul_DATA)'; test -n "$(doc_examples_java_juldir)" || list=; \
+	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(doc_examples_java_juldir)'; $(am__uninstall_files_from_dir)
 tags: TAGS
 TAGS:
 
@@ -469,9 +540,9 @@ distdir: $(DISTFILES)
 check-am: all-am
 check: check-am
 @NO_SHARED_TRUE@all-local:
-all-am: Makefile $(DATA) all-local
+all-am: Makefile $(SCRIPTS) $(DATA) all-local
 installdirs:
-	for dir in "$(DESTDIR)$(doc_examplesdir)" "$(DESTDIR)$(doc_examples_demodir)" "$(DESTDIR)$(doc_examples_easy_ustdir)" "$(DESTDIR)$(doc_examples_gen_tpdir)" "$(DESTDIR)$(doc_examples_hello_static_libdir)"; do \
+	for dir in "$(DESTDIR)$(bindir)" "$(DESTDIR)$(doc_examplesdir)" "$(DESTDIR)$(doc_examples_demodir)" "$(DESTDIR)$(doc_examples_easy_ustdir)" "$(DESTDIR)$(doc_examples_gen_tpdir)" "$(DESTDIR)$(doc_examples_hello_static_libdir)" "$(DESTDIR)$(doc_examples_java_juldir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: install-am
@@ -529,13 +600,14 @@ install-data-am: install-dist_doc_examplesDATA \
 	install-dist_doc_examples_demoDATA \
 	install-dist_doc_examples_easy_ustDATA \
 	install-dist_doc_examples_gen_tpDATA \
-	install-dist_doc_examples_hello_static_libDATA
+	install-dist_doc_examples_hello_static_libDATA \
+	install-dist_doc_examples_java_julDATA
 
 install-dvi: install-dvi-am
 
 install-dvi-am:
 
-install-exec-am:
+install-exec-am: install-binSCRIPTS
 
 install-html: install-html-am
 
@@ -573,57 +645,87 @@ ps: ps-am
 
 ps-am:
 
-uninstall-am: uninstall-dist_doc_examplesDATA \
+uninstall-am: uninstall-binSCRIPTS uninstall-dist_doc_examplesDATA \
 	uninstall-dist_doc_examples_demoDATA \
 	uninstall-dist_doc_examples_easy_ustDATA \
 	uninstall-dist_doc_examples_gen_tpDATA \
-	uninstall-dist_doc_examples_hello_static_libDATA
+	uninstall-dist_doc_examples_hello_static_libDATA \
+	uninstall-dist_doc_examples_java_julDATA
 
 .MAKE: install-am install-strip
 
 .PHONY: all all-am all-local check check-am clean clean-generic \
 	clean-libtool clean-local distclean distclean-generic \
 	distclean-libtool distdir dvi dvi-am html html-am info info-am \
-	install install-am install-data install-data-am \
-	install-dist_doc_examplesDATA \
+	install install-am install-binSCRIPTS install-data \
+	install-data-am install-dist_doc_examplesDATA \
 	install-dist_doc_examples_demoDATA \
 	install-dist_doc_examples_easy_ustDATA \
 	install-dist_doc_examples_gen_tpDATA \
-	install-dist_doc_examples_hello_static_libDATA install-dvi \
+	install-dist_doc_examples_hello_static_libDATA \
+	install-dist_doc_examples_java_julDATA install-dvi \
 	install-dvi-am install-exec install-exec-am install-html \
 	install-html-am install-info install-info-am install-man \
 	install-pdf install-pdf-am install-ps install-ps-am \
 	install-strip installcheck installcheck-am installdirs \
 	maintainer-clean maintainer-clean-generic mostlyclean \
 	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
-	uninstall uninstall-am uninstall-dist_doc_examplesDATA \
+	uninstall uninstall-am uninstall-binSCRIPTS \
+	uninstall-dist_doc_examplesDATA \
 	uninstall-dist_doc_examples_demoDATA \
 	uninstall-dist_doc_examples_easy_ustDATA \
 	uninstall-dist_doc_examples_gen_tpDATA \
-	uninstall-dist_doc_examples_hello_static_libDATA
+	uninstall-dist_doc_examples_hello_static_libDATA \
+	uninstall-dist_doc_examples_java_julDATA
 
 
 @NO_SHARED_FALSE@all-local:
 @NO_SHARED_FALSE@	@if [ x"$(srcdir)" != x"$(builddir)" ]; then \
-@NO_SHARED_FALSE@		cp -f $(srcdir)/Makefile.examples.template $(builddir); \
-@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_PROXY); do \
+@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_PROXY) $(SUBDIRS_JUL); do \
 @NO_SHARED_FALSE@			cp -fR $(srcdir)/$$subdir $(builddir); \
 @NO_SHARED_FALSE@		done; \
-@NO_SHARED_FALSE@	fi
+@NO_SHARED_FALSE@	fi; \
+@NO_SHARED_FALSE@	if [ x"$(shell echo "$(top_srcdir)" | grep "^/" | wc -l)" = x"1" ]; then \
+@NO_SHARED_FALSE@		echo "Examples: absolute top_srcdir path $(top_srcdir)"; \
+@NO_SHARED_FALSE@		rel_src_subdir=""; \
+@NO_SHARED_FALSE@	else \
+@NO_SHARED_FALSE@		echo "Examples: relative top_srcdir path $(top_srcdir)"; \
+@NO_SHARED_FALSE@		rel_src_subdir="../"; \
+@NO_SHARED_FALSE@	fi; \
+@NO_SHARED_FALSE@	if [ x"$(shell echo "$(top_builddir)" | grep "^/" | wc -l)" = x"1" ]; then \
+@NO_SHARED_FALSE@		echo "Examples: absolute top_builddir path $(top_builddir)"; \
+@NO_SHARED_FALSE@		rel_build_subdir=""; \
+@NO_SHARED_FALSE@	else \
+@NO_SHARED_FALSE@		echo "Examples: relative top_builddir path $(top_builddir)"; \
+@NO_SHARED_FALSE@		rel_build_subdir="../"; \
+@NO_SHARED_FALSE@	fi; \
 @NO_SHARED_FALSE@	for subdir in $(SUBDIRS_PROXY); do \
-@NO_SHARED_FALSE@		cd $$subdir && $(MAKE) AM_CPPFLAGS="$(CPPFLAGS) -I../../../include/" AM_CFLAGS='$(CFLAGS)' AM_LDFLAGS='$(LDFLAGS) -L../../../liblttng-ust/.libs/ -Wl,-rpath="$(PWD)/../../liblttng-ust/.libs/"' LTTNG_GEN_TP_PATH="../../../tools/" $(AM_MAKEFLAGS) all; cd ..; \
-@NO_SHARED_FALSE@	done
+@NO_SHARED_FALSE@		(cd $$subdir && $(MAKE) AM_CC="$(CC)" AM_CPPFLAGS="$(CPPFLAGS) -I$$rel_src_subdir$(top_srcdir)/include/ -I$$rel_build_subdir$(top_builddir)/include/" AM_CFLAGS='$(CFLAGS)' AM_LDFLAGS='$(LDFLAGS) -L../../../liblttng-ust/.libs/ -Wl,-rpath="$(PWD)/../../liblttng-ust/.libs/"' LTTNG_GEN_TP_PATH="../../../tools/" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
+@NO_SHARED_FALSE@	done; \
+@NO_SHARED_FALSE@	if [ x"$(SUBDIRS_JUL)" != x"" ]; then \
+@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_JUL); do \
+@NO_SHARED_FALSE@			(cd $(SUBDIRS_JUL) && $(MAKE) JAVA_CLASSPATH_OVERRIDE="../../../liblttng-ust-jul" JAVA_JARFILE_OVERRIDE="liblttng-ust-jul.jar" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
+@NO_SHARED_FALSE@		done; \
+@NO_SHARED_FALSE@	fi;
 
 @NO_SHARED_FALSE@clean-local:
-@NO_SHARED_FALSE@	for subdir in $(SUBDIRS_PROXY); do \
-@NO_SHARED_FALSE@		cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) clean; cd ..; \
-@NO_SHARED_FALSE@	done
-@NO_SHARED_FALSE@	@if [ x"$(srcdir)" != x"$(builddir)" ]; then \
-@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_PROXY); do \
+@NO_SHARED_FALSE@	@for subdir in $(SUBDIRS_PROXY); do \
+@NO_SHARED_FALSE@		if [ -d $$subdir ]; then \
+@NO_SHARED_FALSE@			(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) clean && cd ..) || exit 1; \
+@NO_SHARED_FALSE@		fi; \
+@NO_SHARED_FALSE@	done; \
+@NO_SHARED_FALSE@	if [ x"$(SUBDIRS_JUL)" != x"" ]; then \
+@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_JUL); do \
+@NO_SHARED_FALSE@			if [ -d $$subdir ]; then \
+@NO_SHARED_FALSE@				(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) clean && cd ..) || exit 1; \
+@NO_SHARED_FALSE@			fi; \
+@NO_SHARED_FALSE@		done; \
+@NO_SHARED_FALSE@	fi; \
+@NO_SHARED_FALSE@	if [ x"$(srcdir)" != x"$(builddir)" ]; then \
+@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_PROXY) $(SUBDIRS_JUL); do \
 @NO_SHARED_FALSE@			rm -rf $(builddir)/$$subdir; \
 @NO_SHARED_FALSE@		done; \
-@NO_SHARED_FALSE@		rm -f $(builddir)/Makefile.examples.template; \
-@NO_SHARED_FALSE@	fi
+@NO_SHARED_FALSE@	fi;
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

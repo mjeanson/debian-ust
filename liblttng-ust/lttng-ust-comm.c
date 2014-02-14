@@ -51,6 +51,7 @@
 #include "lttng-tracer-core.h"
 #include "compat.h"
 #include "../libringbuffer/tlsfixup.h"
+#include "lttng-ust-baddr.h"
 
 /*
  * Has lttng ust comm constructor been called ?
@@ -61,10 +62,54 @@ static int initialized;
  * The ust_lock/ust_unlock lock is used as a communication thread mutex.
  * Held when handling a command, also held by fork() to deal with
  * removal of threads, and by exit path.
+ *
+ * The UST lock is the centralized mutex across UST tracing control and
+ * probe registration.
+ *
+ * ust_exit_mutex must never nest in ust_mutex.
  */
+static pthread_mutex_t ust_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/*
+ * ust_exit_mutex protects thread_active variable wrt thread exit. It
+ * cannot be done by ust_mutex because pthread_cancel(), which takes an
+ * internal libc lock, cannot nest within ust_mutex.
+ *
+ * It never nests within a ust_mutex.
+ */
+static pthread_mutex_t ust_exit_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* Should the ust comm thread quit ? */
 static int lttng_ust_comm_should_quit;
+
+/*
+ * Return 0 on success, -1 if should quilt.
+ * The lock is taken in both cases.
+ */
+int ust_lock(void)
+{
+	pthread_mutex_lock(&ust_mutex);
+	if (lttng_ust_comm_should_quit) {
+		return -1;
+	} else {
+		return 0;
+	}
+}
+
+/*
+ * ust_lock_nocheck() can be used in constructors/destructors, because
+ * they are already nested within the dynamic loader lock, and therefore
+ * have exclusive access against execution of liblttng-ust destructor.
+ */
+void ust_lock_nocheck(void)
+{
+	pthread_mutex_lock(&ust_mutex);
+}
+
+void ust_unlock(void)
+{
+	pthread_mutex_unlock(&ust_mutex);
+}
 
 /*
  * Wait for either of these before continuing to the main
@@ -106,6 +151,8 @@ struct sock_info {
 
 	char wait_shm_path[PATH_MAX];
 	char *wait_shm_mmap;
+	/* Keep track of lazy state dump not performed yet. */
+	int statedump_pending;
 };
 
 /* Socket from app (connect) to session daemon (listen) for communication */
@@ -122,6 +169,8 @@ struct sock_info global_apps = {
 	.notify_socket = -1,
 
 	.wait_shm_path = "/" LTTNG_UST_WAIT_FILENAME,
+
+	.statedump_pending = 0,
 };
 
 /* TODO: allow global_apps_sock_path override */
@@ -135,6 +184,8 @@ struct sock_info local_apps = {
 
 	.socket = -1,
 	.notify_socket = -1,
+
+	.statedump_pending = 0,
 };
 
 static int wait_poll_fallback;
@@ -172,6 +223,7 @@ static const char *cmd_name_mapping[] = {
 
 	/* Event FD commands */
 	[ LTTNG_UST_FILTER ] = "Create Filter",
+	[ LTTNG_UST_EXCLUSION ] = "Add exclusions to event",
 };
 
 static const char *str_timeout;
@@ -379,6 +431,28 @@ int handle_register_done(struct sock_info *sock_info)
 	return 0;
 }
 
+/*
+ * Only execute pending statedump after the constructor semaphore has
+ * been posted by each listener thread. This means statedump will only
+ * be performed after the "registration done" command is received from
+ * each session daemon the application is connected to.
+ *
+ * This ensures we don't run into deadlock issues with the dynamic
+ * loader mutex, which is held while the constructor is called and
+ * waiting on the constructor semaphore. All operations requiring this
+ * dynamic loader lock need to be postponed using this mechanism.
+ */
+static
+void handle_pending_statedump(struct sock_info *sock_info)
+{
+	int ctor_passed = sock_info->constructor_sem_posted;
+
+	if (ctor_passed && sock_info->statedump_pending) {
+		sock_info->statedump_pending = 0;
+		lttng_handle_pending_statedump(sock_info);
+	}
+}
+
 static
 int handle_message(struct sock_info *sock_info,
 		int sock, struct ustcomm_ust_msg *lum)
@@ -389,11 +463,9 @@ int handle_message(struct sock_info *sock_info,
 	union ust_args args;
 	ssize_t len;
 
-	ust_lock();
-
 	memset(&lur, 0, sizeof(lur));
 
-	if (lttng_ust_comm_should_quit) {
+	if (ust_lock()) {
 		ret = -LTTNG_UST_ERR_EXITING;
 		goto end;
 	}
@@ -484,6 +556,68 @@ int handle_message(struct sock_info *sock_info,
 		} else {
 			ret = -ENOSYS;
 			free(bytecode);
+		}
+		break;
+	}
+	case LTTNG_UST_EXCLUSION:
+	{
+		/* Receive exclusion names */
+		struct lttng_ust_excluder_node *node;
+		unsigned int count;
+
+		count = lum->u.exclusion.count;
+		if (count == 0) {
+			/* There are no names to read */
+			ret = 0;
+			goto error;
+		}
+		node = zmalloc(sizeof(*node) +
+				count * LTTNG_UST_SYM_NAME_LEN);
+		if (!node) {
+			ret = -ENOMEM;
+			goto error;
+		}
+		node->excluder.count = count;
+		len = ustcomm_recv_unix_sock(sock, node->excluder.names,
+				count * LTTNG_UST_SYM_NAME_LEN);
+		switch (len) {
+		case 0:	/* orderly shutdown */
+			ret = 0;
+			free(node);
+			goto error;
+		default:
+			if (len == count * LTTNG_UST_SYM_NAME_LEN) {
+				DBG("Exclusion data received");
+				break;
+			} else if (len < 0) {
+				DBG("Receive failed from lttng-sessiond with errno %d", (int) -len);
+				if (len == -ECONNRESET) {
+					ERR("%s remote end closed connection", sock_info->name);
+					ret = len;
+					free(node);
+					goto error;
+				}
+				ret = len;
+				free(node);
+				goto end;
+			} else {
+				DBG("Incorrect exclusion data message size: %zd", len);
+				ret = -EINVAL;
+				free(node);
+				goto end;
+			}
+		}
+		if (ops->cmd) {
+			ret = ops->cmd(lum->handle, lum->cmd,
+					(unsigned long) node,
+					&args, sock_info);
+			if (ret) {
+				free(node);
+			}
+			/* Don't free exclusion data if everything went fine. */
+		} else {
+			ret = -ENOSYS;
+			free(node);
 		}
 		break;
 	}
@@ -635,6 +769,14 @@ end:
 
 error:
 	ust_unlock();
+
+	/*
+	 * Performed delayed statedump operations outside of the UST
+	 * lock. We need to take the dynamic loader lock before we take
+	 * the UST lock internally within handle_pending_statedump().
+	  */
+	handle_pending_statedump(sock_info);
+
 	return ret;
 }
 
@@ -705,6 +847,30 @@ int get_wait_shm(struct sock_info *sock_info, size_t mmap_size)
 	 */
 	wait_shm_fd = shm_open(sock_info->wait_shm_path, O_RDONLY, 0);
 	if (wait_shm_fd >= 0) {
+		int32_t tmp_read;
+		ssize_t len;
+		size_t bytes_read = 0;
+
+		/*
+		 * Try to read the fd. If unable to do so, try opening
+		 * it in write mode.
+		 */
+		do {
+			len = read(wait_shm_fd,
+				&((char *) &tmp_read)[bytes_read],
+				sizeof(tmp_read) - bytes_read);
+			if (len > 0) {
+				bytes_read += len;
+			}
+		} while ((len < 0 && errno == EINTR)
+			|| (len > 0 && bytes_read < sizeof(tmp_read)));
+		if (bytes_read != sizeof(tmp_read)) {
+			ret = close(wait_shm_fd);
+			if (ret) {
+				ERR("close wait_shm_fd");
+			}
+			goto open_write;
+		}
 		goto end;
 	} else if (wait_shm_fd < 0 && errno != ENOENT) {
 		/*
@@ -715,9 +881,11 @@ int get_wait_shm(struct sock_info *sock_info, size_t mmap_size)
 		ERR("Error opening shm %s", sock_info->wait_shm_path);
 		goto end;
 	}
+
+open_write:
 	/*
-	 * If the open failed because the file did not exist, try
-	 * creating it ourself.
+	 * If the open failed because the file did not exist, or because
+	 * the file was not truncated yet, try creating it ourself.
 	 */
 	URCU_TLS(lttng_ust_nest_count)++;
 	pid = fork();
@@ -856,8 +1024,7 @@ void wait_for_sessiond(struct sock_info *sock_info)
 {
 	int ret;
 
-	ust_lock();
-	if (lttng_ust_comm_should_quit) {
+	if (ust_lock()) {
 		goto quit;
 	}
 	if (wait_poll_fallback) {
@@ -912,8 +1079,6 @@ void *ust_listener_thread(void *arg)
 {
 	struct sock_info *sock_info = arg;
 	int sock, ret, prev_connect_failed = 0, has_waited = 0;
-	int open_sock[2];
-	int i;
 	long timeout;
 
 	/* Restart trying to connect to the session daemon */
@@ -951,59 +1116,35 @@ restart:
 		sock_info->notify_socket = -1;
 	}
 
-	/* Register */
-	for (i = 0; i < 2; i++) {
-		ret = ustcomm_connect_unix_sock(sock_info->sock_path);
-		if (ret < 0) {
-			DBG("Info: sessiond not accepting connections to %s apps socket", sock_info->name);
-			prev_connect_failed = 1;
+	/*
+	 * Register. We need to perform both connect and sending
+	 * registration message before doing the next connect otherwise
+	 * we may reach unix socket connect queue max limits and block
+	 * on the 2nd connect while the session daemon is awaiting the
+	 * first connect registration message.
+	 */
+	/* Connect cmd socket */
+	ret = ustcomm_connect_unix_sock(sock_info->sock_path);
+	if (ret < 0) {
+		DBG("Info: sessiond not accepting connections to %s apps socket", sock_info->name);
+		prev_connect_failed = 1;
 
-			ust_lock();
-
-			if (lttng_ust_comm_should_quit) {
-				goto quit;
-			}
-
-			/*
-			 * If we cannot find the sessiond daemon, don't delay
-			 * constructor execution.
-			 */
-			ret = handle_register_done(sock_info);
-			assert(!ret);
-			ust_unlock();
-			goto restart;
+		if (ust_lock()) {
+			goto quit;
 		}
-		open_sock[i] = ret;
-	}
 
-	sock_info->socket = open_sock[0];
-	sock_info->notify_socket = open_sock[1];
-
-	timeout = get_notify_sock_timeout();
-	if (timeout >= 0) {
 		/*
-		 * Give at least 10ms to sessiond to reply to
-		 * notifications.
+		 * If we cannot find the sessiond daemon, don't delay
+		 * constructor execution.
 		 */
-		if (timeout < 10)
-			timeout = 10;
-		ret = ustcomm_setsockopt_rcv_timeout(sock_info->notify_socket,
-				timeout);
-		if (ret < 0) {
-			WARN("Error setting socket receive timeout");
-		}
-		ret = ustcomm_setsockopt_snd_timeout(sock_info->notify_socket,
-				timeout);
-		if (ret < 0) {
-			WARN("Error setting socket send timeout");
-		}
-	} else if (timeout < -1) {
-		WARN("Unsuppoorted timeout value %ld", timeout);
+		ret = handle_register_done(sock_info);
+		assert(!ret);
+		ust_unlock();
+		goto restart;
 	}
+	sock_info->socket = ret;
 
-	ust_lock();
-
-	if (lttng_ust_comm_should_quit) {
+	if (ust_lock()) {
 		goto quit;
 	}
 
@@ -1035,6 +1176,56 @@ restart:
 		ust_unlock();
 		goto restart;
 	}
+
+	ust_unlock();
+
+	/* Connect notify socket */
+	ret = ustcomm_connect_unix_sock(sock_info->sock_path);
+	if (ret < 0) {
+		DBG("Info: sessiond not accepting connections to %s apps socket", sock_info->name);
+		prev_connect_failed = 1;
+
+		if (ust_lock()) {
+			goto quit;
+		}
+
+		/*
+		 * If we cannot find the sessiond daemon, don't delay
+		 * constructor execution.
+		 */
+		ret = handle_register_done(sock_info);
+		assert(!ret);
+		ust_unlock();
+		goto restart;
+	}
+	sock_info->notify_socket = ret;
+
+	timeout = get_notify_sock_timeout();
+	if (timeout >= 0) {
+		/*
+		 * Give at least 10ms to sessiond to reply to
+		 * notifications.
+		 */
+		if (timeout < 10)
+			timeout = 10;
+		ret = ustcomm_setsockopt_rcv_timeout(sock_info->notify_socket,
+				timeout);
+		if (ret < 0) {
+			WARN("Error setting socket receive timeout");
+		}
+		ret = ustcomm_setsockopt_snd_timeout(sock_info->notify_socket,
+				timeout);
+		if (ret < 0) {
+			WARN("Error setting socket send timeout");
+		}
+	} else if (timeout < -1) {
+		WARN("Unsupported timeout value %ld", timeout);
+	}
+
+	if (ust_lock()) {
+		goto quit;
+	}
+
 	ret = register_to_sessiond(sock_info->notify_socket,
 			USTCTL_SOCKET_NOTIFY);
 	if (ret < 0) {
@@ -1062,8 +1253,7 @@ restart:
 		switch (len) {
 		case 0:	/* orderly shutdown */
 			DBG("%s lttng-sessiond has performed an orderly shutdown", sock_info->name);
-			ust_lock();
-			if (lttng_ust_comm_should_quit) {
+			if (ust_lock()) {
 				goto quit;
 			}
 			/*
@@ -1102,8 +1292,7 @@ restart:
 
 	}
 end:
-	ust_lock();
-	if (lttng_ust_comm_should_quit) {
+	if (ust_lock()) {
 		goto quit;
 	}
 	/* Cleanup socket handles before trying to reconnect */
@@ -1112,9 +1301,20 @@ end:
 	goto restart;	/* try to reconnect */
 
 quit:
-	sock_info->thread_active = 0;
 	ust_unlock();
+
+	pthread_mutex_lock(&ust_exit_mutex);
+	sock_info->thread_active = 0;
+	pthread_mutex_unlock(&ust_exit_mutex);
 	return NULL;
+}
+
+/*
+ * Weak symbol to call when the ust malloc wrapper is not loaded.
+ */
+__attribute__((weak))
+void lttng_ust_malloc_wrapper_init(void)
+{
 }
 
 /*
@@ -1150,12 +1350,17 @@ void __attribute__((constructor)) lttng_ust_init(void)
 	 */
 	init_usterr();
 	init_tracepoint();
+	lttng_ust_baddr_statedump_init();
 	lttng_ring_buffer_metadata_client_init();
 	lttng_ring_buffer_client_overwrite_init();
 	lttng_ring_buffer_client_overwrite_rt_init();
 	lttng_ring_buffer_client_discard_init();
 	lttng_ring_buffer_client_discard_rt_init();
 	lttng_context_init();
+	/*
+	 * Invoke ust malloc wrapper init before starting other threads.
+	 */
+	lttng_ust_malloc_wrapper_init();
 
 	timeout_mode = get_constructor_timeout(&constructor_timeout);
 
@@ -1187,24 +1392,24 @@ void __attribute__((constructor)) lttng_ust_init(void)
 		ERR("pthread_attr_setdetachstate: %s", strerror(ret));
 	}
 
-	ust_lock();
+	pthread_mutex_lock(&ust_exit_mutex);
 	ret = pthread_create(&global_apps.ust_listener, &thread_attr,
 			ust_listener_thread, &global_apps);
 	if (ret) {
 		ERR("pthread_create global: %s", strerror(ret));
 	}
 	global_apps.thread_active = 1;
-	ust_unlock();
+	pthread_mutex_unlock(&ust_exit_mutex);
 
 	if (local_apps.allowed) {
-		ust_lock();
+		pthread_mutex_lock(&ust_exit_mutex);
 		ret = pthread_create(&local_apps.ust_listener, &thread_attr,
 				ust_listener_thread, &local_apps);
 		if (ret) {
 			ERR("pthread_create local: %s", strerror(ret));
 		}
 		local_apps.thread_active = 1;
-		ust_unlock();
+		pthread_mutex_unlock(&ust_exit_mutex);
 	} else {
 		handle_register_done(&local_apps);
 	}
@@ -1264,6 +1469,7 @@ void lttng_ust_cleanup(int exiting)
 	lttng_ring_buffer_client_overwrite_rt_exit();
 	lttng_ring_buffer_client_overwrite_exit();
 	lttng_ring_buffer_metadata_client_exit();
+	lttng_ust_baddr_statedump_destroy();
 	exit_tracepoint();
 	if (!exiting) {
 		/* Reinitialize values for fork */
@@ -1288,9 +1494,11 @@ void __attribute__((destructor)) lttng_ust_exit(void)
 	 * mutexes to ensure it is not in a mutex critical section when
 	 * pthread_cancel is later called.
 	 */
-	ust_lock();
+	ust_lock_nocheck();
 	lttng_ust_comm_should_quit = 1;
+	ust_unlock();
 
+	pthread_mutex_lock(&ust_exit_mutex);
 	/* cancel threads */
 	if (global_apps.thread_active) {
 		ret = pthread_cancel(global_apps.ust_listener);
@@ -1310,7 +1518,7 @@ void __attribute__((destructor)) lttng_ust_exit(void)
 			local_apps.thread_active = 0;
 		}
 	}
-	ust_unlock();
+	pthread_mutex_unlock(&ust_exit_mutex);
 
 	/*
 	 * Do NOT join threads: use of sys_futex makes it impossible to
@@ -1349,7 +1557,7 @@ void ust_before_fork(sigset_t *save_sigset)
 	if (ret == -1) {
 		PERROR("sigprocmask");
 	}
-	ust_lock();
+	ust_lock_nocheck();
 	rcu_bp_before_fork();
 }
 
@@ -1397,4 +1605,10 @@ void ust_after_fork_child(sigset_t *restore_sigset)
 	/* Release mutexes and reenable signals */
 	ust_after_fork_common(restore_sigset);
 	lttng_ust_init();
+}
+
+void lttng_ust_sockinfo_session_enabled(void *owner)
+{
+	struct sock_info *sock_info = owner;
+	sock_info->statedump_pending = 1;
 }

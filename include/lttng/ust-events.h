@@ -35,6 +35,10 @@
 #include <lttng/ust-endian.h>
 #include <float.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define LTTNG_UST_UUID_LEN		16
 
 /*
@@ -301,6 +305,8 @@ struct lttng_enabler {
 
 	/* head list of struct lttng_ust_filter_bytecode_node */
 	struct cds_list_head filter_bytecode_head;
+	/* head list of struct lttng_ust_excluder_node */
+	struct cds_list_head excluder_head;
 	struct cds_list_head node;	/* per-session list of enablers */
 
 	struct lttng_ust_event event_param;
@@ -342,6 +348,15 @@ struct lttng_ust_filter_bytecode_node {
 	struct lttng_ust_filter_bytecode bc;
 };
 
+struct lttng_ust_excluder_node {
+	struct cds_list_head node;
+	struct lttng_enabler *enabler;
+	/*
+	 * struct lttng_ust_event_exclusion had variable sized array,
+	 * must be last field.
+	 */
+	struct lttng_ust_event_exclusion excluder;
+};
 /*
  * Filter return value masks.
  */
@@ -502,6 +517,9 @@ struct lttng_session {
 	struct lttng_ust_event_ht events_ht;	/* ht of events */
 	void *owner;				/* object owner */
 	int tstate:1;				/* Transient enable state */
+
+	/* New UST 2.4 */
+	int statedump_pending:1;
 };
 
 struct lttng_transport {
@@ -538,12 +556,14 @@ int lttng_enabler_attach_bytecode(struct lttng_enabler *enabler,
 		struct lttng_ust_filter_bytecode_node *bytecode);
 int lttng_enabler_attach_context(struct lttng_enabler *enabler,
 		struct lttng_ust_context *ctx);
+int lttng_enabler_attach_exclusion(struct lttng_enabler *enabler,
+		struct lttng_ust_excluder_node *excluder);
 
 int lttng_attach_context(struct lttng_ust_context *context_param,
 		struct lttng_ctx **ctx, struct lttng_session *session);
 void lttng_context_init(void);
 void lttng_context_exit(void);
-struct lttng_ctx *lttng_static_ctx;	/* Used by filtering */
+extern struct lttng_ctx *lttng_static_ctx;	/* Used by filtering */
 
 void lttng_transport_register(struct lttng_transport *transport);
 void lttng_transport_unregister(struct lttng_transport *transport);
@@ -569,9 +589,9 @@ int lttng_add_ip_to_ctx(struct lttng_ctx **ctx);
 void lttng_context_vtid_reset(void);
 void lttng_context_vpid_reset(void);
 
-extern const struct lttng_ust_lib_ring_buffer_client_cb *lttng_client_callbacks_metadata;
-extern const struct lttng_ust_lib_ring_buffer_client_cb *lttng_client_callbacks_discard;
-extern const struct lttng_ust_lib_ring_buffer_client_cb *lttng_client_callbacks_overwrite;
+extern const struct lttng_ust_client_lib_ring_buffer_client_cb *lttng_client_callbacks_metadata;
+extern const struct lttng_ust_client_lib_ring_buffer_client_cb *lttng_client_callbacks_discard;
+extern const struct lttng_ust_client_lib_ring_buffer_client_cb *lttng_client_callbacks_overwrite;
 
 struct lttng_transport *lttng_transport_find(const char *name);
 
@@ -592,5 +612,13 @@ void lttng_filter_sync_state(struct lttng_bytecode_runtime *runtime);
 
 struct cds_list_head *lttng_get_probe_list_head(void);
 int lttng_session_active(void);
+
+typedef int (*t_statedump_func_ptr)(struct lttng_session *session);
+void lttng_handle_pending_statedump(void *owner);
+struct cds_list_head *_lttng_get_sessions(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _LTTNG_UST_EVENTS_H */
