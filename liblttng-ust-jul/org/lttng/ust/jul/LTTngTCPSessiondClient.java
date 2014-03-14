@@ -23,17 +23,24 @@ import java.nio.ByteOrder;
 import java.lang.Integer;
 import java.io.IOException;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.DataInputStream;
+import java.io.FileReader;
+import java.io.FileNotFoundException;
 import java.net.*;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.logging.Logger;
+import java.util.Collections;
 
 class USTRegisterMsg {
 	public static int pid;
@@ -45,7 +52,6 @@ public class LTTngTCPSessiondClient {
 		new LTTngSessiondCmd2_4.sessiond_hdr();
 
 	private final String sessiondHost;
-	private final int sessiondPort;
 	private Socket sessiondSock;
 	private boolean quit = false;
 
@@ -57,7 +63,8 @@ public class LTTngTCPSessiondClient {
 	private Semaphore registerSem;
 
 	private Timer eventTimer;
-	private List<LTTngEvent> enabledEventList = new ArrayList<LTTngEvent>();
+	private Set<LTTngEvent> enabledEventSet =
+		Collections.synchronizedSet(new HashSet<LTTngEvent>());
 	/*
 	 * Map of Logger objects that have been enabled. They are indexed by name.
 	 */
@@ -66,9 +73,14 @@ public class LTTngTCPSessiondClient {
 	private final static long timerDelay = 5 * 1000;
 	private static boolean timerInitialized;
 
-	public LTTngTCPSessiondClient(String host, int port, Semaphore sem) {
+	private static final String rootPortFile = "/var/run/lttng/jul.port";
+	private static final String userPortFile = "/.lttng/jul.port";
+
+	/* Indicate if we've already release the semaphore. */
+	private boolean sem_posted = false;
+
+	public LTTngTCPSessiondClient(String host, Semaphore sem) {
 		this.sessiondHost = host;
-		this.sessiondPort = port;
 		this.registerSem = sem;
 		this.eventTimer = new Timer();
 		this.timerInitialized = false;
@@ -82,69 +94,96 @@ public class LTTngTCPSessiondClient {
 		this.eventTimer.scheduleAtFixedRate(new TimerTask() {
 			@Override
 			public void run() {
-				/*
-				 * We have to make a copy here since it is possible that the
-				 * enabled event list is changed during an iteration on it.
-				 */
-				List<LTTngEvent> tmpList = new ArrayList<LTTngEvent>(enabledEventList);
-
-				LTTngSessiondCmd2_4.sessiond_enable_handler enableCmd = new
-					LTTngSessiondCmd2_4.sessiond_enable_handler();
-				for (LTTngEvent event: tmpList) {
-					int ret;
-					Logger logger;
-
+				synchronized (enabledEventSet) {
+					LTTngSessiondCmd2_4.sessiond_enable_handler enableCmd = new
+						LTTngSessiondCmd2_4.sessiond_enable_handler();
 					/*
-					 * Check if this Logger name has been enabled already. Note
-					 * that in the case of "*", it's never added in that hash
-					 * table thus the enable command does a lookup for each
-					 * logger name in that hash table for the * case in order
-					 * to make sure we don't enable twice the same logger
-					 * because JUL apparently accepts that the *same*
-					 * LogHandler can be added twice on a Logger object...
-					 * don't ask...
+					 * Modifying events in a Set will raise a
+					 * ConcurrentModificationException. Thus, we remove an event
+					 * and add its modified version to modifiedEvents when a
+					 * modification is necessary.
 					 */
-					logger = enabledLoggers.get(event.name);
-					if (logger != null) {
-						continue;
-					}
+					Set<LTTngEvent> modifiedEvents = new HashSet<LTTngEvent>();
+					Iterator<LTTngEvent> it = enabledEventSet.iterator();
 
-					/*
-					 * Set to one means that the enable all event has been seen
-					 * thus event from that point on must use loglevel for all
-					 * events. Else the object has its own loglevel.
-					 */
-					if (handler.logLevelUseAll == 1) {
-						event.logLevel.level = handler.logLevelAll;
-						event.logLevel.type = handler.logLevelTypeAll;
-					}
+					while (it.hasNext()) {
+						int ret;
+						Logger logger;
+						LTTngEvent event = it.next();
 
-					/*
-					 * The all event is a special case since we have to iterate
-					 * over every Logger to see which one was not enabled.
-					 */
-					if (event.name.equals("*")) {
-						enableCmd.name = event.name;
-						enableCmd.lttngLogLevel = event.logLevel.level;
-						enableCmd.lttngLogLevelType = event.logLevel.type;
 						/*
-						 * The return value is irrelevant since the * event is
-						 * always kept in the list.
+						 * Check if this Logger name has been enabled already. Note
+						 * that in the case of "*", it's never added in that hash
+						 * table thus the enable command does a lookup for each
+						 * logger name in that hash table for the * case in order
+						 * to make sure we don't enable twice the same logger
+						 * because JUL apparently accepts that the *same*
+						 * LogHandler can be added twice on a Logger object...
+						 * don't ask...
 						 */
-						enableCmd.execute(handler, enabledLoggers);
-						continue;
-					}
+						logger = enabledLoggers.get(event.name);
+						if (logger != null) {
+							continue;
+						}
 
-					ret = enableCmd.enableLogger(handler, event, enabledLoggers);
-					if (ret == 1) {
-						/* Enabled so remove the event from the list. */
-						enabledEventList.remove(event);
+						/*
+						 * Set to one means that the enable all event has been seen
+						 * thus event from that point on must use loglevel for all
+						 * events. Else the object has its own loglevel.
+						 */
+						if (handler.logLevelUseAll == 1) {
+							it.remove();
+							event.logLevels.addAll(handler.logLevelsAll);
+							modifiedEvents.add(event);
+						}
+
+						/*
+						 * The all event is a special case since we have to iterate
+						 * over every Logger to see which one was not enabled.
+						 */
+						if (event.name.equals("*")) {
+							enableCmd.name = event.name;
+							/* Tell the command NOT to add the loglevel. */
+							enableCmd.lttngLogLevel = -1;
+							/*
+							 * The return value is irrelevant since the * event is
+							 * always kept in the set.
+							 */
+							enableCmd.execute(handler, enabledLoggers);
+							continue;
+						}
+
+						ret = enableCmd.enableLogger(handler, event, enabledLoggers);
+						if (ret == 1) {
+							/* Enabled so remove the event from the set. */
+							if (!modifiedEvents.remove(event)) {
+								/*
+								 * event can only be present in one of
+								 * the sets.
+								 */
+								it.remove();
+							}
+						}
 					}
+					enabledEventSet.addAll(modifiedEvents);
 				}
+
 			}
 		}, this.timerDelay, this.timerDelay);
 
 		this.timerInitialized = true;
+	}
+
+	/*
+	 * Try to release the registerSem if it's not already done.
+	 */
+	private void tryReleaseSem()
+	{
+		/* Release semaphore so we unblock the agent. */
+		if (!this.sem_posted) {
+			this.registerSem.release();
+			this.sem_posted = true;
+		}
 	}
 
 	public void init(LTTngLogHandler handler) throws InterruptedException {
@@ -167,7 +206,6 @@ public class LTTngTCPSessiondClient {
 				 * UST application.
 				 */
 				registerToSessiond();
-				this.registerSem.release();
 
 				setupEventTimer();
 
@@ -178,13 +216,13 @@ public class LTTngTCPSessiondClient {
 				 */
 				handleSessiondCmd();
 			} catch (UnknownHostException uhe) {
-				this.registerSem.release();
+				tryReleaseSem();
 				System.out.println(uhe);
 			} catch (IOException ioe) {
-				this.registerSem.release();
+				tryReleaseSem();
 				Thread.sleep(3000);
 			} catch (Exception e) {
-				this.registerSem.release();
+				tryReleaseSem();
 				e.printStackTrace();
 			}
 		}
@@ -253,6 +291,19 @@ public class LTTngTCPSessiondClient {
 			}
 
 			switch (headerCmd.cmd) {
+				case CMD_REG_DONE:
+				{
+					/*
+					 * Release semaphore so meaning registration is done and we
+					 * can proceed to continue tracing.
+					 */
+					tryReleaseSem();
+					/*
+					 * We don't send any reply to the registration done command.
+					 * This just marks the end of the initial session setup.
+					 */
+					continue;
+				}
 				case CMD_LIST:
 				{
 					LTTngSessiondCmd2_4.sessiond_list_logger listLoggerCmd =
@@ -274,12 +325,10 @@ public class LTTngTCPSessiondClient {
 					event = enableCmd.execute(this.handler, this.enabledLoggers);
 					if (event != null) {
 						/*
-						 * Add the event to the list so it can be enabled if
+						 * Add the event to the set so it can be enabled if
 						 * the logger appears at some point in time.
 						 */
-						if (enabledEventList.contains(event) == false) {
-							enabledEventList.add(event);
-						}
+						enabledEventSet.add(event);
 					}
 					data = enableCmd.getBytes();
 					break;
@@ -315,8 +364,54 @@ public class LTTngTCPSessiondClient {
 		}
 	}
 
+	private String getHomePath() {
+		return System.getProperty("user.home");
+	}
+
+	/**
+	 * Read port number from file created by the session daemon.
+	 *
+	 * @return port value if found else 0.
+	 */
+	private int getPortFromFile(String path) throws IOException {
+		int port;
+		BufferedReader br;
+
+		try {
+			br = new BufferedReader(new FileReader(path));
+			String line = br.readLine();
+			port = Integer.parseInt(line, 10);
+			if (port < 0 || port > 65535) {
+				/* Invalid value. Ignore. */
+				port = 0;
+			}
+			br.close();
+		} catch (FileNotFoundException e) {
+			/* No port available. */
+			port = 0;
+		}
+
+		return port;
+	}
+
 	private void connectToSessiond() throws Exception {
-		this.sessiondSock = new Socket(this.sessiondHost, this.sessiondPort);
+		int port;
+
+		if (this.handler.is_root == 1) {
+			port = getPortFromFile(rootPortFile);
+			if (port == 0) {
+				/* No session daemon available. Stop and retry later. */
+				throw new IOException();
+			}
+		} else {
+			port = getPortFromFile(getHomePath() + userPortFile);
+			if (port == 0) {
+				/* No session daemon available. Stop and retry later. */
+				throw new IOException();
+			}
+		}
+
+		this.sessiondSock = new Socket(this.sessiondHost, port);
 		this.inFromSessiond = new DataInputStream(
 				sessiondSock.getInputStream());
 		this.outToSessiond = new DataOutputStream(
