@@ -1,3 +1,9 @@
+ust (2.4.0-2) unstable; urgency=low
+
+  * [3071879] Add explicit build dependency on python (Closes: #741687)
+
+ -- Jon Bernard <jbernard@debian.org>  Sat, 15 Mar 2014 21:11:42 -0400
+
 ust (2.4.0-1) unstable; urgency=low
 
   * [5c01e4a] New upstream version 2.4.0
