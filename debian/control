@@ -1,7 +1,7 @@
 Source: ust
 Priority: extra
 Maintainer: Jon Bernard <jbernard@debian.org>
-Build-Depends: debhelper (>= 9), liburcu-dev (>= 0.7.2), uuid-dev, texinfo, python,
+Build-Depends: debhelper (>= 9), liburcu-dev (>= 0.8.4), uuid-dev, texinfo, python,
   systemtap-sdt-dev (>= 1.6) [amd64 armel armhf i386 powerpc]
 Standards-Version: 3.9.5
 Section: libs
@@ -48,7 +48,7 @@ Architecture: amd64 armel armhf i386 mips mipsel powerpc s390x
 Multi-Arch: same
 Depends: ${misc:Depends},
   liblttng-ust0 (= ${binary:Version}), liblttng-ust-ctl2 (= ${binary:Version}),
-  liburcu-dev (>= 0.7.2), uuid-dev, systemtap-sdt-dev (>= 1.6) [amd64 armel armhf i386 powerpc]
+  liburcu-dev (>= 0.8.4), uuid-dev, systemtap-sdt-dev (>= 1.6) [amd64 armel armhf i386 powerpc]
 Recommends: python
 Conflicts: liblttng-ust2
 Replaces: liblttng-ust2
