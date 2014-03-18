@@ -1,3 +1,10 @@
+ust (2.4.0-4) unstable; urgency=low
+
+  [ Michael Jeanson ]
+  * [e7e05c8] Use dh-autoreconf to call autoreconf before building
+
+ -- Jon Bernard <jbernard@debian.org>  Tue, 18 Mar 2014 12:10:09 -0400
+
 ust (2.4.0-3) unstable; urgency=low
 
   * [40e81f4] Bump dependency on liburcu to version 0.8.4
