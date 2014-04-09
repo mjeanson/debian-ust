@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([lttng-ust],[2.4.0],[mathieu dot desnoyers at efficios dot com])
+AC_INIT([lttng-ust],[2.4.1],[mathieu dot desnoyers at efficios dot com])
 
 # Following the numbering scheme proposed by libtool for the library version
 # http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
@@ -198,6 +198,7 @@ changequote([,])dnl
 	tile*) NO_UNALIGNED_ACCESS=1 ;;
 	*) AC_MSG_ERROR([unable to detect alignment requirements (unsupported architecture ($host_cpu)?)]) ;;
 esac
+AC_MSG_RESULT([$host_cpu])
 
 if test x$NO_UNALIGNED_ACCESS = x ; then
 AC_DEFINE([LTTNG_UST_HAVE_EFFICIENT_UNALIGNED_ACCESS], [1])
@@ -265,6 +266,16 @@ AS_IF([test "x$with_sdt" = "xyes"],[
 	])
 ])
 
+AC_MSG_CHECKING([whether shared libraries are enabled])
+AS_IF([test "x$enable_shared" = "xyes"],
+	[
+		AC_MSG_RESULT([yes])
+	],
+	[
+		AC_MSG_RESULT([no])
+		AC_MSG_ERROR([LTTng-UST requires shared libraries to be enabled])
+	])
+
 AC_ARG_WITH([lttng-system-rundir],
 	AS_HELP_STRING([--with-lttng-system-rundir],
 	[Location of the system directory where LTTng-UST expects the system-wide lttng-sessiond runtime files. The default is "/var/run/lttng".]),
@@ -276,7 +287,7 @@ AC_DEFINE_UNQUOTED([LTTNG_SYSTEM_RUNDIR], ["$lttng_system_rundir"],
 lttnglibjavadir="${libdir}/lttng/java"
 AC_SUBST(lttnglibjavadir)
 
-AM_PATH_PYTHON([2.7],BUILD_GEN_TP_EXAMPLES=1)
+AM_PATH_PYTHON([2.7],BUILD_GEN_TP_EXAMPLES=1,[:])
 AM_CONDITIONAL([BUILD_GEN_TP_EXAMPLES], [test $BUILD_GEN_TP_EXAMPLES], [Build examples requiring lttng-gen-tp])
 
 AC_CONFIG_FILES([
