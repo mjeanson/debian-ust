@@ -1,3 +1,10 @@
+ust (2.4.1-1) unstable; urgency=low
+
+  [ Michael Jeanson ]
+  * [3f43734] Imported Upstream version 2.4.1
+
+ -- Jon Bernard <jbernard@debian.org>  Wed, 09 Apr 2014 13:03:09 -0400
+
 ust (2.4.0-4) unstable; urgency=low
 
   [ Michael Jeanson ]
