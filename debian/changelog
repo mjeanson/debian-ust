@@ -1,3 +1,9 @@
+ust (2.5.0-1) unstable; urgency=medium
+
+  * [e695b9e] New upstream version 2.5.0
+
+ -- Jon Bernard <jbernard@debian.org>  Fri, 01 Aug 2014 22:10:16 -0400
+
 ust (2.4.1-1) unstable; urgency=low
 
   [ Michael Jeanson ]
