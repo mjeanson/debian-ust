@@ -17,7 +17,38 @@ port of the low-overhead tracing capabilities of the LTTng kernel tracer
 to user-space. The library "liblttng-ust" enables tracing of
 applications and libraries.
 
-.SH "USAGE"
+.SH "USAGE WITH TRACEF"
+.PP
+The simplest way to add instrumentation to your code is by far the
+tracef() API. To do it, in a nutshell:
+
+1) #include <lttng/tracef.h>
+
+2) /* in your code, use like a printf */
+   tracef("my message, this integer %d", 1234);
+
+3) Link your program against liblttng-ust.so.
+
+4) Enable UST events when tracing with the following sequence of commands
+   from lttng-tools:
+
+   lttng create
+   lttng enable-event -u -a
+   lttng start
+   [... run your program ...]
+   lttng stop
+   lttng view
+
+That's it!
+
+If you want to have more flexibility and control on the event names,
+payload typing, etc, you can continue reading on and use the tracepoints
+below. "tracef()" is there for quick and dirty ad hoc instrumentation,
+whereas tracepoint.h is meant for thorough instrumentation of a code
+base to be integrated with an upstream project.
+.PP
+
+.SH "USAGE WITH TRACEPOINT"
 .PP
 The simple way to generate the lttng-ust tracepoint probes is to use the
 lttng-gen-tp(1) tool. See the lttng-gen-tp(1) manpage for explanation.
@@ -366,13 +397,9 @@ Pthread identifier. Can be used on architectures where pthread_t maps
 nicely to an unsigned long type.
 .PP
 
-.SH "BASE ADDRESS STATEDUMP (Experimental feature)"
+.SH "BASE ADDRESS STATEDUMP"
 
 .PP
-Warning: This is an experimental feature known to cause deadlocks when the
-traced application uses fork, clone or daemon. Only use it for debugging and
-testing.  Do NOT use it in production.
-
 If an application that uses liblttng-ust.so becomes part of a session,
 information about its currently loaded shared objects will be traced to the
 session at session-enable time. To record this information, the following event
@@ -409,8 +436,8 @@ specified in milliseconds. The value 0 means "don't wait". The value
 recommended for applications with time constraints on the process
 startup time.
 .PP
-.IP "LTTNG_UST_WITH_EXPERIMENTAL_BADDR_STATEDUMP"
-Experimentally allow liblttng-ust to perform a base-address statedump on session-enable.
+.IP "LTTNG_UST_WITHOUT_BADDR_STATEDUMP"
+Prevent liblttng-ust to perform a base-address statedump on session-enable.
 .PP
 
 .SH "SEE ALSO"

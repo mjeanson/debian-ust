@@ -195,6 +195,7 @@ LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
 LTTNG_UST_CTL_LIBRARY_VERSION = @LTTNG_UST_CTL_LIBRARY_VERSION@
 LTTNG_UST_LIBRARY_VERSION = @LTTNG_UST_LIBRARY_VERSION@
+MAINT = @MAINT@
 MAJOR_VERSION = @MAJOR_VERSION@
 MAKEINFO = @MAKEINFO@
 MANIFEST_TOOL = @MANIFEST_TOOL@
@@ -290,7 +291,8 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 LTTNG_JUST_SRCDIR = $(srcdir)/org/lttng/ust
 LTTNG_JUST_DESTDIR = $(builddir)/org/lttng/ust
-@BUILD_JNI_INTERFACE_TRUE@AM_CPPFLAGS = -I$(top_srcdir)/include
+@BUILD_JNI_INTERFACE_TRUE@AM_CPPFLAGS = -I$(top_srcdir)/include -I$(builddir) -I$(top_builddir)/include
+@BUILD_JNI_INTERFACE_TRUE@BUILT_SOURCES = org_lttng_ust_LTTngUst.h
 @BUILD_JNI_INTERFACE_TRUE@lib_LTLIBRARIES = liblttng-ust-java.la
 @BUILD_JNI_INTERFACE_TRUE@liblttng_ust_java_la_SOURCES = LTTngUst.c lttng_ust_java.h
 @BUILD_JNI_INTERFACE_TRUE@nodist_liblttng_ust_java_la_SOURCES = org_lttng_ust_LTTngUst.h
@@ -298,11 +300,12 @@ LTTNG_JUST_DESTDIR = $(builddir)/org/lttng/ust
 @BUILD_JNI_INTERFACE_TRUE@liblttng_ust_java_la_LIBADD = -lc -L$(top_builddir)/liblttng-ust/.libs -llttng-ust
 @BUILD_JNI_INTERFACE_TRUE@@HAVE_JAVA_JDK_FALSE@JCC = javac
 @BUILD_JNI_INTERFACE_TRUE@@HAVE_JAVA_JDK_TRUE@JCC = $(JAVA_JDK)/bin
-all: all-am
+all: $(BUILT_SOURCES)
+	$(MAKE) $(AM_MAKEFLAGS) all-am
 
 .SUFFIXES:
 .SUFFIXES: .c .lo .o .obj
-$(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
+$(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am  $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
 	    *$$dep*) \
@@ -327,9 +330,9 @@ Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 $(top_builddir)/config.status: $(top_srcdir)/configure $(CONFIG_STATUS_DEPENDENCIES)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 
-$(top_srcdir)/configure:  $(am__configure_deps)
+$(top_srcdir)/configure: @MAINTAINER_MODE_TRUE@ $(am__configure_deps)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
-$(ACLOCAL_M4):  $(am__aclocal_m4_deps)
+$(ACLOCAL_M4): @MAINTAINER_MODE_TRUE@ $(am__aclocal_m4_deps)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 $(am__aclocal_m4_deps):
 install-libLTLIBRARIES: $(lib_LTLIBRARIES)
@@ -485,13 +488,15 @@ distdir: $(DISTFILES)
 	  fi; \
 	done
 check-am: all-am
-check: check-am
+check: $(BUILT_SOURCES)
+	$(MAKE) $(AM_MAKEFLAGS) check-am
 all-am: Makefile $(LTLIBRARIES) $(DATA)
 installdirs:
 	for dir in "$(DESTDIR)$(libdir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
-install: install-am
+install: $(BUILT_SOURCES)
+	$(MAKE) $(AM_MAKEFLAGS) install-am
 install-exec: install-exec-am
 install-data: install-data-am
 uninstall: uninstall-am
@@ -521,6 +526,7 @@ distclean-generic:
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
+	-test -z "$(BUILT_SOURCES)" || rm -f $(BUILT_SOURCES)
 @BUILD_JNI_INTERFACE_FALSE@clean-local:
 clean: clean-am
 
@@ -593,7 +599,7 @@ ps-am:
 
 uninstall-am: uninstall-libLTLIBRARIES
 
-.MAKE: install-am install-strip
+.MAKE: all check install install-am install-strip
 
 .PHONY: CTAGS GTAGS all all-am check check-am clean clean-generic \
 	clean-libLTLIBRARIES clean-libtool clean-local ctags distclean \
@@ -616,8 +622,6 @@ uninstall-am: uninstall-libLTLIBRARIES
 @BUILD_JNI_INTERFACE_TRUE@	rm -f org_lttng_ust_LTTngUst.h
 @BUILD_JNI_INTERFACE_TRUE@	rm -f liblttng-ust-java.jar
 @BUILD_JNI_INTERFACE_TRUE@	rm -rf org/lttng/ust/*.class
-
-@BUILD_JNI_INTERFACE_TRUE@LTTngUst.c: org_lttng_ust_LTTngUst.h
 
 @BUILD_JNI_INTERFACE_TRUE@$(LTTNG_JUST_DESTDIR)/LTTngUst.class: $(LTTNG_JUST_SRCDIR)/LTTngUst.java
 @BUILD_JNI_INTERFACE_TRUE@	$(JCC)/javac -d "$(builddir)" "$(LTTNG_JUST_SRCDIR)/LTTngUst.java"

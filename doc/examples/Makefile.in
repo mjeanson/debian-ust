@@ -56,6 +56,7 @@ target_triplet = @target@
 subdir = doc/examples
 DIST_COMMON = README $(am__dist_doc_examples_java_jul_DATA_DIST) \
 	$(dist_doc_examples_DATA) $(dist_doc_examples_demo_DATA) \
+	$(dist_doc_examples_demo_tracef_DATA) \
 	$(dist_doc_examples_easy_ust_DATA) \
 	$(dist_doc_examples_gen_tp_DATA) \
 	$(dist_doc_examples_hello_static_lib_DATA) \
@@ -115,6 +116,7 @@ am__uninstall_files_from_dir = { \
   }
 am__installdirs = "$(DESTDIR)$(doc_examplesdir)" \
 	"$(DESTDIR)$(doc_examples_demodir)" \
+	"$(DESTDIR)$(doc_examples_demo_tracefdir)" \
 	"$(DESTDIR)$(doc_examples_easy_ustdir)" \
 	"$(DESTDIR)$(doc_examples_gen_tpdir)" \
 	"$(DESTDIR)$(doc_examples_hello_static_libdir)" \
@@ -122,6 +124,7 @@ am__installdirs = "$(DESTDIR)$(doc_examplesdir)" \
 am__dist_doc_examples_java_jul_DATA_DIST = java-jul/Makefile \
 	java-jul/Hello.java java-jul/run
 DATA = $(dist_doc_examples_DATA) $(dist_doc_examples_demo_DATA) \
+	$(dist_doc_examples_demo_tracef_DATA) \
 	$(dist_doc_examples_easy_ust_DATA) \
 	$(dist_doc_examples_gen_tp_DATA) \
 	$(dist_doc_examples_hello_static_lib_DATA) \
@@ -173,6 +176,7 @@ LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
 LTTNG_UST_CTL_LIBRARY_VERSION = @LTTNG_UST_CTL_LIBRARY_VERSION@
 LTTNG_UST_LIBRARY_VERSION = @LTTNG_UST_LIBRARY_VERSION@
+MAINT = @MAINT@
 MAJOR_VERSION = @MAJOR_VERSION@
 MAKEINFO = @MAKEINFO@
 MANIFEST_TOOL = @MANIFEST_TOOL@
@@ -271,6 +275,7 @@ doc_examples_easy_ustdir = ${docdir}/examples/easy-ust
 doc_examples_gen_tpdir = ${docdir}/examples/gen-tp
 doc_examples_demodir = ${docdir}/examples/demo
 doc_examples_hello_static_libdir = ${docdir}/examples/hello-static-lib
+doc_examples_demo_tracefdir = ${docdir}/examples/demo-tracef
 @BUILD_JNI_INTERFACE_TRUE@doc_examples_java_juldir = ${docdir}/examples/java-jul
 @BUILD_JNI_INTERFACE_TRUE@dist_doc_examples_java_jul_DATA = java-jul/Makefile \
 @BUILD_JNI_INTERFACE_TRUE@								  java-jul/Hello.java \
@@ -302,16 +307,20 @@ dist_doc_examples_hello_static_lib_DATA = hello-static-lib/Makefile \
 	hello-static-lib/ust_tests_hello.h \
 	hello-static-lib/tp.c
 
+dist_doc_examples_demo_tracef_DATA = demo-tracef/Makefile \
+	demo-tracef/demo-tracef.c \
+	demo-tracef/README
+
 
 # Don't build examples if shared libraries support was explicitly
 # disabled.
 # Copies are for VPATH build support
 @NO_SHARED_FALSE@SUBDIRS_PROXY = easy-ust demo hello-static-lib \
-@NO_SHARED_FALSE@	$(am__append_1)
+@NO_SHARED_FALSE@	demo-tracef $(am__append_1)
 all: all-am
 
 .SUFFIXES:
-$(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
+$(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am  $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
 	    *$$dep*) \
@@ -336,9 +345,9 @@ Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 $(top_builddir)/config.status: $(top_srcdir)/configure $(CONFIG_STATUS_DEPENDENCIES)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 
-$(top_srcdir)/configure:  $(am__configure_deps)
+$(top_srcdir)/configure: @MAINTAINER_MODE_TRUE@ $(am__configure_deps)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
-$(ACLOCAL_M4):  $(am__aclocal_m4_deps)
+$(ACLOCAL_M4): @MAINTAINER_MODE_TRUE@ $(am__aclocal_m4_deps)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 $(am__aclocal_m4_deps):
 
@@ -389,6 +398,27 @@ uninstall-dist_doc_examples_demoDATA:
 	@list='$(dist_doc_examples_demo_DATA)'; test -n "$(doc_examples_demodir)" || list=; \
 	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
 	dir='$(DESTDIR)$(doc_examples_demodir)'; $(am__uninstall_files_from_dir)
+install-dist_doc_examples_demo_tracefDATA: $(dist_doc_examples_demo_tracef_DATA)
+	@$(NORMAL_INSTALL)
+	@list='$(dist_doc_examples_demo_tracef_DATA)'; test -n "$(doc_examples_demo_tracefdir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(doc_examples_demo_tracefdir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(doc_examples_demo_tracefdir)" || exit 1; \
+	fi; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  echo "$$d$$p"; \
+	done | $(am__base_list) | \
+	while read files; do \
+	  echo " $(INSTALL_DATA) $$files '$(DESTDIR)$(doc_examples_demo_tracefdir)'"; \
+	  $(INSTALL_DATA) $$files "$(DESTDIR)$(doc_examples_demo_tracefdir)" || exit $$?; \
+	done
+
+uninstall-dist_doc_examples_demo_tracefDATA:
+	@$(NORMAL_UNINSTALL)
+	@list='$(dist_doc_examples_demo_tracef_DATA)'; test -n "$(doc_examples_demo_tracefdir)" || list=; \
+	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(doc_examples_demo_tracefdir)'; $(am__uninstall_files_from_dir)
 install-dist_doc_examples_easy_ustDATA: $(dist_doc_examples_easy_ust_DATA)
 	@$(NORMAL_INSTALL)
 	@list='$(dist_doc_examples_easy_ust_DATA)'; test -n "$(doc_examples_easy_ustdir)" || list=; \
@@ -515,7 +545,7 @@ check: check-am
 @NO_SHARED_TRUE@all-local:
 all-am: Makefile $(DATA) all-local
 installdirs:
-	for dir in "$(DESTDIR)$(doc_examplesdir)" "$(DESTDIR)$(doc_examples_demodir)" "$(DESTDIR)$(doc_examples_easy_ustdir)" "$(DESTDIR)$(doc_examples_gen_tpdir)" "$(DESTDIR)$(doc_examples_hello_static_libdir)" "$(DESTDIR)$(doc_examples_java_juldir)"; do \
+	for dir in "$(DESTDIR)$(doc_examplesdir)" "$(DESTDIR)$(doc_examples_demodir)" "$(DESTDIR)$(doc_examples_demo_tracefdir)" "$(DESTDIR)$(doc_examples_easy_ustdir)" "$(DESTDIR)$(doc_examples_gen_tpdir)" "$(DESTDIR)$(doc_examples_hello_static_libdir)" "$(DESTDIR)$(doc_examples_java_juldir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: install-am
@@ -571,6 +601,7 @@ info-am:
 
 install-data-am: install-dist_doc_examplesDATA \
 	install-dist_doc_examples_demoDATA \
+	install-dist_doc_examples_demo_tracefDATA \
 	install-dist_doc_examples_easy_ustDATA \
 	install-dist_doc_examples_gen_tpDATA \
 	install-dist_doc_examples_hello_static_libDATA \
@@ -620,6 +651,7 @@ ps-am:
 
 uninstall-am: uninstall-dist_doc_examplesDATA \
 	uninstall-dist_doc_examples_demoDATA \
+	uninstall-dist_doc_examples_demo_tracefDATA \
 	uninstall-dist_doc_examples_easy_ustDATA \
 	uninstall-dist_doc_examples_gen_tpDATA \
 	uninstall-dist_doc_examples_hello_static_libDATA \
@@ -633,6 +665,7 @@ uninstall-am: uninstall-dist_doc_examplesDATA \
 	install install-am install-data install-data-am \
 	install-dist_doc_examplesDATA \
 	install-dist_doc_examples_demoDATA \
+	install-dist_doc_examples_demo_tracefDATA \
 	install-dist_doc_examples_easy_ustDATA \
 	install-dist_doc_examples_gen_tpDATA \
 	install-dist_doc_examples_hello_static_libDATA \
@@ -645,6 +678,7 @@ uninstall-am: uninstall-dist_doc_examplesDATA \
 	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
 	uninstall uninstall-am uninstall-dist_doc_examplesDATA \
 	uninstall-dist_doc_examples_demoDATA \
+	uninstall-dist_doc_examples_demo_tracefDATA \
 	uninstall-dist_doc_examples_easy_ustDATA \
 	uninstall-dist_doc_examples_gen_tpDATA \
 	uninstall-dist_doc_examples_hello_static_libDATA \
@@ -672,7 +706,7 @@ uninstall-am: uninstall-dist_doc_examplesDATA \
 @NO_SHARED_FALSE@		rel_build_subdir="../"; \
 @NO_SHARED_FALSE@	fi; \
 @NO_SHARED_FALSE@	for subdir in $(SUBDIRS_PROXY); do \
-@NO_SHARED_FALSE@		(cd $$subdir && $(MAKE) AM_CC="$(CC)" AM_CPPFLAGS="$(CPPFLAGS) -I$$rel_src_subdir$(top_srcdir)/include/ -I$$rel_build_subdir$(top_builddir)/include/" AM_CFLAGS='$(CFLAGS)' AM_LDFLAGS='$(LDFLAGS) -L../../../liblttng-ust/.libs/ -Wl,-rpath="$(PWD)/../../liblttng-ust/.libs/"' LTTNG_GEN_TP_PATH="../../../tools/" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
+@NO_SHARED_FALSE@		(cd $$subdir && $(MAKE) AM_CC="$(CC)" AM_CPPFLAGS="$(CPPFLAGS) -I$$rel_src_subdir$(top_srcdir)/include/ -I$$rel_build_subdir$(top_builddir)/include/" AM_CFLAGS='$(CFLAGS)' AM_LDFLAGS='$(LDFLAGS) -L../../../liblttng-ust/.libs -Wl,-rpath="$(PWD)/../../liblttng-ust/.libs/" -Wl,-rpath-link="$(PWD)/../../liblttng-ust/.libs/"' LTTNG_GEN_TP_PATH="../../../tools/" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
 @NO_SHARED_FALSE@	done; \
 @NO_SHARED_FALSE@	if [ x"$(SUBDIRS_JUL)" != x"" ]; then \
 @NO_SHARED_FALSE@		for subdir in $(SUBDIRS_JUL); do \

@@ -31,16 +31,7 @@ import java.io.FileReader;
 import java.io.FileNotFoundException;
 import java.net.*;
 import java.lang.management.ManagementFactory;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.logging.Logger;
-import java.util.Collections;
 
 class USTRegisterMsg {
 	public static int pid;
@@ -62,17 +53,6 @@ public class LTTngTCPSessiondClient {
 
 	private Semaphore registerSem;
 
-	private Timer eventTimer;
-	private Set<LTTngEvent> enabledEventSet =
-		Collections.synchronizedSet(new HashSet<LTTngEvent>());
-	/*
-	 * Map of Logger objects that have been enabled. They are indexed by name.
-	 */
-	private HashMap<String, Logger> enabledLoggers = new HashMap<String, Logger>();
-	/* Timer delay at each 5 seconds. */
-	private final static long timerDelay = 5 * 1000;
-	private static boolean timerInitialized;
-
 	private static final String rootPortFile = "/var/run/lttng/jul.port";
 	private static final String userPortFile = "/.lttng/jul.port";
 
@@ -82,96 +62,6 @@ public class LTTngTCPSessiondClient {
 	public LTTngTCPSessiondClient(String host, Semaphore sem) {
 		this.sessiondHost = host;
 		this.registerSem = sem;
-		this.eventTimer = new Timer();
-		this.timerInitialized = false;
-	}
-
-	private void setupEventTimer() {
-		if (this.timerInitialized) {
-			return;
-		}
-
-		this.eventTimer.scheduleAtFixedRate(new TimerTask() {
-			@Override
-			public void run() {
-				synchronized (enabledEventSet) {
-					LTTngSessiondCmd2_4.sessiond_enable_handler enableCmd = new
-						LTTngSessiondCmd2_4.sessiond_enable_handler();
-					/*
-					 * Modifying events in a Set will raise a
-					 * ConcurrentModificationException. Thus, we remove an event
-					 * and add its modified version to modifiedEvents when a
-					 * modification is necessary.
-					 */
-					Set<LTTngEvent> modifiedEvents = new HashSet<LTTngEvent>();
-					Iterator<LTTngEvent> it = enabledEventSet.iterator();
-
-					while (it.hasNext()) {
-						int ret;
-						Logger logger;
-						LTTngEvent event = it.next();
-
-						/*
-						 * Check if this Logger name has been enabled already. Note
-						 * that in the case of "*", it's never added in that hash
-						 * table thus the enable command does a lookup for each
-						 * logger name in that hash table for the * case in order
-						 * to make sure we don't enable twice the same logger
-						 * because JUL apparently accepts that the *same*
-						 * LogHandler can be added twice on a Logger object...
-						 * don't ask...
-						 */
-						logger = enabledLoggers.get(event.name);
-						if (logger != null) {
-							continue;
-						}
-
-						/*
-						 * Set to one means that the enable all event has been seen
-						 * thus event from that point on must use loglevel for all
-						 * events. Else the object has its own loglevel.
-						 */
-						if (handler.logLevelUseAll == 1) {
-							it.remove();
-							event.logLevels.addAll(handler.logLevelsAll);
-							modifiedEvents.add(event);
-						}
-
-						/*
-						 * The all event is a special case since we have to iterate
-						 * over every Logger to see which one was not enabled.
-						 */
-						if (event.name.equals("*")) {
-							enableCmd.name = event.name;
-							/* Tell the command NOT to add the loglevel. */
-							enableCmd.lttngLogLevel = -1;
-							/*
-							 * The return value is irrelevant since the * event is
-							 * always kept in the set.
-							 */
-							enableCmd.execute(handler, enabledLoggers);
-							continue;
-						}
-
-						ret = enableCmd.enableLogger(handler, event, enabledLoggers);
-						if (ret == 1) {
-							/* Enabled so remove the event from the set. */
-							if (!modifiedEvents.remove(event)) {
-								/*
-								 * event can only be present in one of
-								 * the sets.
-								 */
-								it.remove();
-							}
-						}
-					}
-					enabledEventSet.addAll(modifiedEvents);
-				}
-
-			}
-		}, this.timerDelay, this.timerDelay);
-
-		this.timerInitialized = true;
 	}
 
 	/*
@@ -186,6 +76,15 @@ public class LTTngTCPSessiondClient {
 		}
 	}
 
+	/*
+	 * Cleanup Agent state.
+	 */
+	private void cleanupState() {
+		if (this.handler != null) {
+			this.handler.clear();
+		}
+	}
+
 	public void init(LTTngLogHandler handler) throws InterruptedException {
 		this.handler = handler;
 
@@ -193,6 +92,9 @@ public class LTTngTCPSessiondClient {
 			if (this.quit) {
 				break;
 			}
+
+			/* Cleanup Agent state before trying to connect or reconnect. */
+			cleanupState();
 
 			try {
 
@@ -206,8 +108,6 @@ public class LTTngTCPSessiondClient {
 				 * UST application.
 				 */
 				registerToSessiond();
-
-				setupEventTimer();
 
 				/*
 				 * Block on socket receive and wait for command from the
@@ -230,7 +130,6 @@ public class LTTngTCPSessiondClient {
 
 	public void destroy() {
 		this.quit = true;
-		this.eventTimer.cancel();
 
 		try {
 			if (this.sessiondSock != null) {
@@ -322,14 +221,7 @@ public class LTTngTCPSessiondClient {
 						break;
 					}
 					enableCmd.populate(data);
-					event = enableCmd.execute(this.handler, this.enabledLoggers);
-					if (event != null) {
-						/*
-						 * Add the event to the set so it can be enabled if
-						 * the logger appears at some point in time.
-						 */
-						enabledEventSet.add(event);
-					}
+					enableCmd.execute(this.handler);
 					data = enableCmd.getBytes();
 					break;
 				}

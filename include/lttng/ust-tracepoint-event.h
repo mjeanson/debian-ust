@@ -75,6 +75,8 @@
 /* Reset all macros within TRACEPOINT_EVENT */
 #include <lttng/ust-tracepoint-event-reset.h>
 
+static inline lttng_ust_notrace
+void _TP_COMBINE_TOKENS(__tracepoint_provider_mismatch_, TRACEPOINT_PROVIDER)(void);
 static inline
 void _TP_COMBINE_TOKENS(__tracepoint_provider_mismatch_, TRACEPOINT_PROVIDER)(void)
 {
@@ -88,6 +90,8 @@ void _TP_COMBINE_TOKENS(__tracepoint_provider_mismatch_, TRACEPOINT_PROVIDER)(vo
 #define TRACEPOINT_EVENT_INSTANCE(_provider, _template, _name, _args)	\
 	__tracepoint_provider_mismatch_##_provider();
 
+static inline lttng_ust_notrace
+void _TP_COMBINE_TOKENS(__tracepoint_provider_check_, TRACEPOINT_PROVIDER)(void);
 static inline
 void _TP_COMBINE_TOKENS(__tracepoint_provider_check_, TRACEPOINT_PROVIDER)(void)
 {
@@ -520,10 +524,24 @@ size_t __event_get_align__##_provider##___##_name(_TP_ARGS_PROTO(_args))      \
 	__chan->ops->event_write(&__ctx, _src,				\
 		sizeof(_type) * __get_dynamic_len(dest));
 
+/*
+ * __chan->ops->u.has_strcpy is a flag letting us know if the LTTng-UST
+ * tracepoint provider ABI implements event_strcpy. This dynamic check
+ * can be removed when the tracepoint provider ABI moves to 2.
+ */
+#if (LTTNG_UST_PROVIDER_MAJOR > 1)
+#error "Tracepoint probe provider major version has changed. Please remove dynamic check for has_strcpy."
+#endif
+
 #undef _ctf_string
 #define _ctf_string(_item, _src, _nowrite)			        \
 	lib_ring_buffer_align_ctx(&__ctx, lttng_alignof(*(_src)));	\
-	__chan->ops->event_write(&__ctx, _src, __get_dynamic_len(dest));
+	if (__chan->ops->u.has_strcpy)					\
+		__chan->ops->event_strcpy(&__ctx, _src,			\
+			__get_dynamic_len(dest));			\
+	else								\
+		__chan->ops->event_write(&__ctx, _src,			\
+			__get_dynamic_len(dest));
 
 /* Beware: this get len actually consumes the len value */
 #undef __get_dynamic_len

@@ -23,7 +23,6 @@ import java.nio.ByteOrder;
 import java.lang.Object;
 import java.util.logging.Logger;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Enumeration;
 
@@ -131,7 +130,7 @@ public interface LTTngSessiondCmd2_4 {
 			buf.order(ByteOrder.LITTLE_ENDIAN);
 			lttngLogLevel = buf.getInt();
 			lttngLogLevelType = buf.getInt();
-			name = new String(data, data_offset, data.length - data_offset);
+			name = new String(data, data_offset, data.length - data_offset).trim();
 		}
 
 		@Override
@@ -143,33 +142,6 @@ public interface LTTngSessiondCmd2_4 {
 			return data;
 		}
 
-		/*
-		 * Enable a logger meaning add our handler to it using an exiting
-		 * event. If successful, the logger is added to the given enabled
-		 * Loggers hashmap.
-		 *
-		 * @return 0 if NO logger is found else 1 if added.
-		 */
-		public int enableLogger(LTTngLogHandler handler, LTTngEvent event,
-				HashMap enabledLoggers) {
-			int ret;
-			Logger logger;
-
-			logger = handler.logManager.getLogger(event.name);
-			if (logger == null) {
-				return 0;
-			}
-
-			ret = handler.setEvent(event);
-			if (ret == 0) {
-				/* Newly created event, add the handler. */
-				logger.addHandler(handler);
-				enabledLoggers.put(event.name, logger);
-			}
-
-			return 1;
-		}
-
 		/**
 		 * Execute enable handler action which is to enable the given handler
 		 * to the received name.
@@ -177,81 +149,45 @@ public interface LTTngSessiondCmd2_4 {
 		 * @return Event name as a string if the event is NOT found thus was
 		 * not enabled.
 		 */
-		public LTTngEvent execute(LTTngLogHandler handler, HashMap enabledLoggers) {
-			int ret;
-			Logger logger;
-			LTTngEvent event = null;
+		public void execute(LTTngLogHandler handler) {
+			LTTngEvent event;
 
-			if (name == null) {
+			if (this.name == null) {
 				this.code = lttng_jul_ret_code.CODE_INVALID_CMD;
-				return null;
+				return;
 			}
 
-			/* Wild card to enable ALL logger. */
-			if (name.trim().equals("*")) {
-				String loggerName;
-				Enumeration loggers = handler.logManager.getLoggerNames();
-
-				/*
-				 * Keep the loglevel value for all events in case an event
-				 * appears later on.
-				 */
-				if (lttngLogLevel != -1) {
-					handler.logLevelUseAll = 1;
-					handler.logLevelsAll.add(new LTTngLogLevel(lttngLogLevel,
-								lttngLogLevelType));
-				}
-
-				while (loggers.hasMoreElements()) {
-					loggerName = loggers.nextElement().toString();
-					/* Somehow there is always an empty string at the end. */
-					if (loggerName == "") {
-						continue;
-					}
-
-					/*
-					 * Create new event object and set it in the log handler so
-					 * we can process the record entry with the right
-					 * attributes like the loglevels.
-					 */
-					event = new LTTngEvent(loggerName, 0, 0);
-					/* Clean up loglevel and merge the the ones from all events. */
-					event.logLevels.clear();
-					event.logLevels.addAll(handler.logLevelsAll);
-					enableLogger(handler, event, enabledLoggers);
-				}
+			/* Add event to the enabled events hash map. */
+			event = handler.enabledEvents.put(this.name,
+					new LTTngEvent(this.name, 0, 0));
+			if (event != null) {
+				/* The event exists so skip updating the refcount. */
 				this.code = lttng_jul_ret_code.CODE_SUCCESS_CMD;
+				return;
+			}
 
-				/*
-				 * Only return an event if this is a newly created event
-				 * meaning the loglevel is valid.
-				 */
-				if (lttngLogLevel != -1) {
-					event = new LTTngEvent("*", lttngLogLevel, lttngLogLevelType);
-				}
-				return event;
+			/*
+			 * Get the root logger and attach to it if it's the first enable
+			 * seen by the handler.
+			 */
+			Logger rootLogger = handler.logManager.getLogger("");
+
+			handler.refcount++;
+			if (handler.refcount == 1) {
+				/* Add handler only if it's the first enable. */
+				rootLogger.addHandler(handler);
 			}
 
 			this.code = lttng_jul_ret_code.CODE_SUCCESS_CMD;
-
-			/*
-			 * Create new event object and set it in the log handler so we can
-			 * process the record entry with the right attributes like the
-			 * loglevels.
-			 */
-			event = new LTTngEvent(name.trim(), lttngLogLevel,
-					lttngLogLevelType);
-			ret = enableLogger(handler, event, enabledLoggers);
-			if (ret == 1) {
-				return null;
-			}
-			return event;
+			return;
 		}
 	}
 
 	public class sessiond_disable_handler implements SessiondResponse, SessiondCommand {
 		private final static int SIZE = 4;
 		public String name;
+		public int lttngLogLevel;
+		public int lttngLogLevelType;
 
 		/** Return status code to the session daemon. */
 		public lttng_jul_ret_code code;
@@ -259,8 +195,8 @@ public interface LTTngSessiondCmd2_4 {
 		@Override
 		public void populate(byte[] data) {
 			ByteBuffer buf = ByteBuffer.wrap(data);
-			buf.order(ByteOrder.BIG_ENDIAN);
-			name = new String(data, 0, data.length);
+			buf.order(ByteOrder.LITTLE_ENDIAN);
+			name = new String(data).trim();
 		}
 
 		@Override
@@ -277,38 +213,34 @@ public interface LTTngSessiondCmd2_4 {
 		 * to the received name.
 		 */
 		public void execute(LTTngLogHandler handler) {
-			Logger logger;
+			LTTngEvent event;
 
-			if (name == null) {
+			if (this.name == null) {
 				this.code = lttng_jul_ret_code.CODE_INVALID_CMD;
 				return;
 			}
 
-			/* Wild card to disable ALL logger. */
-			if (name.trim().equals("*")) {
-				String loggerName;
-				Enumeration loggers = handler.logManager.getLoggerNames();
-				while (loggers.hasMoreElements()) {
-					loggerName = loggers.nextElement().toString();
-					/* Somehow there is always an empty string at the end. */
-					if (loggerName == "") {
-						continue;
-					}
-
-					logger = handler.logManager.getLogger(loggerName);
-					logger.removeHandler(handler);
-				}
-				this.code = lttng_jul_ret_code.CODE_SUCCESS_CMD;
+			/*
+			 * Try to remove the logger name from the events map and if we
+			 * can't, just skip the refcount update since the event was never
+			 * enabled.
+			 */
+			event = handler.enabledEvents.remove(this.name);
+			if (event == null) {
+				/* The event didn't exists so skip updating the refcount. */
+				this.code = lttng_jul_ret_code.CODE_INVALID_CMD;
 				return;
 			}
 
-			logger = handler.logManager.getLogger(name.trim());
-			if (logger == null) {
-				this.code = lttng_jul_ret_code.CODE_UNK_LOGGER_NAME;
-			} else {
-				logger.removeHandler(handler);
-				this.code = lttng_jul_ret_code.CODE_SUCCESS_CMD;
+			Logger rootLogger = handler.logManager.getLogger("");
+
+			handler.refcount--;
+			if (handler.refcount == 0) {
+				rootLogger.removeHandler(handler);
 			}
+
+			this.code = lttng_jul_ret_code.CODE_SUCCESS_CMD;
+			return;
 		}
 	}
 
