@@ -52,7 +52,8 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
-@BUILD_JNI_INTERFACE_TRUE@am__append_1 = liblttng-ust-java liblttng-ust-jul
+@HAVE_DLINFO_TRUE@am__append_1 = liblttng-ust-dl
+@BUILD_JNI_INTERFACE_TRUE@am__append_2 = liblttng-ust-java liblttng-ust-jul
 subdir = .
 DIST_COMMON = README $(am__configure_deps) $(dist_doc_DATA) \
 	$(dist_noinst_DATA) $(srcdir)/Makefile.am \
@@ -135,9 +136,8 @@ ETAGS = etags
 CTAGS = ctags
 DIST_SUBDIRS = . include snprintf libringbuffer liblttng-ust-comm \
 	liblttng-ust liblttng-ust-ctl liblttng-ust-fork \
-	liblttng-ust-dl liblttng-ust-libc-wrapper \
-	liblttng-ust-cyg-profile tools liblttng-ust-java \
-	liblttng-ust-jul tests doc
+	liblttng-ust-libc-wrapper liblttng-ust-cyg-profile tools \
+	liblttng-ust-dl liblttng-ust-java liblttng-ust-jul tests doc
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 distdir = $(PACKAGE)-$(VERSION)
 top_distdir = $(distdir)
@@ -224,6 +224,7 @@ LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
 LTTNG_UST_CTL_LIBRARY_VERSION = @LTTNG_UST_CTL_LIBRARY_VERSION@
 LTTNG_UST_LIBRARY_VERSION = @LTTNG_UST_LIBRARY_VERSION@
+MAINT = @MAINT@
 MAJOR_VERSION = @MAJOR_VERSION@
 MAKEINFO = @MAKEINFO@
 MANIFEST_TOOL = @MANIFEST_TOOL@
@@ -320,8 +321,8 @@ top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I config
 SUBDIRS = . include snprintf libringbuffer liblttng-ust-comm \
 	liblttng-ust liblttng-ust-ctl liblttng-ust-fork \
-	liblttng-ust-dl liblttng-ust-libc-wrapper \
-	liblttng-ust-cyg-profile tools $(am__append_1) tests doc
+	liblttng-ust-libc-wrapper liblttng-ust-cyg-profile tools \
+	$(am__append_1) $(am__append_2) tests doc
 
 #temporarily disabled
 # liblttng-ust-malloc
@@ -335,7 +336,7 @@ all: config.h
 .SUFFIXES:
 am--refresh: Makefile
 	@:
-$(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
+$(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am  $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
 	    *$$dep*) \
@@ -362,9 +363,9 @@ Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 $(top_builddir)/config.status: $(top_srcdir)/configure $(CONFIG_STATUS_DEPENDENCIES)
 	$(SHELL) ./config.status --recheck
 
-$(top_srcdir)/configure:  $(am__configure_deps)
+$(top_srcdir)/configure: @MAINTAINER_MODE_TRUE@ $(am__configure_deps)
 	$(am__cd) $(srcdir) && $(AUTOCONF)
-$(ACLOCAL_M4):  $(am__aclocal_m4_deps)
+$(ACLOCAL_M4): @MAINTAINER_MODE_TRUE@ $(am__aclocal_m4_deps)
 	$(am__cd) $(srcdir) && $(ACLOCAL) $(ACLOCAL_AMFLAGS)
 $(am__aclocal_m4_deps):
 
@@ -375,7 +376,7 @@ config.h: stamp-h1
 stamp-h1: $(srcdir)/config.h.in $(top_builddir)/config.status
 	@rm -f stamp-h1
 	cd $(top_builddir) && $(SHELL) ./config.status config.h
-$(srcdir)/config.h.in:  $(am__configure_deps) 
+$(srcdir)/config.h.in: @MAINTAINER_MODE_TRUE@ $(am__configure_deps) 
 	($(am__cd) $(top_srcdir) && $(AUTOHEADER))
 	rm -f stamp-h1
 	touch $@

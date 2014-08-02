@@ -104,18 +104,23 @@ int lttng_loglevel_match(int loglevel,
 		loglevel = TRACE_DEFAULT;
 	switch (req_type) {
 	case LTTNG_UST_LOGLEVEL_RANGE:
-		if (loglevel <= req_loglevel || req_loglevel == -1)
+		if (loglevel <= req_loglevel
+				|| (req_loglevel == -1 && loglevel <= TRACE_DEBUG))
 			return 1;
 		else
 			return 0;
 	case LTTNG_UST_LOGLEVEL_SINGLE:
-		if (loglevel == req_loglevel || req_loglevel == -1)
+		if (loglevel == req_loglevel
+				|| (req_loglevel == -1 && loglevel <= TRACE_DEBUG))
 			return 1;
 		else
 			return 0;
 	case LTTNG_UST_LOGLEVEL_ALL:
 	default:
-		return 1;
+		if (loglevel <= TRACE_DEBUG)
+			return 1;
+		else
+			return 0;
 	}
 }
 
@@ -243,8 +248,6 @@ int lttng_session_enable(struct lttng_session *session)
 
 	/* Set transient enabler state to "enabled" */
 	session->tstate = 1;
-	/* We need to sync enablers with session before activation. */
-	lttng_session_sync_enablers(session);
 
 	/*
 	 * Snapshot the number of events per channel to know the type of header
@@ -281,6 +284,9 @@ int lttng_session_enable(struct lttng_session *session)
 			return -EINVAL;
 		}
 	}
+
+	/* We need to sync enablers with session before activation. */
+	lttng_session_sync_enablers(session);
 
 	/* Set atomically the state to "active" */
 	CMM_ACCESS_ONCE(session->active) = 1;
@@ -792,6 +798,17 @@ int lttng_attach_context(struct lttng_ust_context *context_param,
 	switch (context_param->ctx) {
 	case LTTNG_UST_CONTEXT_PTHREAD_ID:
 		return lttng_add_pthread_id_to_ctx(ctx);
+	case LTTNG_UST_CONTEXT_PERF_THREAD_COUNTER:
+	{
+		struct lttng_ust_perf_counter_ctx *perf_ctx_param;
+
+		perf_ctx_param = &context_param->u.perf_counter;
+		return lttng_add_perf_counter_to_ctx(
+			perf_ctx_param->type,
+			perf_ctx_param->config,
+			perf_ctx_param->name,
+			ctx);
+	}
 	case LTTNG_UST_CONTEXT_VTID:
 		return lttng_add_vtid_to_ctx(ctx);
 	case LTTNG_UST_CONTEXT_VPID:

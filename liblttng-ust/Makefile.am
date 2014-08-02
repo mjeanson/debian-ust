@@ -44,7 +44,14 @@ liblttng_ust_runtime_la_SOURCES = \
 	wait.h \
 	jhash.h \
 	lttng-ust-uuid.h \
-	error.h
+	error.h \
+	tracef.c \
+	lttng-ust-tracef-provider.h
+
+if HAVE_PERF_EVENT
+liblttng_ust_runtime_la_SOURCES += \
+	lttng-context-perf-counters.c
+endif
 
 liblttng_ust_support_la_SOURCES = \
 	lttng-tracer.h \
@@ -70,6 +77,7 @@ liblttng_ust_la_LIBADD = \
 	-lpthread \
 	-lrt \
 	-lurcu-cds \
+	-ldl \
 	$(top_builddir)/snprintf/libustsnprintf.la \
 	$(top_builddir)/liblttng-ust-comm/liblttng-ust-comm.la \
 	liblttng-ust-tracepoint.la \

@@ -1,5 +1,9 @@
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
+/* Define to 1 if you have the declaration of `RTLD_DI_LINKMAP', and to 0 if
+   you don't. */
+#undef HAVE_DECL_RTLD_DI_LINKMAP
+
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #undef HAVE_DLFCN_H
 
@@ -20,6 +24,9 @@
 
 /* Define to 1 if you have the `urcu-cds' library (-lurcu-cds). */
 #undef HAVE_LIBURCU_CDS
+
+/* Define to 1 if you have the <linux/perf_event.h> header file. */
+#undef HAVE_LINUX_PERF_EVENT_H
 
 /* Define to 1 if your system has a GNU libc compatible `malloc' function, and
    to 0 otherwise. */
@@ -75,6 +82,9 @@
 
 /* Use efficient unaligned access. */
 #undef LTTNG_UST_HAVE_EFFICIENT_UNALIGNED_ACCESS
+
+/* Perf event integration via perf_event.h */
+#undef LTTNG_UST_HAVE_PERF_EVENT
 
 /* SystemTap integration via sdt.h */
 #undef LTTNG_UST_HAVE_SDT_INTEGRATION

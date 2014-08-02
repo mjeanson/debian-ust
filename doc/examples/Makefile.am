@@ -3,6 +3,7 @@ doc_examples_easy_ustdir = ${docdir}/examples/easy-ust
 doc_examples_gen_tpdir = ${docdir}/examples/gen-tp
 doc_examples_demodir = ${docdir}/examples/demo
 doc_examples_hello_static_libdir = ${docdir}/examples/hello-static-lib
+doc_examples_demo_tracefdir = ${docdir}/examples/demo-tracef
 
 if BUILD_JNI_INTERFACE
 doc_examples_java_juldir = ${docdir}/examples/java-jul
@@ -38,12 +39,16 @@ dist_doc_examples_hello_static_lib_DATA = hello-static-lib/Makefile \
 	hello-static-lib/ust_tests_hello.h \
 	hello-static-lib/tp.c
 
+dist_doc_examples_demo_tracef_DATA = demo-tracef/Makefile \
+	demo-tracef/demo-tracef.c \
+	demo-tracef/README
+
 if NO_SHARED
 # Don't build examples if shared libraries support was explicitly
 # disabled.
 else
 # Copies are for VPATH build support
-SUBDIRS_PROXY = easy-ust demo hello-static-lib
+SUBDIRS_PROXY = easy-ust demo hello-static-lib demo-tracef
 
 if BUILD_GEN_TP_EXAMPLES
 SUBDIRS_PROXY += gen-tp
@@ -70,7 +75,7 @@ all-local:
 		rel_build_subdir="../"; \
 	fi; \
 	for subdir in $(SUBDIRS_PROXY); do \
-		(cd $$subdir && $(MAKE) AM_CC="$(CC)" AM_CPPFLAGS="$(CPPFLAGS) -I$$rel_src_subdir$(top_srcdir)/include/ -I$$rel_build_subdir$(top_builddir)/include/" AM_CFLAGS='$(CFLAGS)' AM_LDFLAGS='$(LDFLAGS) -L../../../liblttng-ust/.libs/ -Wl,-rpath="$(PWD)/../../liblttng-ust/.libs/"' LTTNG_GEN_TP_PATH="../../../tools/" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
+		(cd $$subdir && $(MAKE) AM_CC="$(CC)" AM_CPPFLAGS="$(CPPFLAGS) -I$$rel_src_subdir$(top_srcdir)/include/ -I$$rel_build_subdir$(top_builddir)/include/" AM_CFLAGS='$(CFLAGS)' AM_LDFLAGS='$(LDFLAGS) -L../../../liblttng-ust/.libs -Wl,-rpath="$(PWD)/../../liblttng-ust/.libs/" -Wl,-rpath-link="$(PWD)/../../liblttng-ust/.libs/"' LTTNG_GEN_TP_PATH="../../../tools/" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
 	done; \
 	if [ x"$(SUBDIRS_JUL)" != x"" ]; then \
 		for subdir in $(SUBDIRS_JUL); do \

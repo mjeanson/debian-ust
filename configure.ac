@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([lttng-ust],[2.4.1],[mathieu dot desnoyers at efficios dot com])
+AC_INIT([lttng-ust],[2.5.0],[mathieu dot desnoyers at efficios dot com])
 
 # Following the numbering scheme proposed by libtool for the library version
 # http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
@@ -19,6 +19,7 @@ AC_CANONICAL_TARGET
 AC_CANONICAL_HOST
 AC_CONFIG_MACRO_DIR([config])
 AM_INIT_AUTOMAKE([foreign dist-bzip2 no-dist-gzip])
+AM_MAINTAINER_MODE([enable])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AC_CONFIG_SRCDIR([include/lttng/tracepoint.h])
 
@@ -26,6 +27,7 @@ AC_CONFIG_SRCDIR([include/lttng/tracepoint.h])
 AC_CONFIG_HEADERS([config.h include/lttng/ust-config.h])
 AH_TEMPLATE([LTTNG_UST_HAVE_EFFICIENT_UNALIGNED_ACCESS], [Use efficient unaligned access.])
 AH_TEMPLATE([LTTNG_UST_HAVE_SDT_INTEGRATION], [SystemTap integration via sdt.h])
+AH_TEMPLATE([LTTNG_UST_HAVE_PERF_EVENT], [Perf event integration via perf_event.h])
 
 # Compute minor/major/patchlevel version numbers
 AC_PROG_SED
@@ -39,8 +41,8 @@ AC_DEFINE_UNQUOTED([VERSION_MAJOR], $major_version, [UST major version number])
 AC_DEFINE_UNQUOTED([VERSION_MINOR], $minor_version, [UST minor version number])
 AC_DEFINE_UNQUOTED([VERSION_PATCHLEVEL], $patchlevel_version, [UST patchlevel version number])
 
-version_name="Époque Opaque"
-version_description="The Époque Opaque is a black IPA from Trou du Diable brewery. The nose is eerily reminiscent of the coffee crisp candy from of our childhood. These strong mocha accents are present on the palate, which are quickly subdued by Japanese and Australian hops leading to a final state of satisfaction enjoyable for any fan of bitter beer."
+version_name="Fumisterie"
+version_description="The Fumisterie is a beer whose style is at the confluence of English and German ales. On the palate, it is full-bodied, malty and slightly caramelized. The organic hemp seeds incorporated during the brewing gives it a unique and original taste. The hop flavour comes through delicately in the after taste."
 
 AC_DEFINE_UNQUOTED([VERSION_NAME], ["$version_name"], [UST version name])
 AC_DEFINE_UNQUOTED([VERSION_DESCRIPTION], ["$version_description"], [UST version description])
@@ -123,6 +125,16 @@ AM_CONDITIONAL([LTTNG_UST_BUILD_WITH_LIBC_DL], [test "x$have_libc_dl" = "xyes"])
 
 AC_CHECK_LIB([pthread], [pthread_create])
 
+# Check for dlfcn.h
+AC_CHECK_HEADER([dlfcn.h])
+AS_IF([test "x${ac_cv_header_dlfcn_h}" = "xyes"],
+	[AC_CHECK_DECLS([RTLD_DI_LINKMAP],,,
+		[#define _GNU_SOURCE /* Required on Linux to get GNU extensions */
+		#include <dlfcn.h>])
+	],
+	[ac_cv_have_decl_RTLD_DI_LINKMAP="no"])
+AM_CONDITIONAL([HAVE_DLINFO], [test "x${ac_cv_have_decl_RTLD_DI_LINKMAP}" = "xyes"])
+
 # Checks for header files.
 #AC_CHECK_HEADERS([fcntl.h stdint.h stdlib.h string.h sys/socket.h sys/time.h unistd.h])
 
@@ -180,6 +192,28 @@ AC_CHECK_LIB([urcu-bp], [synchronize_rcu_bp], [], [AC_MSG_ERROR([Cannot find lib
 # urcu - check that URCU lib is at least version 0.6
 AC_CHECK_LIB([urcu-bp], [call_rcu_bp], [], [AC_MSG_ERROR([liburcu 0.6 or newer is needed, please update your version or use [LDFLAGS]=-Ldir to specify the right location.])])
 
+# optional linux/perf_event.h
+AC_CHECK_HEADERS([linux/perf_event.h], [have_perf_event=yes], [])
+
+# Perf event counters are only supported on x86 so far.
+AC_MSG_CHECKING([UST support for architecture perf event counters])
+case $host_cpu in
+changequote(,)dnl
+	i[3456]86)
+changequote([,])dnl
+	UST_SUPPORT_FOR_ARCH_PERF_EVENT_COUNTERS=yes;;
+	x86_64) UST_SUPPORT_FOR_ARCH_PERF_EVENT_COUNTERS=yes;;
+	amd64) UST_SUPPORT_FOR_ARCH_PERF_EVENT_COUNTERS=yes;;
+	*) UST_SUPPORT_FOR_ARCH_PERF_EVENT_COUNTERS=no;;
+esac
+AC_MSG_RESULT([$UST_SUPPORT_FOR_ARCH_PERF_EVENT_COUNTERS])
+
+AM_CONDITIONAL([HAVE_PERF_EVENT], [test "x$have_perf_event" = "xyes" -a "x$UST_SUPPORT_FOR_ARCH_PERF_EVENT_COUNTERS" = "xyes"])
+
+if test "x$have_perf_event" = "xyes" -a "x$UST_SUPPORT_FOR_ARCH_PERF_EVENT_COUNTERS" = "xyes"; then
+AC_DEFINE([LTTNG_UST_HAVE_PERF_EVENT], [1])
+fi
+
 AC_MSG_CHECKING([host system alignment requirements])
 case $host_cpu in
 changequote(,)dnl
@@ -190,7 +224,9 @@ changequote([,])dnl
 	amd64) ;;
 	powerpc) ;;
 	ppc64) ;;
+	ppc64le) ;;
 	powerpc64) ;;
+	powerpc64le) ;;
 	s390) NO_UNALIGNED_ACCESS=1 ;;
 	s390x) NO_UNALIGNED_ACCESS=1 ;;
         arm*) NO_UNALIGNED_ACCESS=1 ;;
