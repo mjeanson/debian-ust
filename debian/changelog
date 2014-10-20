@@ -1,3 +1,11 @@
+ust (2.5.0-2) unstable; urgency=medium
+
+  * [900b9f9] Add symbols files for library packages.
+    Thanks to Dmitry Smirnov (Closes: #765842)
+  * [3458cf0] Bump standards version, no changes necessary
+
+ -- Jon Bernard <jbernard@debian.org>  Mon, 20 Oct 2014 18:12:54 +0000
+
 ust (2.5.0-1) unstable; urgency=medium
 
   * [e695b9e] New upstream version 2.5.0
