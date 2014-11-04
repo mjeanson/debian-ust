@@ -1,3 +1,9 @@
+ust (2.5.1-2) unstable; urgency=medium
+
+  * [65a639d] Tag arch-specfic symbols for i386 and amd64 (Closes: #767632)
+
+ -- Jon Bernard <jbernard@debian.org>  Tue, 04 Nov 2014 19:44:13 +0000
+
 ust (2.5.1-1) unstable; urgency=medium
 
   * [e1dc4b2] New upstream version 2.5.1
