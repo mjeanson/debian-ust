@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([lttng-ust],[2.5.1],[mathieu dot desnoyers at efficios dot com])
+AC_INIT([lttng-ust],[2.6.0],[mathieu dot desnoyers at efficios dot com])
 
 # Following the numbering scheme proposed by libtool for the library version
 # http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
@@ -41,13 +41,14 @@ AC_DEFINE_UNQUOTED([VERSION_MAJOR], $major_version, [UST major version number])
 AC_DEFINE_UNQUOTED([VERSION_MINOR], $minor_version, [UST minor version number])
 AC_DEFINE_UNQUOTED([VERSION_PATCHLEVEL], $patchlevel_version, [UST patchlevel version number])
 
-version_name="Fumisterie"
-version_description="The Fumisterie is a beer whose style is at the confluence of English and German ales. On the palate, it is full-bodied, malty and slightly caramelized. The organic hemp seeds incorporated during the brewing gives it a unique and original taste. The hop flavour comes through delicately in the after taste."
+version_name="Gaia"
+version_description="From Benelux brewery in Montreal, the Gaia is a witbier with a cloudy light amber ale color. Aroma of coriander with floral hay notes is enchanting. Taste is also dominated by the very floral coriander note and some medium sweet malt notes."
 
 AC_DEFINE_UNQUOTED([VERSION_NAME], ["$version_name"], [UST version name])
 AC_DEFINE_UNQUOTED([VERSION_DESCRIPTION], ["$version_description"], [UST version description])
 
 AC_PROG_GREP
+AC_PROG_LN_S
 # libtool link_all_deplibs fixup. See http://bugs.lttng.org/issues/321.
 AC_ARG_ENABLE(libtool-linkdep-fixup,
 	AS_HELP_STRING([--disable-libtool-linkdep-fixup],
@@ -104,6 +105,13 @@ AC_CACHE_CHECK([whether the C++ compiler works],
 		AC_LANG_POP([C++])])
 
 AM_CONDITIONAL([CXX_WORKS], [test "x$rw_cv_prog_cxx_works" = "xyes"])
+
+# Check if the compiler support weak symbols
+AX_SYS_WEAK_ALIAS
+
+if test "x${ax_cv_sys_weak_alias}" = "xno"; then
+   AC_MSG_ERROR([Your platform doesn't support weak symbols.])
+fi
 
 ## Checks for libraries.
 AC_CHECK_LIB([dl], [dlopen],
@@ -240,42 +248,64 @@ if test x$NO_UNALIGNED_ACCESS = x ; then
 AC_DEFINE([LTTNG_UST_HAVE_EFFICIENT_UNALIGNED_ACCESS], [1])
 fi
 
-# Set compile flags to java include files if given
-AC_ARG_WITH([java-jdk],
-	[AS_HELP_STRING([--with-java-jdk=DIR],[use the Java JDK in DIR. Ex : $JAVA_HOME.])],
-	[JAVA_JDK=$withval],
-	[JAVA_JDK=""]
-)
-AM_CONDITIONAL([HAVE_JAVA_JDK], [test $JAVA_JDK], [Java JDK path])
-AC_SUBST([JAVA_JDK])
-
-AS_IF([test $JAVA_JDK],[
-	AS_IF([test -d $JAVA_JDK],[
-                AC_MSG_RESULT([using Java includes in $JAVA_SDK])
-                SUBDIRS=`find $JAVA_JDK/include -type d`
-		CPPFLAGS+=" "
-                CPPFLAGS+=`for x in $SUBDIRS; do echo -n "-I$x "; done`
-		CPPFLAGS+=" "
-        ],[
-                AC_MSG_ERROR(Unable to find Java include files in $JAVA_JDK)
-        ])
-])
-
 # Check for JNI header files if requested
-AC_ARG_WITH([jni-interface],
-	[AS_HELP_STRING([--with-jni-interface],[build JNI interface between C and Java. Needs Java include files [default=no]])],
+AC_ARG_ENABLE([jni-interface],
+	[AS_HELP_STRING([--enable-jni-interface],[build JNI interface between C and Java. Needs Java include files [default=no]])],
 	[jni_interface=$withval],
 	[jni_interface=no]
 )
 
-AS_IF([test "x$jni_interface" = "xyes"],[
-        AC_CHECK_HEADERS([jni.h],[],[
-        AC_MSG_ERROR([missing jni.h
-Make sure Sun Java, OpenJDK or GCJ is installed and that this header file exists in the system path.
-Use the --with-java-jdk=DIR option to point to your JDK directory, or disable the JNI interface.])
-	])
-])
 AM_CONDITIONAL([BUILD_JNI_INTERFACE], [test "x$jni_interface" = "xyes"])
+
+
+AC_ARG_ENABLE([java-agent-jul],
+	[AS_HELP_STRING([--enable-java-agent-jul],[build the LTTng UST Java agent with JUL support [default=no]])],
+	[java_agent_jul=$enableval],
+	[java_agent_jul=no]
+)
+
+AC_ARG_ENABLE([java-agent-log4j],
+	[AS_HELP_STRING([--enable-java-agent-log4j],[build the LTTng UST Java agent with Log4j support [default=no]])],
+	[java_agent_log4j=$enableval],
+	[java_agent_log4j=no]
+)
+
+AC_ARG_ENABLE([java-agent-all],
+	[AS_HELP_STRING([--enable-java-agent-all],[build the LTTng UST Java agent with all supported backends [default=no]])],
+	[java_agent_jul=$enableval
+	 java_agent_log4j=$enableval],
+	[:]
+)
+
+
+AM_CONDITIONAL([BUILD_JAVA_AGENT], [test "x$java_agent_jul" = "xyes" || test "x$java_agent_log4j" = "xyes"])
+AM_CONDITIONAL([BUILD_JAVA_AGENT_WITH_JUL], [test "x$java_agent_jul" = "xyes"])
+AM_CONDITIONAL([BUILD_JAVA_AGENT_WITH_LOG4J], [test "x$java_agent_log4j" = "xyes"])
+
+if test "x$jni_interface" = "xyes" || test "x$java_agent_jul" = "xyes" || test "x$java_agent_log4j" = "xyes"; then
+  AX_JAVA_OPTIONS
+  AX_PROG_JAVAC
+  AX_PROG_JAVA
+  AX_PROG_JAR
+
+  AX_JNI_INCLUDE_DIR
+  for JNI_INCLUDE_DIR in $JNI_INCLUDE_DIRS
+  do
+	CPPFLAGS="$CPPFLAGS -I$JNI_INCLUDE_DIR"
+  done
+
+  AX_PROG_JAVAH
+fi
+
+if test "x$java_agent_log4j" = "xyes"; then
+  AX_CHECK_CLASSPATH
+
+  AX_CHECK_CLASS(org.apache.log4j.Logger)
+
+  if test "x$ac_cv_class_org_apache_log4j_Logger" = "xno"; then
+     AC_MSG_ERROR([The UST Java agent support for log4j was requested but the Log4j classes were not found. Please specify the location of the Log4j jar via the Java CLASSPATH e.g: export CLASSPATH="/path/to/log4j.jar"])
+  fi
+fi
 
 # sdt.h integration
 AC_ARG_WITH([sdt],
@@ -320,9 +350,6 @@ AC_ARG_WITH([lttng-system-rundir],
 AC_DEFINE_UNQUOTED([LTTNG_SYSTEM_RUNDIR], ["$lttng_system_rundir"],
 	[LTTng system runtime directory])
 
-lttnglibjavadir="${libdir}/lttng/java"
-AC_SUBST(lttnglibjavadir)
-
 AM_PATH_PYTHON([2.7],BUILD_GEN_TP_EXAMPLES=1,[:])
 AM_CONDITIONAL([BUILD_GEN_TP_EXAMPLES], [test $BUILD_GEN_TP_EXAMPLES], [Build examples requiring lttng-gen-tp])
 
@@ -340,7 +367,11 @@ AC_CONFIG_FILES([
 	liblttng-ust-fork/Makefile
 	liblttng-ust-dl/Makefile
 	liblttng-ust-java/Makefile
-	liblttng-ust-jul/Makefile
+	liblttng-ust-java-agent/Makefile
+	liblttng-ust-java-agent/java/Makefile
+	liblttng-ust-java-agent/jni/Makefile
+	liblttng-ust-java-agent/jni/jul/Makefile
+	liblttng-ust-java-agent/jni/log4j/Makefile
 	liblttng-ust-libc-wrapper/Makefile
 	liblttng-ust-cyg-profile/Makefile
 	tools/Makefile
@@ -351,7 +382,6 @@ AC_CONFIG_FILES([
 	tests/snprintf/Makefile
 	tests/benchmark/Makefile
 	tests/utils/Makefile
-	tests/java-jul/Makefile
 	lttng-ust.pc
 ])
 
@@ -366,7 +396,14 @@ AS_ECHO()
 AS_ECHO("LTTng-UST will be built with the following options:")
 
 AS_ECHO()
-AS_ECHO_N("Java support (JNI): ")
+
+AS_ECHO_N("Java agent (JUL support): ")
+AS_IF([test "x$java_agent_jul" = "xyes"], [AS_ECHO("Enabled")], [AS_ECHO("Disabled")])
+
+AS_ECHO_N("Java agent (Log4j support): ")
+AS_IF([test "x$java_agent_log4j" = "xyes"], [AS_ECHO("Enabled")], [AS_ECHO("Disabled")])
+
+AS_ECHO_N("JNI interface (JNI): ")
 AS_IF([test "x$jni_interface" = "xyes"], [AS_ECHO("Enabled")], [AS_ECHO("Disabled")])
 
 AS_ECHO_N("sdt.h integration:  ")

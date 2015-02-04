@@ -17,7 +17,7 @@
 #
 
 # Default JUL jar name.
-JARFILE=liblttng-ust-jul.jar
+JARFILE=liblttng-ust-agent.jar
 
 # Check if the top level makefile overrides the JUL Jar file name.
 ifneq "$(JAVA_JARFILE_OVERRIDE)" ""
@@ -26,13 +26,13 @@ endif
 
 # Check if the top level makefile overrides the JUL classpath.
 ifeq "$(JAVA_CLASSPATH_OVERRIDE)" ""
-	CLASSPATH=/usr/local/lib/lttng/java/$(JARFILE):/usr/lib/lttng/java/$(JARFILE)
+	CLASSPATH=/usr/local/share/java/$(JARFILE):/usr/share/java/$(JARFILE)
 else
 	CLASSPATH=$(JAVA_CLASSPATH_OVERRIDE)/$(JARFILE)
 endif
 
 JFLAGS = -g
-JC = javac -cp "$(CLASSPATH):."
+JC = javac -classpath "$(CLASSPATH):."
 .SUFFIXES: .java .class
 .java.class:
 	$(JC) $(JFLAGS) $*.java
