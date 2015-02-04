@@ -80,7 +80,8 @@ build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
 @HAVE_DLINFO_TRUE@am__append_1 = liblttng-ust-dl
-@BUILD_JNI_INTERFACE_TRUE@am__append_2 = liblttng-ust-java liblttng-ust-jul
+@BUILD_JNI_INTERFACE_TRUE@am__append_2 = liblttng-ust-java
+@BUILD_JAVA_AGENT_TRUE@am__append_3 = liblttng-ust-java-agent
 subdir = .
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(top_srcdir)/configure $(am__configure_deps) \
@@ -88,15 +89,28 @@ DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(top_srcdir)/include/lttng/ust-config.h.in \
 	$(top_srcdir)/include/lttng/ust-version.h.in \
 	$(srcdir)/lttng-ust.pc.in $(dist_doc_DATA) $(dist_noinst_DATA) \
-	COPYING ChangeLog README config/compile config/config.guess \
+	COPYING ChangeLog config/compile config/config.guess \
 	config/config.sub config/depcomp config/install-sh \
-	config/missing config/texinfo.tex config/ltmain.sh \
-	$(top_srcdir)/config/compile $(top_srcdir)/config/config.guess \
+	config/missing config/py-compile config/texinfo.tex \
+	config/ltmain.sh $(top_srcdir)/config/compile \
+	$(top_srcdir)/config/config.guess \
 	$(top_srcdir)/config/config.sub \
 	$(top_srcdir)/config/install-sh $(top_srcdir)/config/ltmain.sh \
 	$(top_srcdir)/config/missing
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/config/libtool.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/config/ax_check_class.m4 \
+	$(top_srcdir)/config/ax_check_classpath.m4 \
+	$(top_srcdir)/config/ax_java_options.m4 \
+	$(top_srcdir)/config/ax_jni_include_dir.m4 \
+	$(top_srcdir)/config/ax_prog_jar.m4 \
+	$(top_srcdir)/config/ax_prog_java.m4 \
+	$(top_srcdir)/config/ax_prog_java_works.m4 \
+	$(top_srcdir)/config/ax_prog_javac.m4 \
+	$(top_srcdir)/config/ax_prog_javac_works.m4 \
+	$(top_srcdir)/config/ax_prog_javah.m4 \
+	$(top_srcdir)/config/ax_sys_weak_alias.m4 \
+	$(top_srcdir)/config/ax_try_compile_java.m4 \
+	$(top_srcdir)/config/libtool.m4 \
 	$(top_srcdir)/config/ltoptions.m4 \
 	$(top_srcdir)/config/ltsugar.m4 \
 	$(top_srcdir)/config/ltversion.m4 \
@@ -197,7 +211,8 @@ CSCOPE = cscope
 DIST_SUBDIRS = . include snprintf libringbuffer liblttng-ust-comm \
 	liblttng-ust liblttng-ust-ctl liblttng-ust-fork \
 	liblttng-ust-libc-wrapper liblttng-ust-cyg-profile tools \
-	liblttng-ust-dl liblttng-ust-java liblttng-ust-jul tests doc
+	liblttng-ust-dl liblttng-ust-java liblttng-ust-java-agent \
+	tests doc
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 distdir = $(PACKAGE)-$(VERSION)
 top_distdir = $(distdir)
@@ -275,7 +290,13 @@ INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
-JAVA_JDK = @JAVA_JDK@
+JAR = @JAR@
+JAVA = @JAVA@
+JAVAC = @JAVAC@
+JAVACFLAGS = @JAVACFLAGS@
+JAVAFLAGS = @JAVAFLAGS@
+JAVAH = @JAVAH@
+JAVAPREFIX = @JAVAPREFIX@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
@@ -317,7 +338,11 @@ SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 STRIP = @STRIP@
+UUDECODE = @UUDECODE@
 VERSION = @VERSION@
+WEAK_ALIAS = @WEAK_ALIAS@
+WEAK_ALIAS_CROSSFILE = @WEAK_ALIAS_CROSSFILE@
+_ACJNI_JAVAC = @_ACJNI_JAVAC@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -356,7 +381,6 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
-lttnglibjavadir = @lttnglibjavadir@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -384,13 +408,13 @@ ACLOCAL_AMFLAGS = -I config
 SUBDIRS = . include snprintf libringbuffer liblttng-ust-comm \
 	liblttng-ust liblttng-ust-ctl liblttng-ust-fork \
 	liblttng-ust-libc-wrapper liblttng-ust-cyg-profile tools \
-	$(am__append_1) $(am__append_2) tests doc
+	$(am__append_1) $(am__append_2) $(am__append_3) tests doc
 
 #temporarily disabled
 # liblttng-ust-malloc
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = lttng-ust.pc
-dist_doc_DATA = README ChangeLog
+dist_doc_DATA = README.md ChangeLog
 dist_noinst_DATA = CodingStyle
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive

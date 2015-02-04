@@ -13,7 +13,11 @@ SUBDIRS += liblttng-ust-dl
 endif
 
 if BUILD_JNI_INTERFACE
-SUBDIRS += liblttng-ust-java liblttng-ust-jul
+SUBDIRS += liblttng-ust-java
+endif
+
+if BUILD_JAVA_AGENT
+SUBDIRS += liblttng-ust-java-agent
 endif
 
 SUBDIRS += tests doc
@@ -24,6 +28,6 @@ SUBDIRS += tests doc
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = lttng-ust.pc
 
-dist_doc_DATA = README ChangeLog
+dist_doc_DATA = README.md ChangeLog
 
 dist_noinst_DATA = CodingStyle

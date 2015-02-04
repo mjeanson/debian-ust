@@ -200,6 +200,7 @@ int ustctl_create_event(int sock, struct lttng_ust_event *ev,
 	lum.u.event.instrumentation = ev->instrumentation;
 	lum.u.event.loglevel_type = ev->loglevel_type;
 	lum.u.event.loglevel = ev->loglevel;
+	lum.u.event.disabled = ev->disabled;
 	ret = ustcomm_send_app_cmd(sock, &lum, &lur);
 	if (ret) {
 		free(event_data);
@@ -1637,6 +1638,22 @@ int ustctl_get_current_timestamp(struct ustctl_consumer_stream *stream,
 		return -ENOSYS;
 	return client_cb->current_timestamp(buf, handle, ts);
 }
+
+#if defined(__x86_64__) || defined(__i386__)
+
+int ustctl_has_perf_counters(void)
+{
+	return 1;
+}
+
+#else
+
+int ustctl_has_perf_counters(void)
+{
+	return 0;
+}
+
+#endif
 
 /*
  * Returns 0 on success, negative error value on error.

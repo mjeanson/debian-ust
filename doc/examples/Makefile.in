@@ -89,7 +89,19 @@ DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(dist_doc_examples_hello_static_lib_DATA) \
 	$(am__dist_doc_examples_java_jul_DATA_DIST) README
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/config/libtool.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/config/ax_check_class.m4 \
+	$(top_srcdir)/config/ax_check_classpath.m4 \
+	$(top_srcdir)/config/ax_java_options.m4 \
+	$(top_srcdir)/config/ax_jni_include_dir.m4 \
+	$(top_srcdir)/config/ax_prog_jar.m4 \
+	$(top_srcdir)/config/ax_prog_java.m4 \
+	$(top_srcdir)/config/ax_prog_java_works.m4 \
+	$(top_srcdir)/config/ax_prog_javac.m4 \
+	$(top_srcdir)/config/ax_prog_javac_works.m4 \
+	$(top_srcdir)/config/ax_prog_javah.m4 \
+	$(top_srcdir)/config/ax_sys_weak_alias.m4 \
+	$(top_srcdir)/config/ax_try_compile_java.m4 \
+	$(top_srcdir)/config/libtool.m4 \
 	$(top_srcdir)/config/ltoptions.m4 \
 	$(top_srcdir)/config/ltsugar.m4 \
 	$(top_srcdir)/config/ltversion.m4 \
@@ -199,7 +211,13 @@ INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
-JAVA_JDK = @JAVA_JDK@
+JAR = @JAR@
+JAVA = @JAVA@
+JAVAC = @JAVAC@
+JAVACFLAGS = @JAVACFLAGS@
+JAVAFLAGS = @JAVAFLAGS@
+JAVAH = @JAVAH@
+JAVAPREFIX = @JAVAPREFIX@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
@@ -241,7 +259,11 @@ SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 STRIP = @STRIP@
+UUDECODE = @UUDECODE@
 VERSION = @VERSION@
+WEAK_ALIAS = @WEAK_ALIAS@
+WEAK_ALIAS_CROSSFILE = @WEAK_ALIAS_CROSSFILE@
+_ACJNI_JAVAC = @_ACJNI_JAVAC@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -280,7 +302,6 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
-lttnglibjavadir = @lttnglibjavadir@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -310,12 +331,12 @@ doc_examples_gen_tpdir = ${docdir}/examples/gen-tp
 doc_examples_demodir = ${docdir}/examples/demo
 doc_examples_hello_static_libdir = ${docdir}/examples/hello-static-lib
 doc_examples_demo_tracefdir = ${docdir}/examples/demo-tracef
-@BUILD_JNI_INTERFACE_TRUE@doc_examples_java_juldir = ${docdir}/examples/java-jul
-@BUILD_JNI_INTERFACE_TRUE@dist_doc_examples_java_jul_DATA = java-jul/Makefile \
-@BUILD_JNI_INTERFACE_TRUE@								  java-jul/Hello.java \
-@BUILD_JNI_INTERFACE_TRUE@								  java-jul/run
+@BUILD_JAVA_AGENT_TRUE@doc_examples_java_juldir = ${docdir}/examples/java-jul
+@BUILD_JAVA_AGENT_TRUE@dist_doc_examples_java_jul_DATA = java-jul/Makefile \
+@BUILD_JAVA_AGENT_TRUE@				  java-jul/Hello.java \
+@BUILD_JAVA_AGENT_TRUE@				  java-jul/run
 
-@BUILD_JNI_INTERFACE_TRUE@SUBDIRS_JUL = java-jul
+@BUILD_JAVA_AGENT_TRUE@SUBDIRS_JUL = java-jul
 dist_doc_examples_DATA = README
 dist_doc_examples_easy_ust_DATA = easy-ust/Makefile \
 	easy-ust/sample.c \
@@ -744,7 +765,7 @@ uninstall-am: uninstall-dist_doc_examplesDATA \
 @NO_SHARED_FALSE@	done; \
 @NO_SHARED_FALSE@	if [ x"$(SUBDIRS_JUL)" != x"" ]; then \
 @NO_SHARED_FALSE@		for subdir in $(SUBDIRS_JUL); do \
-@NO_SHARED_FALSE@			(cd $(SUBDIRS_JUL) && $(MAKE) JAVA_CLASSPATH_OVERRIDE="../../../liblttng-ust-jul" JAVA_JARFILE_OVERRIDE="liblttng-ust-jul.jar" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
+@NO_SHARED_FALSE@			(cd $(SUBDIRS_JUL) && $(MAKE) JAVA_CLASSPATH_OVERRIDE="../../../liblttng-ust-java-agent/java" JAVA_JARFILE_OVERRIDE="liblttng-ust-agent.jar" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
 @NO_SHARED_FALSE@		done; \
 @NO_SHARED_FALSE@	fi;
 
