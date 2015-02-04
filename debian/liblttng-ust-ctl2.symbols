@@ -121,6 +121,7 @@ liblttng-ust-ctl.so.2 liblttng-ust-ctl2 #MINVER#
  ustctl_get_subbuf_size@Base 2.5.0
  ustctl_get_timestamp_begin@Base 2.5.0
  ustctl_get_timestamp_end@Base 2.5.0
+ ustctl_has_perf_counters@Base 2.6.0
  ustctl_put_next_subbuf@Base 2.5.0
  ustctl_put_subbuf@Base 2.5.0
  ustctl_recv_channel_from_consumer@Base 2.5.0

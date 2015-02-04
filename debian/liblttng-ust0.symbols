@@ -172,6 +172,7 @@ liblttng-ust.so.0 liblttng-ust0 #MINVER#
  lttng_context_exit@Base 2.5.0
  lttng_context_init@Base 2.5.0
  lttng_context_procname_reset@Base 2.5.0
+ lttng_context_update@Base 2.6.0
  lttng_context_vpid_reset@Base 2.5.0
  lttng_context_vtid_reset@Base 2.5.0
  lttng_destroy_context@Base 2.5.0
