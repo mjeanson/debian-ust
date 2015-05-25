@@ -52,6 +52,7 @@
 #include "compat.h"
 #include "../libringbuffer/tlsfixup.h"
 #include "lttng-ust-baddr.h"
+#include "getenv.h"
 
 /*
  * Has lttng ust comm constructor been called ?
@@ -313,11 +314,11 @@ const char *get_lttng_home_dir(void)
 {
        const char *val;
 
-       val = (const char *) getenv("LTTNG_HOME");
+       val = (const char *) lttng_secure_getenv("LTTNG_HOME");
        if (val != NULL) {
                return val;
        }
-       return (const char *) getenv("HOME");
+       return (const char *) lttng_secure_getenv("HOME");
 }
 
 /*
@@ -399,7 +400,7 @@ int setup_local_apps(void)
 
 /*
  * Get notify_sock timeout, in ms.
- * -1: don't wait. 0: wait forever. >0: timeout, in ms.
+ * -1: wait forever. 0: don't wait. >0: timeout, in ms.
  */
 static
 long get_timeout(void)
@@ -422,7 +423,7 @@ long get_notify_sock_timeout(void)
 }
 
 /*
- * Return values: -1: don't wait. 0: wait forever. 1: timeout wait.
+ * Return values: -1: wait forever. 0: don't wait. 1: timeout wait.
  */
 static
 int get_constructor_timeout(struct timespec *constructor_timeout)
@@ -445,7 +446,8 @@ int get_constructor_timeout(struct timespec *constructor_timeout)
 	 */
 	ret = clock_gettime(CLOCK_REALTIME, constructor_timeout);
 	if (ret) {
-		return -1;
+		/* Don't wait. */
+		return 0;
 	}
 	constructor_timeout->tv_sec += constructor_delay_ms / 1000UL;
 	constructor_timeout->tv_nsec +=
@@ -454,6 +456,7 @@ int get_constructor_timeout(struct timespec *constructor_timeout)
 		constructor_timeout->tv_sec++;
 		constructor_timeout->tv_nsec -= 1000000000UL;
 	}
+	/* Timeout wait (constructor_delay_ms). */
 	return 1;
 }
 
