@@ -150,7 +150,8 @@ am__liblttng_ust_runtime_la_SOURCES_DIST = lttng-ust-comm.c \
 	lttng-hash-helper.h lttng-ust-baddr.c lttng-ust-baddr.h \
 	ust_baddr_statedump.h tracepoint-internal.h clock.h compat.h \
 	wait.h jhash.h lttng-ust-uuid.h error.h tracef.c \
-	lttng-ust-tracef-provider.h lttng-context-perf-counters.c
+	lttng-ust-tracef-provider.h getenv.h \
+	lttng-context-perf-counters.c
 @HAVE_PERF_EVENT_TRUE@am__objects_1 = lttng-context-perf-counters.lo
 am_liblttng_ust_runtime_la_OBJECTS = lttng-ust-comm.lo \
 	lttng-ust-abi.lo lttng-probes.lo lttng-context-vtid.lo \
@@ -438,7 +439,7 @@ liblttng_ust_runtime_la_SOURCES = lttng-ust-comm.c lttng-ust-abi.c \
 	filter-bytecode.h lttng-hash-helper.h lttng-ust-baddr.c \
 	lttng-ust-baddr.h ust_baddr_statedump.h tracepoint-internal.h \
 	clock.h compat.h wait.h jhash.h lttng-ust-uuid.h error.h \
-	tracef.c lttng-ust-tracef-provider.h $(am__append_1)
+	tracef.c lttng-ust-tracef-provider.h getenv.h $(am__append_1)
 liblttng_ust_support_la_SOURCES = \
 	lttng-tracer.h \
 	lttng-tracer-core.h \
