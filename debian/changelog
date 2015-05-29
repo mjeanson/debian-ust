@@ -1,3 +1,13 @@
+ust (2.6.1-1) unstable; urgency=medium
+
+  [ Michael Jeanson ]
+  * [34a39b5] New upstream version 2.6.1
+  * [e750d6c] Update symbols files
+
+  [ Jon Bernard ]
+
+ -- Jon Bernard <jbernard@debian.org>  Fri, 29 May 2015 18:22:01 +0000
+
 ust (2.5.1-2) unstable; urgency=medium
 
   * [65a639d] Tag arch-specfic symbols for i386 and amd64 (Closes: #767632)
