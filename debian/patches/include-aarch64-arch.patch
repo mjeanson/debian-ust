@@ -1,0 +1,10 @@
+--- ust-2.6.1.orig/configure.ac
++++ ust-2.6.1/configure.ac
+@@ -235,6 +235,7 @@ changequote([,])dnl
+ 	ppc64le) ;;
+ 	powerpc64) ;;
+ 	powerpc64le) ;;
++	aarch64) ;;
+ 	s390) NO_UNALIGNED_ACCESS=1 ;;
+ 	s390x) NO_UNALIGNED_ACCESS=1 ;;
+         arm*) NO_UNALIGNED_ACCESS=1 ;;
