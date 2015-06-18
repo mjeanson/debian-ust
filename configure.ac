@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([lttng-ust],[2.6.1],[mathieu dot desnoyers at efficios dot com])
+AC_INIT([lttng-ust],[2.6.2],[mathieu dot desnoyers at efficios dot com])
 
 # Following the numbering scheme proposed by libtool for the library version
 # http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
@@ -238,6 +238,7 @@ changequote([,])dnl
 	s390) NO_UNALIGNED_ACCESS=1 ;;
 	s390x) NO_UNALIGNED_ACCESS=1 ;;
         arm*) NO_UNALIGNED_ACCESS=1 ;;
+	aarch64) NO_UNALIGNED_ACCESS=1 ;;
 	mips*) NO_UNALIGNED_ACCESS=1 ;;
 	tile*) NO_UNALIGNED_ACCESS=1 ;;
 	*) AC_MSG_ERROR([unable to detect alignment requirements (unsupported architecture ($host_cpu)?)]) ;;
