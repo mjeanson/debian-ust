@@ -1,3 +1,14 @@
+ust (2.6.2-1) unstable; urgency=medium
+
+  [ Michael Jeanson ]
+  * [55c5de5] Enable build on aarch64
+  * [35afe9f] Build on all supported architectures
+  * [1eae5b2] New upstream version 2.6.2
+  * [e4ed593] aarch64 support was merged upstream in 2.6.2
+  * [825bfda] Drop systemtap integration
+
+ -- Jon Bernard <jbernard@debian.org>  Thu, 18 Jun 2015 21:06:30 +0000
+
 ust (2.6.1-1) unstable; urgency=medium
 
   [ Michael Jeanson ]
