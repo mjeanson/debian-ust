@@ -4,17 +4,8 @@
 # triggering a non-PIC lintian error.
 #export DEB_BUILD_MAINT_OPTIONS := hardening=+all
 
-HAS_SDT = $(shell dpkg -l systemtap-sdt-dev >/dev/null 2>&1 && echo 0 || echo 1)
- 
-ifeq ($(HAS_SDT), 0)
-	CONFIGURE_FLAGS := "--with-sdt"
-endif
- 
 %:
 	dh $@ --with autoreconf
-
-override_dh_auto_configure:
-	dh_auto_configure -- $(CONFIGURE_FLAGS)
 
 override_dh_makeshlibs:
 	dh_makeshlibs -V
