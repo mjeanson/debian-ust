@@ -1,0 +1,40 @@
+From: Michael Jeanson <mjeanson@efficios.com>
+Date: Tue, 30 Jun 2015 11:55:40 -0400
+Subject: Default to no unaligned access on unsupported archs
+
+[ Edit by Mathieu: change configure output style to match current style. ]
+
+Signed-off-by: Michael Jeanson <mjeanson@efficios.com>
+Signed-off-by: Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
+---
+ configure.ac | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/configure.ac b/configure.ac
+index 6b4a74f..196ad1a 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -241,7 +241,10 @@ changequote([,])dnl
+ 	aarch64) NO_UNALIGNED_ACCESS=1 ;;
+ 	mips*) NO_UNALIGNED_ACCESS=1 ;;
+ 	tile*) NO_UNALIGNED_ACCESS=1 ;;
+-	*) AC_MSG_ERROR([unable to detect alignment requirements (unsupported architecture ($host_cpu)?)]) ;;
++	*)
++		UNSUPPORTED_ARCH=1
++		NO_UNALIGNED_ACCESS=1
++		;;
+ esac
+ AC_MSG_RESULT([$host_cpu])
+ 
+@@ -410,6 +413,11 @@ AS_IF([test "x$jni_interface" = "xyes"], [AS_ECHO("Enabled")], [AS_ECHO("Disable
+ AS_ECHO_N("sdt.h integration:  ")
+ AS_IF([test "x$with_sdt" = "xyes"], [AS_ECHO("Enabled")], [AS_ECHO("Disabled")])
+ 
++AS_ECHO("Architecture: $host_cpu")
++AS_ECHO_N("Efficient unaligned memory access: ")
++AS_IF([test "x$NO_UNALIGNED_ACCESS" != "x1"], [AS_ECHO("yes")], [AS_IF([test "x$UNSUPPORTED_ARCH" != "x1"], [AS_ECHO("no")], [AS_ECHO("unknown")])])
++AS_IF([test "x$UNSUPPORTED_ARCH" = "x1"], [AC_MSG_WARN([Your architecture ($host_cpu) is unsupported, using safe default of no unaligned access])])
+ AS_ECHO()
++
+ AS_ECHO("Type 'make' to compile.")
+ 
