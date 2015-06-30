@@ -1,0 +1,4 @@
+usr/lib/*/jni/liblttng-ust-jul-jni.so
+usr/lib/*/jni/liblttng-ust-jul-jni.so.*
+usr/lib/*/jni/liblttng-ust-log4j-jni.so
+usr/lib/*/jni/liblttng-ust-log4j-jni.so.*
