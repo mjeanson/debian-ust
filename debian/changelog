@@ -1,3 +1,12 @@
+ust (2.6.2-2) unstable; urgency=medium
+
+  [ Michael Jeanson ]
+  * [f1bd937] Default to no unaligned access on unsupported archs
+  * [9663c9a] Add java subpackages
+  * [a23d3b8] Use python3 for lttng-gen-tp (Closes: #789790)
+
+ -- Jon Bernard <jbernard@debian.org>  Thu, 02 Jul 2015 19:10:06 +0000
+
 ust (2.6.2-1) unstable; urgency=medium
 
   [ Michael Jeanson ]
