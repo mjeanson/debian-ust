@@ -111,8 +111,15 @@ static int lttng_ust_comm_should_quit;
 int ust_lock(void)
 {
 	sigset_t sig_all_blocked, orig_mask;
-	int ret;
+	int ret, oldstate;
 
+	ret = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &oldstate);
+	if (ret) {
+		ERR("pthread_setcancelstate: %s", strerror(ret));
+	}
+	if (oldstate != PTHREAD_CANCEL_ENABLE) {
+		ERR("pthread_setcancelstate: unexpected oldstate");
+	}
 	sigfillset(&sig_all_blocked);
 	ret = pthread_sigmask(SIG_SETMASK, &sig_all_blocked, &orig_mask);
 	if (ret) {
@@ -140,8 +147,15 @@ int ust_lock(void)
 void ust_lock_nocheck(void)
 {
 	sigset_t sig_all_blocked, orig_mask;
-	int ret;
+	int ret, oldstate;
 
+	ret = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &oldstate);
+	if (ret) {
+		ERR("pthread_setcancelstate: %s", strerror(ret));
+	}
+	if (oldstate != PTHREAD_CANCEL_ENABLE) {
+		ERR("pthread_setcancelstate: unexpected oldstate");
+	}
 	sigfillset(&sig_all_blocked);
 	ret = pthread_sigmask(SIG_SETMASK, &sig_all_blocked, &orig_mask);
 	if (ret) {
@@ -161,7 +175,7 @@ void ust_lock_nocheck(void)
 void ust_unlock(void)
 {
 	sigset_t sig_all_blocked, orig_mask;
-	int ret;
+	int ret, oldstate;
 
 	sigfillset(&sig_all_blocked);
 	ret = pthread_sigmask(SIG_SETMASK, &sig_all_blocked, &orig_mask);
@@ -173,6 +187,13 @@ void ust_unlock(void)
 	ret = pthread_sigmask(SIG_SETMASK, &orig_mask, NULL);
 	if (ret) {
 		ERR("pthread_sigmask: %s", strerror(ret));
+	}
+	ret = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &oldstate);
+	if (ret) {
+		ERR("pthread_setcancelstate: %s", strerror(ret));
+	}
+	if (oldstate != PTHREAD_CANCEL_DISABLE) {
+		ERR("pthread_setcancelstate: unexpected oldstate");
 	}
 }
 
@@ -552,13 +573,13 @@ int handle_message(struct sock_info *sock_info,
 
 	if (ust_lock()) {
 		ret = -LTTNG_UST_ERR_EXITING;
-		goto end;
+		goto error;
 	}
 
 	ops = objd_ops(lum->handle);
 	if (!ops) {
 		ret = -ENOENT;
-		goto end;
+		goto error;
 	}
 
 	switch (lum->cmd) {
@@ -619,12 +640,12 @@ int handle_message(struct sock_info *sock_info,
 				}
 				ret = len;
 				free(bytecode);
-				goto end;
+				goto error;
 			} else {
 				DBG("incorrect filter data message size: %zd", len);
 				ret = -EINVAL;
 				free(bytecode);
-				goto end;
+				goto error;
 			}
 		}
 		bytecode->bc.len = lum->u.filter.data_size;
@@ -684,12 +705,12 @@ int handle_message(struct sock_info *sock_info,
 				}
 				ret = len;
 				free(node);
-				goto end;
+				goto error;
 			} else {
 				DBG("Incorrect exclusion data message size: %zd", len);
 				ret = -EINVAL;
 				free(node);
-				goto end;
+				goto error;
 			}
 		}
 		if (ops->cmd) {
@@ -730,11 +751,11 @@ int handle_message(struct sock_info *sock_info,
 					goto error;
 				}
 				ret = len;
-				goto end;
+				goto error;
 			} else {
 				DBG("incorrect channel data message size: %zd", len);
 				ret = -EINVAL;
-				goto end;
+				goto error;
 			}
 		}
 		args.channel.chan_data = chan_data;
@@ -755,7 +776,7 @@ int handle_message(struct sock_info *sock_info,
 			&args.stream.shm_fd,
 			&args.stream.wakeup_fd);
 		if (ret) {
-			goto end;
+			goto error;
 		}
 		if (ops->cmd)
 			ret = ops->cmd(lum->handle, lum->cmd,
@@ -775,7 +796,6 @@ int handle_message(struct sock_info *sock_info,
 		break;
 	}
 
-end:
 	lur.handle = lum->handle;
 	lur.cmd = lum->cmd;
 	lur.ret_val = ret;
@@ -1117,8 +1137,6 @@ error:
 static
 void wait_for_sessiond(struct sock_info *sock_info)
 {
-	int ret;
-
 	if (ust_lock()) {
 		goto quit;
 	}
@@ -1134,23 +1152,32 @@ void wait_for_sessiond(struct sock_info *sock_info)
 
 	DBG("Waiting for %s apps sessiond", sock_info->name);
 	/* Wait for futex wakeup */
-	if (uatomic_read((int32_t *) sock_info->wait_shm_mmap) == 0) {
-		ret = futex_async((int32_t *) sock_info->wait_shm_mmap,
-			FUTEX_WAIT, 0, NULL, NULL, 0);
-		if (ret < 0) {
-			if (errno == EFAULT) {
-				wait_poll_fallback = 1;
-				DBG(
+	if (uatomic_read((int32_t *) sock_info->wait_shm_mmap))
+		goto end_wait;
+
+	while (futex_async((int32_t *) sock_info->wait_shm_mmap,
+			FUTEX_WAIT, 0, NULL, NULL, 0)) {
+		switch (errno) {
+		case EWOULDBLOCK:
+			/* Value already changed. */
+			goto end_wait;
+		case EINTR:
+			/* Retry if interrupted by signal. */
+			break;	/* Get out of switch. */
+		case EFAULT:
+			wait_poll_fallback = 1;
+			DBG(
 "Linux kernels 2.6.33 to 3.0 (with the exception of stable versions) "
 "do not support FUTEX_WAKE on read-only memory mappings correctly. "
 "Please upgrade your kernel "
 "(fix is commit 9ea71503a8ed9184d2d0b8ccc4d269d05f7940ae in Linux kernel "
 "mainline). LTTng-UST will use polling mode fallback.");
-				if (ust_debug())
-					PERROR("futex");
-			}
+			if (ust_debug())
+				PERROR("futex");
+			goto end_wait;
 		}
 	}
+end_wait:
 	return;
 
 quit:
@@ -1369,7 +1396,13 @@ restart:
 			print_cmd(lum.cmd, lum.handle);
 			ret = handle_message(sock_info, sock, &lum);
 			if (ret) {
-				ERR("Error handling message for %s socket", sock_info->name);
+				ERR("Error handling message for %s socket",
+					sock_info->name);
+				/*
+				 * Close socket if protocol error is
+				 * detected.
+				 */
+				goto end;
 			}
 			continue;
 		default:
@@ -1549,9 +1582,7 @@ static
 void lttng_ust_cleanup(int exiting)
 {
 	cleanup_sock_info(&global_apps, exiting);
-	if (local_apps.allowed) {
-		cleanup_sock_info(&local_apps, exiting);
-	}
+	cleanup_sock_info(&local_apps, exiting);
 	/*
 	 * The teardown in this function all affect data structures
 	 * accessed under the UST lock by the listener thread. This

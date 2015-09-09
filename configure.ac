@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([lttng-ust],[2.6.2],[mathieu dot desnoyers at efficios dot com])
+AC_INIT([lttng-ust],[2.6.3],[mathieu dot desnoyers at efficios dot com])
 
 # Following the numbering scheme proposed by libtool for the library version
 # http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
@@ -252,7 +252,7 @@ fi
 # Check for JNI header files if requested
 AC_ARG_ENABLE([jni-interface],
 	[AS_HELP_STRING([--enable-jni-interface],[build JNI interface between C and Java. Needs Java include files [default=no]])],
-	[jni_interface=$withval],
+	[jni_interface=$enableval],
 	[jni_interface=no]
 )
 

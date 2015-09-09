@@ -87,7 +87,8 @@ DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(dist_doc_examples_easy_ust_DATA) \
 	$(dist_doc_examples_gen_tp_DATA) \
 	$(dist_doc_examples_hello_static_lib_DATA) \
-	$(am__dist_doc_examples_java_jul_DATA_DIST) README
+	$(am__dist_doc_examples_java_jul_DATA_DIST) \
+	$(am__dist_doc_examples_java_log4j_DATA_DIST) README
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/config/ax_check_class.m4 \
 	$(top_srcdir)/config/ax_check_classpath.m4 \
@@ -165,15 +166,19 @@ am__installdirs = "$(DESTDIR)$(doc_examplesdir)" \
 	"$(DESTDIR)$(doc_examples_easy_ustdir)" \
 	"$(DESTDIR)$(doc_examples_gen_tpdir)" \
 	"$(DESTDIR)$(doc_examples_hello_static_libdir)" \
-	"$(DESTDIR)$(doc_examples_java_juldir)"
+	"$(DESTDIR)$(doc_examples_java_juldir)" \
+	"$(DESTDIR)$(doc_examples_java_log4jdir)"
 am__dist_doc_examples_java_jul_DATA_DIST = java-jul/Makefile \
 	java-jul/Hello.java java-jul/run
+am__dist_doc_examples_java_log4j_DATA_DIST = java-log4j/Makefile \
+	java-log4j/Hello.java java-log4j/run
 DATA = $(dist_doc_examples_DATA) $(dist_doc_examples_demo_DATA) \
 	$(dist_doc_examples_demo_tracef_DATA) \
 	$(dist_doc_examples_easy_ust_DATA) \
 	$(dist_doc_examples_gen_tp_DATA) \
 	$(dist_doc_examples_hello_static_lib_DATA) \
-	$(dist_doc_examples_java_jul_DATA)
+	$(dist_doc_examples_java_jul_DATA) \
+	$(dist_doc_examples_java_log4j_DATA)
 am__tagged_files = $(HEADERS) $(SOURCES) $(TAGS_FILES) $(LISP)
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 ACLOCAL = @ACLOCAL@
@@ -331,12 +336,18 @@ doc_examples_gen_tpdir = ${docdir}/examples/gen-tp
 doc_examples_demodir = ${docdir}/examples/demo
 doc_examples_hello_static_libdir = ${docdir}/examples/hello-static-lib
 doc_examples_demo_tracefdir = ${docdir}/examples/demo-tracef
-@BUILD_JAVA_AGENT_TRUE@doc_examples_java_juldir = ${docdir}/examples/java-jul
-@BUILD_JAVA_AGENT_TRUE@dist_doc_examples_java_jul_DATA = java-jul/Makefile \
-@BUILD_JAVA_AGENT_TRUE@				  java-jul/Hello.java \
-@BUILD_JAVA_AGENT_TRUE@				  java-jul/run
+@BUILD_JAVA_AGENT_WITH_JUL_TRUE@doc_examples_java_juldir = ${docdir}/examples/java-jul
+@BUILD_JAVA_AGENT_WITH_JUL_TRUE@dist_doc_examples_java_jul_DATA = java-jul/Makefile \
+@BUILD_JAVA_AGENT_WITH_JUL_TRUE@				  java-jul/Hello.java \
+@BUILD_JAVA_AGENT_WITH_JUL_TRUE@				  java-jul/run
 
-@BUILD_JAVA_AGENT_TRUE@SUBDIRS_JUL = java-jul
+@BUILD_JAVA_AGENT_WITH_JUL_TRUE@SUBDIRS_JUL = java-jul
+@BUILD_JAVA_AGENT_WITH_LOG4J_TRUE@doc_examples_java_log4jdir = ${docdir}/examples/java-log4j
+@BUILD_JAVA_AGENT_WITH_LOG4J_TRUE@dist_doc_examples_java_log4j_DATA = java-log4j/Makefile \
+@BUILD_JAVA_AGENT_WITH_LOG4J_TRUE@				  java-log4j/Hello.java \
+@BUILD_JAVA_AGENT_WITH_LOG4J_TRUE@				  java-log4j/run
+
+@BUILD_JAVA_AGENT_WITH_LOG4J_TRUE@SUBDIRS_LOG4J = java-log4j
 dist_doc_examples_DATA = README
 dist_doc_examples_easy_ust_DATA = easy-ust/Makefile \
 	easy-ust/sample.c \
@@ -558,6 +569,27 @@ uninstall-dist_doc_examples_java_julDATA:
 	@list='$(dist_doc_examples_java_jul_DATA)'; test -n "$(doc_examples_java_juldir)" || list=; \
 	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
 	dir='$(DESTDIR)$(doc_examples_java_juldir)'; $(am__uninstall_files_from_dir)
+install-dist_doc_examples_java_log4jDATA: $(dist_doc_examples_java_log4j_DATA)
+	@$(NORMAL_INSTALL)
+	@list='$(dist_doc_examples_java_log4j_DATA)'; test -n "$(doc_examples_java_log4jdir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(doc_examples_java_log4jdir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(doc_examples_java_log4jdir)" || exit 1; \
+	fi; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  echo "$$d$$p"; \
+	done | $(am__base_list) | \
+	while read files; do \
+	  echo " $(INSTALL_DATA) $$files '$(DESTDIR)$(doc_examples_java_log4jdir)'"; \
+	  $(INSTALL_DATA) $$files "$(DESTDIR)$(doc_examples_java_log4jdir)" || exit $$?; \
+	done
+
+uninstall-dist_doc_examples_java_log4jDATA:
+	@$(NORMAL_UNINSTALL)
+	@list='$(dist_doc_examples_java_log4j_DATA)'; test -n "$(doc_examples_java_log4jdir)" || list=; \
+	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(doc_examples_java_log4jdir)'; $(am__uninstall_files_from_dir)
 tags TAGS:
 
 ctags CTAGS:
@@ -600,7 +632,7 @@ check: check-am
 @NO_SHARED_TRUE@all-local:
 all-am: Makefile $(DATA) all-local
 installdirs:
-	for dir in "$(DESTDIR)$(doc_examplesdir)" "$(DESTDIR)$(doc_examples_demodir)" "$(DESTDIR)$(doc_examples_demo_tracefdir)" "$(DESTDIR)$(doc_examples_easy_ustdir)" "$(DESTDIR)$(doc_examples_gen_tpdir)" "$(DESTDIR)$(doc_examples_hello_static_libdir)" "$(DESTDIR)$(doc_examples_java_juldir)"; do \
+	for dir in "$(DESTDIR)$(doc_examplesdir)" "$(DESTDIR)$(doc_examples_demodir)" "$(DESTDIR)$(doc_examples_demo_tracefdir)" "$(DESTDIR)$(doc_examples_easy_ustdir)" "$(DESTDIR)$(doc_examples_gen_tpdir)" "$(DESTDIR)$(doc_examples_hello_static_libdir)" "$(DESTDIR)$(doc_examples_java_juldir)" "$(DESTDIR)$(doc_examples_java_log4jdir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: install-am
@@ -660,7 +692,8 @@ install-data-am: install-dist_doc_examplesDATA \
 	install-dist_doc_examples_easy_ustDATA \
 	install-dist_doc_examples_gen_tpDATA \
 	install-dist_doc_examples_hello_static_libDATA \
-	install-dist_doc_examples_java_julDATA
+	install-dist_doc_examples_java_julDATA \
+	install-dist_doc_examples_java_log4jDATA
 
 install-dvi: install-dvi-am
 
@@ -710,7 +743,8 @@ uninstall-am: uninstall-dist_doc_examplesDATA \
 	uninstall-dist_doc_examples_easy_ustDATA \
 	uninstall-dist_doc_examples_gen_tpDATA \
 	uninstall-dist_doc_examples_hello_static_libDATA \
-	uninstall-dist_doc_examples_java_julDATA
+	uninstall-dist_doc_examples_java_julDATA \
+	uninstall-dist_doc_examples_java_log4jDATA
 
 .MAKE: install-am install-strip
 
@@ -724,7 +758,8 @@ uninstall-am: uninstall-dist_doc_examplesDATA \
 	install-dist_doc_examples_easy_ustDATA \
 	install-dist_doc_examples_gen_tpDATA \
 	install-dist_doc_examples_hello_static_libDATA \
-	install-dist_doc_examples_java_julDATA install-dvi \
+	install-dist_doc_examples_java_julDATA \
+	install-dist_doc_examples_java_log4jDATA install-dvi \
 	install-dvi-am install-exec install-exec-am install-html \
 	install-html-am install-info install-info-am install-man \
 	install-pdf install-pdf-am install-ps install-ps-am \
@@ -737,12 +772,13 @@ uninstall-am: uninstall-dist_doc_examplesDATA \
 	uninstall-dist_doc_examples_easy_ustDATA \
 	uninstall-dist_doc_examples_gen_tpDATA \
 	uninstall-dist_doc_examples_hello_static_libDATA \
-	uninstall-dist_doc_examples_java_julDATA
+	uninstall-dist_doc_examples_java_julDATA \
+	uninstall-dist_doc_examples_java_log4jDATA
 
 
 @NO_SHARED_FALSE@all-local:
 @NO_SHARED_FALSE@	@if [ x"$(srcdir)" != x"$(builddir)" ]; then \
-@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_PROXY) $(SUBDIRS_JUL); do \
+@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_PROXY) $(SUBDIRS_JUL) $(SUBDIRS_LOG4J); do \
 @NO_SHARED_FALSE@			cp -pfR $(srcdir)/$$subdir $(builddir); \
 @NO_SHARED_FALSE@		done; \
 @NO_SHARED_FALSE@	fi; \
@@ -767,6 +803,11 @@ uninstall-am: uninstall-dist_doc_examplesDATA \
 @NO_SHARED_FALSE@		for subdir in $(SUBDIRS_JUL); do \
 @NO_SHARED_FALSE@			(cd $(SUBDIRS_JUL) && $(MAKE) JAVA_CLASSPATH_OVERRIDE="../../../liblttng-ust-java-agent/java" JAVA_JARFILE_OVERRIDE="liblttng-ust-agent.jar" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
 @NO_SHARED_FALSE@		done; \
+@NO_SHARED_FALSE@	fi; \
+@NO_SHARED_FALSE@	if [ x"$(SUBDIRS_LOG4J)" != x"" ]; then \
+@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_LOG4J); do \
+@NO_SHARED_FALSE@			(cd $(SUBDIRS_LOG4J) && $(MAKE) JAVA_CLASSPATH_OVERRIDE="../../../liblttng-ust-java-agent/java" JAVA_JARFILE_OVERRIDE="liblttng-ust-agent.jar" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
+@NO_SHARED_FALSE@		done; \
 @NO_SHARED_FALSE@	fi;
 
 @NO_SHARED_FALSE@clean-local:
@@ -782,8 +823,15 @@ uninstall-am: uninstall-dist_doc_examplesDATA \
 @NO_SHARED_FALSE@			fi; \
 @NO_SHARED_FALSE@		done; \
 @NO_SHARED_FALSE@	fi; \
+@NO_SHARED_FALSE@	if [ x"$(SUBDIRS_LOG4J)" != x"" ]; then \
+@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_LOG4J); do \
+@NO_SHARED_FALSE@			if [ -d $$subdir ]; then \
+@NO_SHARED_FALSE@				(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) clean && cd ..) || exit 1; \
+@NO_SHARED_FALSE@			fi; \
+@NO_SHARED_FALSE@		done; \
+@NO_SHARED_FALSE@	fi; \
 @NO_SHARED_FALSE@	if [ x"$(srcdir)" != x"$(builddir)" ]; then \
-@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_PROXY) $(SUBDIRS_JUL); do \
+@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_PROXY) $(SUBDIRS_JUL) $(SUBDIRS_LOG4J); do \
 @NO_SHARED_FALSE@			rm -rf $(builddir)/$$subdir; \
 @NO_SHARED_FALSE@		done; \
 @NO_SHARED_FALSE@	fi;
