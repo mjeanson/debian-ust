@@ -1,3 +1,11 @@
+ust (2.6.3-1) unstable; urgency=medium
+
+  [ Michael Jeanson ]
+  * [fd874dc] New upstream version 2.6.3
+  * [a0a6282] Refresh fix-incompatible-java-bytecode-format.patch
+
+ -- Jon Bernard <jbernard@debian.org>  Thu, 10 Sep 2015 20:17:15 +0000
+
 ust (2.6.2-2) unstable; urgency=medium
 
   [ Michael Jeanson ]
