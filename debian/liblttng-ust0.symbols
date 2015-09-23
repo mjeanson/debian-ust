@@ -13,19 +13,18 @@ liblttng-ust-cyg-profile.so.0 liblttng-ust0 #MINVER#
  __cyg_profile_func_exit@Base 2.5.0
  __event_desc___lttng_ust_cyg_profile_func_entry@Base 2.5.0
  __event_desc___lttng_ust_cyg_profile_func_exit@Base 2.5.0
- __tp_event_signature___lttng_ust_cyg_profile___func_entry@Base 2.5.0
- __tp_event_signature___lttng_ust_cyg_profile___func_exit@Base 2.5.0
+ __tp_event_signature___lttng_ust_cyg_profile___func_class@Base 2.7.0
  __tracepoint_lttng_ust_cyg_profile___func_entry@Base 2.5.0
  __tracepoint_lttng_ust_cyg_profile___func_exit@Base 2.5.0
  __tracepoint_provider_lttng_ust_cyg_profile@Base 2.5.0
 liblttng-ust-dl.so.0 liblttng-ust0 #MINVER#
- __event_desc___ust_baddr_pop@Base 2.5.0
- __event_desc___ust_baddr_push@Base 2.5.0
- __tp_event_signature___ust_baddr___pop@Base 2.5.0
- __tp_event_signature___ust_baddr___push@Base 2.5.0
- __tracepoint_provider_ust_baddr@Base 2.5.0
- __tracepoint_ust_baddr___pop@Base 2.5.0
- __tracepoint_ust_baddr___push@Base 2.5.0
+ __event_desc___lttng_ust_dl_dlclose@Base 2.7.0
+ __event_desc___lttng_ust_dl_dlopen@Base 2.7.0
+ __tp_event_signature___lttng_ust_dl___dlclose@Base 2.7.0
+ __tp_event_signature___lttng_ust_dl___dlopen@Base 2.7.0
+ __tracepoint_lttng_ust_dl___dlclose@Base 2.7.0
+ __tracepoint_lttng_ust_dl___dlopen@Base 2.7.0
+ __tracepoint_provider_lttng_ust_dl@Base 2.7.0
  dlclose@Base 2.5.0
  dlopen@Base 2.5.0
 liblttng-ust-fork.so.0 liblttng-ust0 #MINVER#
@@ -33,25 +32,25 @@ liblttng-ust-fork.so.0 liblttng-ust0 #MINVER#
  daemon@Base 2.5.0
  fork@Base 2.5.0
 liblttng-ust-libc-wrapper.so.0 liblttng-ust0 #MINVER#
- __event_desc___ust_libc_calloc@Base 2.5.0
- __event_desc___ust_libc_free@Base 2.5.0
- __event_desc___ust_libc_malloc@Base 2.5.0
- __event_desc___ust_libc_memalign@Base 2.5.0
- __event_desc___ust_libc_posix_memalign@Base 2.5.0
- __event_desc___ust_libc_realloc@Base 2.5.0
- __tp_event_signature___ust_libc___calloc@Base 2.5.0
- __tp_event_signature___ust_libc___free@Base 2.5.0
- __tp_event_signature___ust_libc___malloc@Base 2.5.0
- __tp_event_signature___ust_libc___memalign@Base 2.5.0
- __tp_event_signature___ust_libc___posix_memalign@Base 2.5.0
- __tp_event_signature___ust_libc___realloc@Base 2.5.0
- __tracepoint_provider_ust_libc@Base 2.5.0
- __tracepoint_ust_libc___calloc@Base 2.5.0
- __tracepoint_ust_libc___free@Base 2.5.0
- __tracepoint_ust_libc___malloc@Base 2.5.0
- __tracepoint_ust_libc___memalign@Base 2.5.0
- __tracepoint_ust_libc___posix_memalign@Base 2.5.0
- __tracepoint_ust_libc___realloc@Base 2.5.0
+ __event_desc___lttng_ust_libc_calloc@Base 2.7.0
+ __event_desc___lttng_ust_libc_free@Base 2.7.0
+ __event_desc___lttng_ust_libc_malloc@Base 2.7.0
+ __event_desc___lttng_ust_libc_memalign@Base 2.7.0
+ __event_desc___lttng_ust_libc_posix_memalign@Base 2.7.0
+ __event_desc___lttng_ust_libc_realloc@Base 2.7.0
+ __tp_event_signature___lttng_ust_libc___calloc@Base 2.7.0
+ __tp_event_signature___lttng_ust_libc___free@Base 2.7.0
+ __tp_event_signature___lttng_ust_libc___malloc@Base 2.7.0
+ __tp_event_signature___lttng_ust_libc___memalign@Base 2.7.0
+ __tp_event_signature___lttng_ust_libc___posix_memalign@Base 2.7.0
+ __tp_event_signature___lttng_ust_libc___realloc@Base 2.7.0
+ __tracepoint_lttng_ust_libc___calloc@Base 2.7.0
+ __tracepoint_lttng_ust_libc___free@Base 2.7.0
+ __tracepoint_lttng_ust_libc___malloc@Base 2.7.0
+ __tracepoint_lttng_ust_libc___memalign@Base 2.7.0
+ __tracepoint_lttng_ust_libc___posix_memalign@Base 2.7.0
+ __tracepoint_lttng_ust_libc___realloc@Base 2.7.0
+ __tracepoint_provider_lttng_ust_libc@Base 2.7.0
  calloc@Base 2.5.0
  free@Base 2.5.0
  lttng_ust_malloc_wrapper_init@Base 2.5.0
@@ -60,19 +59,19 @@ liblttng-ust-libc-wrapper.so.0 liblttng-ust0 #MINVER#
  posix_memalign@Base 2.5.0
  realloc@Base 2.5.0
 liblttng-ust-pthread-wrapper.so.0 liblttng-ust0 #MINVER#
- __event_desc___ust_pthread_pthread_mutex_lock_acq@Base 2.5.0
- __event_desc___ust_pthread_pthread_mutex_lock_req@Base 2.5.0
- __event_desc___ust_pthread_pthread_mutex_trylock@Base 2.5.0
- __event_desc___ust_pthread_pthread_mutex_unlock@Base 2.5.0
- __tp_event_signature___ust_pthread___pthread_mutex_lock_acq@Base 2.5.0
- __tp_event_signature___ust_pthread___pthread_mutex_lock_req@Base 2.5.0
- __tp_event_signature___ust_pthread___pthread_mutex_trylock@Base 2.5.0
- __tp_event_signature___ust_pthread___pthread_mutex_unlock@Base 2.5.0
- __tracepoint_provider_ust_pthread@Base 2.5.0
- __tracepoint_ust_pthread___pthread_mutex_lock_acq@Base 2.5.0
- __tracepoint_ust_pthread___pthread_mutex_lock_req@Base 2.5.0
- __tracepoint_ust_pthread___pthread_mutex_trylock@Base 2.5.0
- __tracepoint_ust_pthread___pthread_mutex_unlock@Base 2.5.0
+ __event_desc___lttng_ust_pthread_pthread_mutex_lock_acq@Base 2.7.0
+ __event_desc___lttng_ust_pthread_pthread_mutex_lock_req@Base 2.7.0
+ __event_desc___lttng_ust_pthread_pthread_mutex_trylock@Base 2.7.0
+ __event_desc___lttng_ust_pthread_pthread_mutex_unlock@Base 2.7.0
+ __tp_event_signature___lttng_ust_pthread___pthread_mutex_lock_acq@Base 2.7.0
+ __tp_event_signature___lttng_ust_pthread___pthread_mutex_lock_req@Base 2.7.0
+ __tp_event_signature___lttng_ust_pthread___pthread_mutex_trylock@Base 2.7.0
+ __tp_event_signature___lttng_ust_pthread___pthread_mutex_unlock@Base 2.7.0
+ __tracepoint_lttng_ust_pthread___pthread_mutex_lock_acq@Base 2.7.0
+ __tracepoint_lttng_ust_pthread___pthread_mutex_lock_req@Base 2.7.0
+ __tracepoint_lttng_ust_pthread___pthread_mutex_trylock@Base 2.7.0
+ __tracepoint_lttng_ust_pthread___pthread_mutex_unlock@Base 2.7.0
+ __tracepoint_provider_lttng_ust_pthread@Base 2.7.0
  pthread_mutex_lock@Base 2.5.0
  pthread_mutex_trylock@Base 2.5.0
  pthread_mutex_unlock@Base 2.5.0
@@ -103,21 +102,74 @@ liblttng-ust-tracepoint.so.0 liblttng-ust0 #MINVER#
  ust_safe_vfprintf@Base 2.5.0
  ust_safe_vsnprintf@Base 2.5.0
 liblttng-ust.so.0 liblttng-ust0 #MINVER#
+ __event_desc___lttng_ust_statedump_end@Base 2.7.0
+ __event_desc___lttng_ust_statedump_soinfo@Base 2.7.0
+ __event_desc___lttng_ust_statedump_start@Base 2.7.0
  __event_desc___lttng_ust_tracef_event@Base 2.5.0
- __event_desc___ust_baddr_statedump_soinfo@Base 2.5.0
+ __event_desc___lttng_ust_tracelog_TRACE_ALERT@Base 2.7.0
+ __event_desc___lttng_ust_tracelog_TRACE_CRIT@Base 2.7.0
+ __event_desc___lttng_ust_tracelog_TRACE_DEBUG@Base 2.7.0
+ __event_desc___lttng_ust_tracelog_TRACE_DEBUG_FUNCTION@Base 2.7.0
+ __event_desc___lttng_ust_tracelog_TRACE_DEBUG_LINE@Base 2.7.0
+ __event_desc___lttng_ust_tracelog_TRACE_DEBUG_MODULE@Base 2.7.0
+ __event_desc___lttng_ust_tracelog_TRACE_DEBUG_PROCESS@Base 2.7.0
+ __event_desc___lttng_ust_tracelog_TRACE_DEBUG_PROGRAM@Base 2.7.0
+ __event_desc___lttng_ust_tracelog_TRACE_DEBUG_SYSTEM@Base 2.7.0
+ __event_desc___lttng_ust_tracelog_TRACE_DEBUG_UNIT@Base 2.7.0
+ __event_desc___lttng_ust_tracelog_TRACE_EMERG@Base 2.7.0
+ __event_desc___lttng_ust_tracelog_TRACE_ERR@Base 2.7.0
+ __event_desc___lttng_ust_tracelog_TRACE_INFO@Base 2.7.0
+ __event_desc___lttng_ust_tracelog_TRACE_NOTICE@Base 2.7.0
+ __event_desc___lttng_ust_tracelog_TRACE_WARNING@Base 2.7.0
  __num_possible_cpus@Base 2.5.0
  __sflush@Base 2.5.0
  __sfvwrite@Base 2.5.0
  __swsetup@Base 2.5.0
+ __tp_event_signature___lttng_ust_statedump___end@Base 2.7.0
+ __tp_event_signature___lttng_ust_statedump___soinfo@Base 2.7.0
+ __tp_event_signature___lttng_ust_statedump___start@Base 2.7.0
  __tp_event_signature___lttng_ust_tracef___event@Base 2.5.0
- __tp_event_signature___ust_baddr_statedump___soinfo@Base 2.5.0
+ __tp_event_signature___lttng_ust_tracelog___tlclass@Base 2.7.0
+ __tracepoint_lttng_ust_statedump___end@Base 2.7.0
+ __tracepoint_lttng_ust_statedump___soinfo@Base 2.7.0
+ __tracepoint_lttng_ust_statedump___start@Base 2.7.0
  __tracepoint_lttng_ust_tracef___event@Base 2.5.0
+ __tracepoint_lttng_ust_tracelog___TRACE_ALERT@Base 2.7.0
+ __tracepoint_lttng_ust_tracelog___TRACE_CRIT@Base 2.7.0
+ __tracepoint_lttng_ust_tracelog___TRACE_DEBUG@Base 2.7.0
+ __tracepoint_lttng_ust_tracelog___TRACE_DEBUG_FUNCTION@Base 2.7.0
+ __tracepoint_lttng_ust_tracelog___TRACE_DEBUG_LINE@Base 2.7.0
+ __tracepoint_lttng_ust_tracelog___TRACE_DEBUG_MODULE@Base 2.7.0
+ __tracepoint_lttng_ust_tracelog___TRACE_DEBUG_PROCESS@Base 2.7.0
+ __tracepoint_lttng_ust_tracelog___TRACE_DEBUG_PROGRAM@Base 2.7.0
+ __tracepoint_lttng_ust_tracelog___TRACE_DEBUG_SYSTEM@Base 2.7.0
+ __tracepoint_lttng_ust_tracelog___TRACE_DEBUG_UNIT@Base 2.7.0
+ __tracepoint_lttng_ust_tracelog___TRACE_EMERG@Base 2.7.0
+ __tracepoint_lttng_ust_tracelog___TRACE_ERR@Base 2.7.0
+ __tracepoint_lttng_ust_tracelog___TRACE_INFO@Base 2.7.0
+ __tracepoint_lttng_ust_tracelog___TRACE_NOTICE@Base 2.7.0
+ __tracepoint_lttng_ust_tracelog___TRACE_WARNING@Base 2.7.0
+ __tracepoint_provider_lttng_ust_statedump@Base 2.7.0
  __tracepoint_provider_lttng_ust_tracef@Base 2.5.0
- __tracepoint_provider_ust_baddr_statedump@Base 2.5.0
- __tracepoint_ust_baddr_statedump___soinfo@Base 2.5.0
+ __tracepoint_provider_lttng_ust_tracelog@Base 2.7.0
  _get_num_possible_cpus@Base 2.5.0
  _lttng_get_sessions@Base 2.5.0
  _lttng_ust_tracef@Base 2.5.0
+ _lttng_ust_tracelog_TRACE_ALERT@Base 2.7.0
+ _lttng_ust_tracelog_TRACE_CRIT@Base 2.7.0
+ _lttng_ust_tracelog_TRACE_DEBUG@Base 2.7.0
+ _lttng_ust_tracelog_TRACE_DEBUG_FUNCTION@Base 2.7.0
+ _lttng_ust_tracelog_TRACE_DEBUG_LINE@Base 2.7.0
+ _lttng_ust_tracelog_TRACE_DEBUG_MODULE@Base 2.7.0
+ _lttng_ust_tracelog_TRACE_DEBUG_PROCESS@Base 2.7.0
+ _lttng_ust_tracelog_TRACE_DEBUG_PROGRAM@Base 2.7.0
+ _lttng_ust_tracelog_TRACE_DEBUG_SYSTEM@Base 2.7.0
+ _lttng_ust_tracelog_TRACE_DEBUG_UNIT@Base 2.7.0
+ _lttng_ust_tracelog_TRACE_EMERG@Base 2.7.0
+ _lttng_ust_tracelog_TRACE_ERR@Base 2.7.0
+ _lttng_ust_tracelog_TRACE_INFO@Base 2.7.0
+ _lttng_ust_tracelog_TRACE_NOTICE@Base 2.7.0
+ _lttng_ust_tracelog_TRACE_WARNING@Base 2.7.0
  align_shm@Base 2.5.0
  channel_backend_free@Base 2.5.0
  channel_backend_init@Base 2.5.0
@@ -129,6 +181,7 @@ liblttng-ust.so.0 liblttng-ust0 #MINVER#
  channel_handle_create@Base 2.5.0
  channel_handle_get_nr_streams@Base 2.5.0
  channel_reset@Base 2.5.0
+ do_lttng_ust_statedump@Base 2.7.0
  global_apps@Base 2.5.0
  init_usterr@Base 2.5.0
  lib_ring_buffer_backend_create@Base 2.5.0
@@ -154,6 +207,7 @@ liblttng-ust.so.0 liblttng-ust0 #MINVER#
  ltt_probe_unregister@Base 2.5.0
  lttng_abi_create_root_handle@Base 2.5.0
  lttng_abi_map_channel@Base 2.5.0
+ lttng_add_cpu_id_to_ctx@Base 2.7.0
  lttng_add_ip_to_ctx@Base 2.5.0
  (arch=i386 amd64)lttng_add_perf_counter_to_ctx@Base 2.5.0
  lttng_add_procname_to_ctx@Base 2.5.0
@@ -175,6 +229,7 @@ liblttng-ust.so.0 liblttng-ust0 #MINVER#
  lttng_context_update@Base 2.6.0
  lttng_context_vpid_reset@Base 2.5.0
  lttng_context_vtid_reset@Base 2.5.0
+ lttng_crash_magic_xor@Base 2.7.0
  lttng_destroy_context@Base 2.5.0
  lttng_enabler_attach_bytecode@Base 2.5.0
  lttng_enabler_attach_context@Base 2.5.0
@@ -197,6 +252,7 @@ liblttng-ust.so.0 liblttng-ust0 #MINVER#
  lttng_free_enabler_filter_bytecode@Base 2.5.0
  lttng_free_event_filter_runtime@Base 2.5.0
  lttng_get_context_index@Base 2.5.0
+ lttng_get_cpu@Base 2.7.0
  lttng_get_notify_socket@Base 2.5.0
  lttng_get_probe_list_head@Base 2.5.0
  lttng_handle_pending_statedump@Base 2.5.0
@@ -225,23 +281,32 @@ liblttng-ust.so.0 liblttng-ust0 #MINVER#
  lttng_session_disable@Base 2.5.0
  lttng_session_enable@Base 2.5.0
  lttng_static_ctx@Base 2.5.0
+ lttng_trace_clock@Base 2.7.0
  lttng_transport_find@Base 2.5.0
  lttng_transport_register@Base 2.5.0
  lttng_transport_unregister@Base 2.5.0
  lttng_ust_abi_exit@Base 2.5.0
- lttng_ust_baddr_statedump@Base 2.5.0
- lttng_ust_baddr_statedump_destroy@Base 2.5.0
- lttng_ust_baddr_statedump_init@Base 2.5.0
+ lttng_ust_clock_init@Base 2.7.0
+ lttng_ust_enable_trace_clock_override@Base 2.7.0
  lttng_ust_events_exit@Base 2.5.0
  lttng_ust_exit@Base 2.5.0
  lttng_ust_field_list_get_iter_next@Base 2.5.0
+ lttng_ust_getcpu_init@Base 2.7.0
+ lttng_ust_getcpu_override@Base 2.7.0
  lttng_ust_init@Base 2.5.0
  lttng_ust_malloc_wrapper_init@Base 2.5.0
  lttng_ust_obj_get_name@Base 2.5.0
  lttng_ust_objd_table_owner_cleanup@Base 2.5.0
  lttng_ust_objd_unref@Base 2.5.0
  lttng_ust_sockinfo_session_enabled@Base 2.5.0
+ lttng_ust_statedump_destroy@Base 2.7.0
+ lttng_ust_statedump_init@Base 2.7.0
  lttng_ust_strerror@Base 2.5.0
+ lttng_ust_trace_clock_set_description_cb@Base 2.7.0
+ lttng_ust_trace_clock_set_freq_cb@Base 2.7.0
+ lttng_ust_trace_clock_set_name_cb@Base 2.7.0
+ lttng_ust_trace_clock_set_read64_cb@Base 2.7.0
+ lttng_ust_trace_clock_set_uuid_cb@Base 2.7.0
  lttng_ust_tracepoint_list_get_iter_next@Base 2.5.0
  objd_ops@Base 2.5.0
  patient_send@Base 2.5.0
