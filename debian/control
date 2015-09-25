@@ -12,7 +12,7 @@ Homepage: http://lttng.org/
 X-Python3-Version: >= 3.0
 
 Package: liblttng-ust0
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends}, ${misc:Depends},
@@ -29,7 +29,7 @@ Description: LTTng 2.0 Userspace Tracer (tracing libraries)
  to the instrumented programs.
 
 Package: liblttng-ust-ctl2
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends}, ${misc:Depends}
@@ -46,7 +46,7 @@ Description: LTTng 2.0 Userspace Tracer (trace control library)
 
 Package: liblttng-ust-dev
 Section: libdevel
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Depends: ${misc:Depends},
   liblttng-ust0 (= ${binary:Version}), liblttng-ust-ctl2 (= ${binary:Version}),
@@ -82,7 +82,7 @@ Description: LTTng 2.0 Userspace Tracer (Java support library)
 
 Package: liblttng-ust-java-jni
 Section: java
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends}, ${misc:Depends}
@@ -113,7 +113,7 @@ Description: LTTng 2.0 Userspace Tracer (Java agent library)
 
 Package: liblttng-ust-agent-java-jni
 Section: java
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends}, ${misc:Depends}
@@ -127,7 +127,7 @@ Description: LTTng 2.0 Userspace Tracer (Java agent JNI interface)
  This package contains the native side of the Java agent for lttng-ust.
 
 Package: liblttng-ust-python-agent0
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends}, ${misc:Depends},
