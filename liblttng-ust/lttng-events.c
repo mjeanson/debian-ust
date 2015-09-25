@@ -54,7 +54,7 @@
 #include "tracepoint-internal.h"
 #include "lttng-tracer.h"
 #include "lttng-tracer-core.h"
-#include "lttng-ust-baddr.h"
+#include "lttng-ust-statedump.h"
 #include "wait.h"
 #include "../libringbuffer/shm.h"
 #include "jhash.h"
@@ -683,7 +683,7 @@ void lttng_handle_pending_statedump(void *owner)
 	struct lttng_session *session;
 
 	/* Execute state dump */
-	lttng_ust_baddr_statedump(owner);
+	do_lttng_ust_statedump(owner);
 
 	/* Clear pending state dump */
 	if (ust_lock()) {
@@ -746,16 +746,7 @@ struct lttng_enabler *lttng_enabler_create(enum lttng_enabler_type type,
 		sizeof(enabler->event_param));
 	enabler->chan = chan;
 	/* ctx left NULL */
-	/*
-	 * The "disable" event create comm field has been added to fix a
-	 * race between event creation (of a started trace) and enabling
-	 * filtering. New session daemon always set the "disable" field
-	 * to 1, and are aware that they need to explicitly enable the
-	 * event. Older session daemon (within same ABI) leave it at 0,
-	 * and therefore we need to enable it here, keeping the original
-	 * racy behavior.
-	 */
-	enabler->enabled = !event_param->disabled;
+	enabler->enabled = 0;
 	cds_list_add(&enabler->node, &enabler->chan->session->enablers_head);
 	lttng_session_lazy_sync_enablers(enabler->chan->session);
 	return enabler;
@@ -826,6 +817,8 @@ int lttng_attach_context(struct lttng_ust_context *context_param,
 		return lttng_add_procname_to_ctx(ctx);
 	case LTTNG_UST_CONTEXT_IP:
 		return lttng_add_ip_to_ctx(ctx);
+	case LTTNG_UST_CONTEXT_CPU_ID:
+		return lttng_add_cpu_id_to_ctx(ctx);
 	default:
 		return -EINVAL;
 	}

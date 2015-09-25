@@ -48,6 +48,41 @@ whereas tracepoint.h is meant for thorough instrumentation of a code
 base to be integrated with an upstream project.
 .PP
 
+.SH "USAGE WITH TRACELOG"
+.PP
+If you want to migrate existing logging (info, errors, ...)
+to LTTng UST, you can use the tracelog() interface.
+To do it, in a nutshell:
+
+1) #include <lttng/tracelog.h>
+
+2) /* in your code, use like a printf, with extra loglevel info. */
+   tracelog(TRACE_INFO, "Message with integer %d", 1234);
+
+3) Link your program against liblttng-ust.so.
+
+4) Enable UST events when tracing with the following sequence of commands
+   from lttng-tools:
+
+   lttng create
+   lttng enable-event -u "lttng_ust_tracelog:*"
+   lttng start
+   [... run your program ...]
+   lttng stop
+   lttng view
+
+That's it!
+
+You can replace the enable-event line above with a selection of
+loglevels, e.g.:
+
+   lttng enable-event -u -a --loglevel TRACE_INFO
+
+Which will gather all events from TRACE_INFO and more important
+loglevels.
+
+.PP
+
 .SH "USAGE WITH TRACEPOINT"
 .PP
 The simple way to generate the lttng-ust tracepoint probes is to use the
@@ -290,6 +325,33 @@ Even though LTTng-UST supports tracepoint() call site duplicates having
 the same provider and event name, it is recommended to use a
 provider event name pair only once within the source code to help
 map events back to their call sites when analyzing the trace.
+
+Sometimes arguments to the probe are expensive to compute (e.g.
+take call stack). To avoid the computation when the tracepoint is
+disabled one can use more 'low level' tracepoint_enabled() and
+do_tracepoint() macros as following:
+
+	if (tracepoint_enabled(ust_tests_hello, tptest)) {
+		/* prepare arguments */
+		do_tracepoint(ust_tests_hello, tptest, i, netint, values,
+			text, strlen(text), dbl, flt);
+	}
+
+Here do_tracepoint() doesn't contain check if the tracepoint is enabled.
+Using tracepoint() in such scenario is dangerous since it also contains
+enabled check and thus race condition is possible in the following code
+if the tracepoint has been enabled after check in tracepoint_enabled()
+but before tracepoint():
+
+	if (tracepoint_enabled(provider, name)) { /* tracepoint is disabled */
+		prepare(args);
+	}
+	/* tracepoint is enabled by 'lttng' tool */
+	tracepoint(provider, name, args); /* args wasn't prepared properly */
+
+Note also that neither tracepoint_enabled() nor do_tracepoint() have
+STAP_PROBEV() call so if you need it you should emit this call yourself.
+
 .fi
 
 .SH "BUILDING/LINKING THE TRACEPOINT PROVIDER"
@@ -420,7 +482,7 @@ line number lookup are traced by LTTng.
 
 .PP
 .IP "LTTNG_UST_DEBUG"
-Activate liblttng-ust debug output.
+Activate liblttng-ust debug and error output.
 .PP
 .IP "LTTNG_UST_REGISTER_TIMEOUT"
 The environment variable "LTTNG_UST_REGISTER_TIMEOUT" can be used to
@@ -434,6 +496,18 @@ startup time.
 .PP
 .IP "LTTNG_UST_WITHOUT_BADDR_STATEDUMP"
 Prevent liblttng-ust to perform a base-address statedump on session-enable.
+.PP
+.IP "LTTNG_UST_GETCPU_PLUGIN"
+Used by the getcpu override plugin system. The environment variable
+provides the path to the shared object which will act as the getcpu override
+plugin. An example can be found in the lttng-ust documentation under
+examples/getcpu-override .
+.PP
+.IP "LTTNG_UST_CLOCK_PLUGIN"
+Used by the clock override plugin system. The environment variable
+provides the path to the shared object wich will act as the clock override
+plugin. An example can be found in the lttng-ust documentation under
+doc/examples/clock-override .
 .PP
 
 .SH "SEE ALSO"

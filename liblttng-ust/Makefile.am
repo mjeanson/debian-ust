@@ -26,6 +26,7 @@ liblttng_ust_runtime_la_SOURCES = \
 	lttng-context-pthread-id.c \
 	lttng-context-procname.c \
 	lttng-context-ip.c \
+	lttng-context-cpu-id.c \
 	lttng-context.c \
 	lttng-events.c \
 	lttng-filter.c \
@@ -35,9 +36,9 @@ liblttng_ust_runtime_la_SOURCES = \
 	lttng-filter-interpreter.c \
 	filter-bytecode.h \
 	lttng-hash-helper.h \
-	lttng-ust-baddr.c \
-	lttng-ust-baddr.h \
-	ust_baddr_statedump.h \
+	lttng-ust-statedump.c \
+	lttng-ust-statedump.h \
+	lttng-ust-statedump-provider.h \
 	tracepoint-internal.h \
 	clock.h \
 	compat.h \
@@ -47,6 +48,8 @@ liblttng_ust_runtime_la_SOURCES = \
 	error.h \
 	tracef.c \
 	lttng-ust-tracef-provider.h \
+	tracelog.c \
+	lttng-ust-tracelog-provider.h \
 	getenv.h
 
 if HAVE_PERF_EVENT
@@ -65,7 +68,8 @@ liblttng_ust_support_la_SOURCES = \
 	lttng-ring-buffer-client-overwrite.c \
 	lttng-ring-buffer-client-overwrite-rt.c \
 	lttng-ring-buffer-metadata-client.h \
-	lttng-ring-buffer-metadata-client.c
+	lttng-ring-buffer-metadata-client.c \
+	lttng-clock.c lttng-getcpu.c
 
 liblttng_ust_la_SOURCES =
 

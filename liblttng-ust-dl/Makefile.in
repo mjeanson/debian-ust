@@ -142,8 +142,8 @@ am__DEPENDENCIES_1 =
 liblttng_ust_dl_la_DEPENDENCIES =  \
 	$(top_builddir)/liblttng-ust/liblttng-ust.la \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
-am_liblttng_ust_dl_la_OBJECTS = liblttng_ust_dl_la-ustdl.lo \
-	liblttng_ust_dl_la-ust_baddr.lo
+am_liblttng_ust_dl_la_OBJECTS = liblttng_ust_dl_la-lttng-ust-dl.lo \
+	liblttng_ust_dl_la-ust_dl.lo
 liblttng_ust_dl_la_OBJECTS = $(am_liblttng_ust_dl_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -222,6 +222,7 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
+BUILD_GEN_TP_EXAMPLES = @BUILD_GEN_TP_EXAMPLES@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
 CFLAGS = @CFLAGS@
@@ -367,9 +368,9 @@ AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_builddir)/include
 AM_CFLAGS = -fno-strict-aliasing
 lib_LTLIBRARIES = liblttng-ust-dl.la
 liblttng_ust_dl_la_SOURCES = \
-	ustdl.c \
-	ust_baddr.c \
-	ust_baddr.h
+	lttng-ust-dl.c \
+	ust_dl.c \
+	ust_dl.h
 
 liblttng_ust_dl_la_LIBADD =  \
 	$(top_builddir)/liblttng-ust/liblttng-ust.la $(am__append_1) \
@@ -454,8 +455,8 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/liblttng_ust_dl_la-ust_baddr.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/liblttng_ust_dl_la-ustdl.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/liblttng_ust_dl_la-lttng-ust-dl.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/liblttng_ust_dl_la-ust_dl.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -478,19 +479,19 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LTCOMPILE) -c -o $@ $<
 
-liblttng_ust_dl_la-ustdl.lo: ustdl.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(liblttng_ust_dl_la_CFLAGS) $(CFLAGS) -MT liblttng_ust_dl_la-ustdl.lo -MD -MP -MF $(DEPDIR)/liblttng_ust_dl_la-ustdl.Tpo -c -o liblttng_ust_dl_la-ustdl.lo `test -f 'ustdl.c' || echo '$(srcdir)/'`ustdl.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/liblttng_ust_dl_la-ustdl.Tpo $(DEPDIR)/liblttng_ust_dl_la-ustdl.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='ustdl.c' object='liblttng_ust_dl_la-ustdl.lo' libtool=yes @AMDEPBACKSLASH@
+liblttng_ust_dl_la-lttng-ust-dl.lo: lttng-ust-dl.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(liblttng_ust_dl_la_CFLAGS) $(CFLAGS) -MT liblttng_ust_dl_la-lttng-ust-dl.lo -MD -MP -MF $(DEPDIR)/liblttng_ust_dl_la-lttng-ust-dl.Tpo -c -o liblttng_ust_dl_la-lttng-ust-dl.lo `test -f 'lttng-ust-dl.c' || echo '$(srcdir)/'`lttng-ust-dl.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/liblttng_ust_dl_la-lttng-ust-dl.Tpo $(DEPDIR)/liblttng_ust_dl_la-lttng-ust-dl.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='lttng-ust-dl.c' object='liblttng_ust_dl_la-lttng-ust-dl.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(liblttng_ust_dl_la_CFLAGS) $(CFLAGS) -c -o liblttng_ust_dl_la-ustdl.lo `test -f 'ustdl.c' || echo '$(srcdir)/'`ustdl.c
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(liblttng_ust_dl_la_CFLAGS) $(CFLAGS) -c -o liblttng_ust_dl_la-lttng-ust-dl.lo `test -f 'lttng-ust-dl.c' || echo '$(srcdir)/'`lttng-ust-dl.c
 
-liblttng_ust_dl_la-ust_baddr.lo: ust_baddr.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(liblttng_ust_dl_la_CFLAGS) $(CFLAGS) -MT liblttng_ust_dl_la-ust_baddr.lo -MD -MP -MF $(DEPDIR)/liblttng_ust_dl_la-ust_baddr.Tpo -c -o liblttng_ust_dl_la-ust_baddr.lo `test -f 'ust_baddr.c' || echo '$(srcdir)/'`ust_baddr.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/liblttng_ust_dl_la-ust_baddr.Tpo $(DEPDIR)/liblttng_ust_dl_la-ust_baddr.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='ust_baddr.c' object='liblttng_ust_dl_la-ust_baddr.lo' libtool=yes @AMDEPBACKSLASH@
+liblttng_ust_dl_la-ust_dl.lo: ust_dl.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(liblttng_ust_dl_la_CFLAGS) $(CFLAGS) -MT liblttng_ust_dl_la-ust_dl.lo -MD -MP -MF $(DEPDIR)/liblttng_ust_dl_la-ust_dl.Tpo -c -o liblttng_ust_dl_la-ust_dl.lo `test -f 'ust_dl.c' || echo '$(srcdir)/'`ust_dl.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/liblttng_ust_dl_la-ust_dl.Tpo $(DEPDIR)/liblttng_ust_dl_la-ust_dl.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='ust_dl.c' object='liblttng_ust_dl_la-ust_dl.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(liblttng_ust_dl_la_CFLAGS) $(CFLAGS) -c -o liblttng_ust_dl_la-ust_baddr.lo `test -f 'ust_baddr.c' || echo '$(srcdir)/'`ust_baddr.c
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(liblttng_ust_dl_la_CFLAGS) $(CFLAGS) -c -o liblttng_ust_dl_la-ust_dl.lo `test -f 'ust_dl.c' || echo '$(srcdir)/'`ust_dl.c
 
 mostlyclean-libtool:
 	-rm -f *.lo

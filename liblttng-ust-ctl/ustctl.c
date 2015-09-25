@@ -32,6 +32,7 @@
 #include "../libringbuffer/frontend.h"
 #include "../liblttng-ust/wait.h"
 #include "../liblttng-ust/lttng-rb-clients.h"
+#include "../liblttng-ust/clock.h"
 
 /*
  * Number of milliseconds to retry before failing metadata writes on
@@ -200,7 +201,6 @@ int ustctl_create_event(int sock, struct lttng_ust_event *ev,
 	lum.u.event.instrumentation = ev->instrumentation;
 	lum.u.event.loglevel_type = ev->loglevel_type;
 	lum.u.event.loglevel = ev->loglevel;
-	lum.u.event.disabled = ev->disabled;
 	ret = ustcomm_send_app_cmd(sock, &lum, &lur);
 	if (ret) {
 		free(event_data);
@@ -943,8 +943,14 @@ error:
 
 /* Buffer operations */
 
+int ustctl_get_nr_stream_per_channel(void)
+{
+	return num_possible_cpus();
+}
+
 struct ustctl_consumer_channel *
-	ustctl_create_channel(struct ustctl_consumer_channel_attr *attr)
+	ustctl_create_channel(struct ustctl_consumer_channel_attr *attr,
+		const int *stream_fds, int nr_stream_fds)
 {
 	struct ustctl_consumer_channel *chan;
 	const char *transport_name;
@@ -996,7 +1002,8 @@ struct ustctl_consumer_channel *
 			attr->subbuf_size, attr->num_subbuf,
 			attr->switch_timer_interval,
 			attr->read_timer_interval,
-			attr->uuid, attr->chan_id);
+			attr->uuid, attr->chan_id,
+			stream_fds, nr_stream_fds);
 	if (!chan->chan) {
 		goto chan_error;
 	}
@@ -1334,6 +1341,8 @@ int ustctl_get_mmap_read_offset(struct ustctl_consumer_stream *stream,
 	unsigned long sb_bindex;
 	struct lttng_ust_lib_ring_buffer *buf;
 	struct ustctl_consumer_channel *consumer_chan;
+	struct lttng_ust_lib_ring_buffer_backend_pages_shmp *barray_idx;
+	struct lttng_ust_lib_ring_buffer_backend_pages *pages;
 
 	if (!stream)
 		return -EINVAL;
@@ -1344,8 +1353,14 @@ int ustctl_get_mmap_read_offset(struct ustctl_consumer_stream *stream,
 		return -EINVAL;
 	sb_bindex = subbuffer_id_get_index(&chan->backend.config,
 					buf->backend.buf_rsb.id);
-	*off = shmp(consumer_chan->chan->handle,
-		shmp_index(consumer_chan->chan->handle, buf->backend.array, sb_bindex)->shmp)->mmap_offset;
+	barray_idx = shmp_index(consumer_chan->chan->handle, buf->backend.array,
+			sb_bindex);
+	if (!barray_idx)
+		return -EINVAL;
+	pages = shmp(consumer_chan->chan->handle, barray_idx->shmp);
+	if (!pages)
+		return -EINVAL;
+	*off = pages->mmap_offset;
 	return 0;
 }
 
@@ -1511,6 +1526,8 @@ struct lttng_ust_client_lib_ring_buffer_client_cb *get_client_cb(
 	struct lttng_ust_client_lib_ring_buffer_client_cb *client_cb;
 
 	chan = shmp(handle, buf->backend.chan);
+	if (!chan)
+		return NULL;
 	config = &chan->backend.config;
 	if (!config->cb_ptr)
 		return NULL;
@@ -1997,6 +2014,7 @@ static __attribute__((constructor))
 void ustctl_init(void)
 {
 	init_usterr();
+	lttng_ust_clock_init();
 	lttng_ring_buffer_metadata_client_init();
 	lttng_ring_buffer_client_overwrite_init();
 	lttng_ring_buffer_client_overwrite_rt_init();

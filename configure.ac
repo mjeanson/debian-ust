@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([lttng-ust],[2.6.3],[mathieu dot desnoyers at efficios dot com])
+AC_INIT([lttng-ust],[2.7.0],[mathieu dot desnoyers at efficios dot com])
 
 # Following the numbering scheme proposed by libtool for the library version
 # http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
@@ -41,11 +41,12 @@ AC_DEFINE_UNQUOTED([VERSION_MAJOR], $major_version, [UST major version number])
 AC_DEFINE_UNQUOTED([VERSION_MINOR], $minor_version, [UST minor version number])
 AC_DEFINE_UNQUOTED([VERSION_PATCHLEVEL], $patchlevel_version, [UST patchlevel version number])
 
-version_name="Gaia"
-version_description="From Benelux brewery in Montreal, the Gaia is a witbier with a cloudy light amber ale color. Aroma of coriander with floral hay notes is enchanting. Taste is also dominated by the very floral coriander note and some medium sweet malt notes."
+version_name="Herbe à Détourne"
+version_description='Brewed with unrestrained amounts of Citra hop, the Herbe à Détourne is a fantastic New World Tripel brewed by "Dieu du Ciel!". Aromas of mango, cantaloupe melon and passion fruit, combined with a controlled bitter finish, unite in making this smooth golden-orange beer stand apart.'
+version_description_c=$(echo $version_description | sed 's/"/\\"/g')
 
 AC_DEFINE_UNQUOTED([VERSION_NAME], ["$version_name"], [UST version name])
-AC_DEFINE_UNQUOTED([VERSION_DESCRIPTION], ["$version_description"], [UST version description])
+AC_DEFINE_UNQUOTED([VERSION_DESCRIPTION], ["$version_description_c"], [UST version description])
 
 AC_PROG_GREP
 AC_PROG_LN_S
@@ -241,7 +242,10 @@ changequote([,])dnl
 	aarch64) NO_UNALIGNED_ACCESS=1 ;;
 	mips*) NO_UNALIGNED_ACCESS=1 ;;
 	tile*) NO_UNALIGNED_ACCESS=1 ;;
-	*) AC_MSG_ERROR([unable to detect alignment requirements (unsupported architecture ($host_cpu)?)]) ;;
+	*)
+		UNSUPPORTED_ARCH=1
+		NO_UNALIGNED_ACCESS=1
+		;;
 esac
 AC_MSG_RESULT([$host_cpu])
 
@@ -308,6 +312,17 @@ if test "x$java_agent_log4j" = "xyes"; then
   fi
 fi
 
+# Option to build the python agent
+AC_ARG_ENABLE([python-agent],
+	[AS_HELP_STRING([--enable-python-agent],[build the LTTng UST Python agent [default=no]])],
+    [python_agent=$enableval],
+	[:]
+)
+AM_CONDITIONAL([BUILD_PYTHON_AGENT], [test "x$python_agent" = "xyes"])
+if test "x$python_agent" = "xyes"; then
+	AM_PATH_PYTHON([2.7])
+fi
+
 # sdt.h integration
 AC_ARG_WITH([sdt],
 	[AS_HELP_STRING([--with-sdt],[provide SystemTap integration via sdt.h [default=no]])],
@@ -351,7 +366,7 @@ AC_ARG_WITH([lttng-system-rundir],
 AC_DEFINE_UNQUOTED([LTTNG_SYSTEM_RUNDIR], ["$lttng_system_rundir"],
 	[LTTng system runtime directory])
 
-AM_PATH_PYTHON([2.7],BUILD_GEN_TP_EXAMPLES=1,[:])
+AC_CHECK_PROG([BUILD_GEN_TP_EXAMPLES],[python],["yes"])
 AM_CONDITIONAL([BUILD_GEN_TP_EXAMPLES], [test $BUILD_GEN_TP_EXAMPLES], [Build examples requiring lttng-gen-tp])
 
 AC_CONFIG_FILES([
@@ -375,6 +390,9 @@ AC_CONFIG_FILES([
 	liblttng-ust-java-agent/jni/log4j/Makefile
 	liblttng-ust-libc-wrapper/Makefile
 	liblttng-ust-cyg-profile/Makefile
+	liblttng-ust-python-agent/Makefile
+	liblttng-ust-python-agent/setup.py
+	liblttng-ust-python-agent/lttngust/__init__.py
 	tools/Makefile
 	tests/Makefile
 	tests/hello/Makefile
@@ -384,6 +402,14 @@ AC_CONFIG_FILES([
 	tests/benchmark/Makefile
 	tests/utils/Makefile
 	lttng-ust.pc
+])
+
+# Create link for python agent for the VPATH guru.
+AC_CONFIG_LINKS([
+	liblttng-ust-python-agent/lttngust/agent.py:liblttng-ust-python-agent/lttngust/agent.py
+	liblttng-ust-python-agent/lttngust/cmd.py:liblttng-ust-python-agent/lttngust/cmd.py
+	liblttng-ust-python-agent/lttngust/debug.py:liblttng-ust-python-agent/lttngust/debug.py
+	liblttng-ust-python-agent/lttngust/loghandler.py:liblttng-ust-python-agent/lttngust/loghandler.py
 ])
 
 AC_OUTPUT
@@ -407,9 +433,17 @@ AS_IF([test "x$java_agent_log4j" = "xyes"], [AS_ECHO("Enabled")], [AS_ECHO("Disa
 AS_ECHO_N("JNI interface (JNI): ")
 AS_IF([test "x$jni_interface" = "xyes"], [AS_ECHO("Enabled")], [AS_ECHO("Disabled")])
 
-AS_ECHO_N("sdt.h integration:  ")
+AS_ECHO_N("Python ($PYTHON) agent: ")
+AS_IF([test "x$python_agent" = "xyes"], [AS_ECHO("Enabled")], [AS_ECHO("Disabled")])
+
+AS_ECHO_N("sdt.h integration: ")
 AS_IF([test "x$with_sdt" = "xyes"], [AS_ECHO("Enabled")], [AS_ECHO("Disabled")])
 
+AS_ECHO("Architecture: $host_cpu")
+AS_ECHO_N("Efficient unaligned memory access: ")
+AS_IF([test "x$NO_UNALIGNED_ACCESS" != "x1"], [AS_ECHO("yes")], [AS_IF([test "x$UNSUPPORTED_ARCH" != "x1"], [AS_ECHO("no")], [AS_ECHO("unknown")])])
+AS_IF([test "x$UNSUPPORTED_ARCH" = "x1"], [AC_MSG_WARN([Your architecture ($host_cpu) is unsupported, using safe default of no unaligned access])])
 AS_ECHO()
+
 AS_ECHO("Type 'make' to compile.")
 

@@ -1,8 +1,8 @@
 #undef TRACEPOINT_PROVIDER
-#define TRACEPOINT_PROVIDER ust_baddr
+#define TRACEPOINT_PROVIDER lttng_ust_statedump
 
-#if !defined(_TRACEPOINT_UST_BADDR_H) || defined(TRACEPOINT_HEADER_MULTI_READ)
-#define _TRACEPOINT_UST_BADDR_H
+#if !defined(_TRACEPOINT_LTTNG_UST_STATEDUMP_H) || defined(TRACEPOINT_HEADER_MULTI_READ)
+#define _TRACEPOINT_LTTNG_UST_STATEDUMP_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -10,6 +10,7 @@ extern "C" {
 
 /*
  * Copyright (C) 2013  Paul Woegerer <paul_woegerer@mentor.com>
+ * Copyright (C) 2015  Antoine Busque <abusque@efficios.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -32,13 +33,24 @@ extern "C" {
 
 #include <stdint.h>
 #include <unistd.h>
+#include <lttng/ust-events.h>
 
-#define LTTNG_UST_BADDR_PROVIDER
+#define LTTNG_UST_STATEDUMP_PROVIDER
 #include <lttng/tracepoint.h>
 
-TRACEPOINT_EVENT(ust_baddr, push,
-	TP_ARGS(void *, baddr, const char*, sopath, int64_t, size,
-		int64_t, mtime, void *, ip),
+TRACEPOINT_EVENT(lttng_ust_statedump, start,
+	TP_ARGS(struct lttng_session *, session),
+	TP_FIELDS()
+)
+
+TRACEPOINT_EVENT(lttng_ust_statedump, soinfo,
+	TP_ARGS(
+		struct lttng_session *, session,
+		void *, baddr,
+		const char*, sopath,
+		int64_t, size,
+		int64_t, mtime
+		),
 	TP_FIELDS(
 		ctf_integer_hex(void *, baddr, baddr)
 		ctf_string(sopath, sopath)
@@ -47,17 +59,15 @@ TRACEPOINT_EVENT(ust_baddr, push,
 	)
 )
 
-TRACEPOINT_EVENT(ust_baddr, pop,
-	TP_ARGS(void *, baddr, void *, ip),
-	TP_FIELDS(
-		ctf_integer_hex(void *, baddr, baddr)
-	)
+TRACEPOINT_EVENT(lttng_ust_statedump, end,
+	TP_ARGS(struct lttng_session *, session),
+	TP_FIELDS()
 )
 
-#endif /* _TRACEPOINT_UST_BADDR_H */
+#endif /* _TRACEPOINT_LTTNG_UST_STATEDUMP_H */
 
 #undef TRACEPOINT_INCLUDE
-#define TRACEPOINT_INCLUDE "./ust_baddr.h"
+#define TRACEPOINT_INCLUDE "./lttng-ust-statedump-provider.h"
 
 /* This part must be outside ifdef protection */
 #include <lttng/tracepoint-event.h>

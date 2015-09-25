@@ -26,5 +26,4 @@ interface LogFramework {
 	Iterator<String> listLoggers();
 	Boolean isRoot();
 	void reset();
-	void setEnableRefCountDecrement(boolean enableRefCountDecrement);
 }
