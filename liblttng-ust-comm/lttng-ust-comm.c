@@ -377,6 +377,8 @@ ssize_t ustcomm_send_fds_unix_sock(int sock, int *fds, size_t nb_fd)
 	msg.msg_controllen = CMSG_LEN(sizeof_fds);
 
 	cmptr = CMSG_FIRSTHDR(&msg);
+	if (!cmptr)
+		return -EINVAL;
 	cmptr->cmsg_level = SOL_SOCKET;
 	cmptr->cmsg_type = SCM_RIGHTS;
 	cmptr->cmsg_len = CMSG_LEN(sizeof_fds);
@@ -515,19 +517,27 @@ int ustcomm_recv_app_reply(int sock, struct ustcomm_ust_reply *lur,
 	case 0:	/* orderly shutdown */
 		return -EPIPE;
 	case sizeof(*lur):
+	{
+		int err = 0;
+
 		if (lur->handle != expected_handle) {
 			ERR("Unexpected result message handle: "
 				"expected: %u vs received: %u\n",
 				expected_handle, lur->handle);
-			return -EINVAL;
+			err = 1;
 		}
 		if (lur->cmd != expected_cmd) {
 			ERR("Unexpected result message command "
 				"expected: %u vs received: %u\n",
 				expected_cmd, lur->cmd);
-			return -EINVAL;
+			err = 1;
 		}
-		return lur->ret_code;
+		if (err) {
+			return -EINVAL;
+		} else {
+			return lur->ret_code;
+		}
+	}
 	default:
 		if (len >= 0) {
 			ERR("incorrect message size: %zd\n", len);

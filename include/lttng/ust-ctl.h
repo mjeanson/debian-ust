@@ -21,6 +21,7 @@
 
 #include <lttng/ust-abi.h>
 #include <sys/types.h>
+#include <limits.h>
 
 #ifndef LTTNG_UST_UUID_LEN
 #define LTTNG_UST_UUID_LEN	16
@@ -147,8 +148,11 @@ struct ustctl_consumer_channel;
 struct ustctl_consumer_stream;
 struct ustctl_consumer_channel_attr;
 
+int ustctl_get_nr_stream_per_channel(void);
+
 struct ustctl_consumer_channel *
-	ustctl_create_channel(struct ustctl_consumer_channel_attr *attr);
+	ustctl_create_channel(struct ustctl_consumer_channel_attr *attr,
+		const int *stream_fds, int nr_stream_fds);
 /*
  * Each stream created needs to be destroyed before calling
  * ustctl_destroy_channel().

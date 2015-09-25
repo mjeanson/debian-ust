@@ -143,23 +143,25 @@ liblttng_ust_runtime_la_LIBADD =
 am__liblttng_ust_runtime_la_SOURCES_DIST = lttng-ust-comm.c \
 	lttng-ust-abi.c lttng-probes.c lttng-context-vtid.c \
 	lttng-context-vpid.c lttng-context-pthread-id.c \
-	lttng-context-procname.c lttng-context-ip.c lttng-context.c \
-	lttng-events.c lttng-filter.c lttng-filter.h \
-	lttng-filter-validator.c lttng-filter-specialize.c \
-	lttng-filter-interpreter.c filter-bytecode.h \
-	lttng-hash-helper.h lttng-ust-baddr.c lttng-ust-baddr.h \
-	ust_baddr_statedump.h tracepoint-internal.h clock.h compat.h \
-	wait.h jhash.h lttng-ust-uuid.h error.h tracef.c \
-	lttng-ust-tracef-provider.h getenv.h \
+	lttng-context-procname.c lttng-context-ip.c \
+	lttng-context-cpu-id.c lttng-context.c lttng-events.c \
+	lttng-filter.c lttng-filter.h lttng-filter-validator.c \
+	lttng-filter-specialize.c lttng-filter-interpreter.c \
+	filter-bytecode.h lttng-hash-helper.h lttng-ust-statedump.c \
+	lttng-ust-statedump.h lttng-ust-statedump-provider.h \
+	tracepoint-internal.h clock.h compat.h wait.h jhash.h \
+	lttng-ust-uuid.h error.h tracef.c lttng-ust-tracef-provider.h \
+	tracelog.c lttng-ust-tracelog-provider.h getenv.h \
 	lttng-context-perf-counters.c
 @HAVE_PERF_EVENT_TRUE@am__objects_1 = lttng-context-perf-counters.lo
 am_liblttng_ust_runtime_la_OBJECTS = lttng-ust-comm.lo \
 	lttng-ust-abi.lo lttng-probes.lo lttng-context-vtid.lo \
 	lttng-context-vpid.lo lttng-context-pthread-id.lo \
-	lttng-context-procname.lo lttng-context-ip.lo lttng-context.lo \
-	lttng-events.lo lttng-filter.lo lttng-filter-validator.lo \
+	lttng-context-procname.lo lttng-context-ip.lo \
+	lttng-context-cpu-id.lo lttng-context.lo lttng-events.lo \
+	lttng-filter.lo lttng-filter-validator.lo \
 	lttng-filter-specialize.lo lttng-filter-interpreter.lo \
-	lttng-ust-baddr.lo tracef.lo $(am__objects_1)
+	lttng-ust-statedump.lo tracef.lo tracelog.lo $(am__objects_1)
 liblttng_ust_runtime_la_OBJECTS =  \
 	$(am_liblttng_ust_runtime_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -173,7 +175,8 @@ am_liblttng_ust_support_la_OBJECTS = ust-core.lo \
 	lttng-ring-buffer-client-discard-rt.lo \
 	lttng-ring-buffer-client-overwrite.lo \
 	lttng-ring-buffer-client-overwrite-rt.lo \
-	lttng-ring-buffer-metadata-client.lo
+	lttng-ring-buffer-metadata-client.lo lttng-clock.lo \
+	lttng-getcpu.lo
 liblttng_ust_support_la_OBJECTS =  \
 	$(am_liblttng_ust_support_la_OBJECTS)
 liblttng_ust_tracepoint_la_DEPENDENCIES =  \
@@ -272,6 +275,7 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
+BUILD_GEN_TP_EXAMPLES = @BUILD_GEN_TP_EXAMPLES@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
 CFLAGS = @CFLAGS@
@@ -433,13 +437,16 @@ liblttng_ust_tracepoint_la_CFLAGS = -DUST_COMPONENT="liblttng_ust_tracepoint" -f
 liblttng_ust_runtime_la_SOURCES = lttng-ust-comm.c lttng-ust-abi.c \
 	lttng-probes.c lttng-context-vtid.c lttng-context-vpid.c \
 	lttng-context-pthread-id.c lttng-context-procname.c \
-	lttng-context-ip.c lttng-context.c lttng-events.c \
-	lttng-filter.c lttng-filter.h lttng-filter-validator.c \
-	lttng-filter-specialize.c lttng-filter-interpreter.c \
-	filter-bytecode.h lttng-hash-helper.h lttng-ust-baddr.c \
-	lttng-ust-baddr.h ust_baddr_statedump.h tracepoint-internal.h \
-	clock.h compat.h wait.h jhash.h lttng-ust-uuid.h error.h \
-	tracef.c lttng-ust-tracef-provider.h getenv.h $(am__append_1)
+	lttng-context-ip.c lttng-context-cpu-id.c lttng-context.c \
+	lttng-events.c lttng-filter.c lttng-filter.h \
+	lttng-filter-validator.c lttng-filter-specialize.c \
+	lttng-filter-interpreter.c filter-bytecode.h \
+	lttng-hash-helper.h lttng-ust-statedump.c \
+	lttng-ust-statedump.h lttng-ust-statedump-provider.h \
+	tracepoint-internal.h clock.h compat.h wait.h jhash.h \
+	lttng-ust-uuid.h error.h tracef.c lttng-ust-tracef-provider.h \
+	tracelog.c lttng-ust-tracelog-provider.h getenv.h \
+	$(am__append_1)
 liblttng_ust_support_la_SOURCES = \
 	lttng-tracer.h \
 	lttng-tracer-core.h \
@@ -451,7 +458,8 @@ liblttng_ust_support_la_SOURCES = \
 	lttng-ring-buffer-client-overwrite.c \
 	lttng-ring-buffer-client-overwrite-rt.c \
 	lttng-ring-buffer-metadata-client.h \
-	lttng-ring-buffer-metadata-client.c
+	lttng-ring-buffer-metadata-client.c \
+	lttng-clock.c lttng-getcpu.c
 
 liblttng_ust_la_SOURCES = 
 liblttng_ust_la_LDFLAGS = -no-undefined -version-info $(LTTNG_UST_LIBRARY_VERSION)
@@ -569,6 +577,8 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/liblttng_ust_tracepoint_la-tracepoint.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-clock.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-cpu-id.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-ip.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-perf-counters.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-procname.Plo@am__quote@
@@ -581,6 +591,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-filter-specialize.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-filter-validator.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-filter.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-getcpu.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-probes.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ring-buffer-client-discard-rt.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ring-buffer-client-discard.Plo@am__quote@
@@ -588,9 +599,10 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ring-buffer-client-overwrite.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ring-buffer-metadata-client.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-abi.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-baddr.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-comm.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-statedump.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tracef.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tracelog.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ust-core.Plo@am__quote@
 
 .c.o:

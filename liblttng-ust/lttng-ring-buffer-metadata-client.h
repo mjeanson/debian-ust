@@ -101,6 +101,9 @@ static void client_buffer_begin(struct lttng_ust_lib_ring_buffer *buf, uint64_t 
 				handle);
 	struct lttng_channel *lttng_chan = channel_get_private(chan);
 
+	assert(header);
+	if (!header)
+		return;
 	header->magic = TSDL_MAGIC_NUMBER;
 	memcpy(header->uuid, lttng_chan->uuid, sizeof(lttng_chan->uuid));
 	header->checksum = 0;		/* 0 if unused */
@@ -129,6 +132,9 @@ static void client_buffer_end(struct lttng_ust_lib_ring_buffer *buf, uint64_t ts
 				handle);
 	unsigned long records_lost = 0;
 
+	assert(header);
+	if (!header)
+		return;
 	header->content_size = data_size * CHAR_BIT;		/* in bits */
 	header->packet_size = PAGE_ALIGN(data_size) * CHAR_BIT; /* in bits */
 	/*
@@ -199,7 +205,8 @@ struct lttng_channel *_channel_create(const char *name,
 				unsigned int switch_timer_interval,
 				unsigned int read_timer_interval,
 				unsigned char *uuid,
-				uint32_t chan_id)
+				uint32_t chan_id,
+				const int *stream_fds, int nr_stream_fds)
 {
 	struct lttng_channel chan_priv_init;
 	struct lttng_ust_shm_handle *handle;
@@ -214,7 +221,8 @@ struct lttng_channel *_channel_create(const char *name,
 			sizeof(struct lttng_channel),
 			&chan_priv_init,
 			buf_addr, subbuf_size, num_subbuf,
-			switch_timer_interval, read_timer_interval);
+			switch_timer_interval, read_timer_interval,
+			stream_fds, nr_stream_fds);
 	if (!handle)
 		return NULL;
 	lttng_chan = priv;

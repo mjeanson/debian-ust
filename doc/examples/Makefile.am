@@ -4,6 +4,9 @@ doc_examples_gen_tpdir = ${docdir}/examples/gen-tp
 doc_examples_demodir = ${docdir}/examples/demo
 doc_examples_hello_static_libdir = ${docdir}/examples/hello-static-lib
 doc_examples_demo_tracefdir = ${docdir}/examples/demo-tracef
+doc_examples_demo_tracelogdir = ${docdir}/examples/demo-tracelog
+doc_examples_clock_overridedir = ${docdir}/examples/clock-override
+doc_examples_getcpu_overridedir = ${docdir}/examples/getcpu-override
 
 if BUILD_JAVA_AGENT_WITH_JUL
 doc_examples_java_juldir = ${docdir}/examples/java-jul
@@ -19,6 +22,11 @@ dist_doc_examples_java_log4j_DATA = java-log4j/Makefile \
 				  java-log4j/Hello.java \
 				  java-log4j/run
 SUBDIRS_LOG4J = java-log4j
+endif
+
+if BUILD_PYTHON_AGENT
+doc_examples_pythondir = ${docdir}/examples/python
+dist_doc_examples_python_DATA = python/hello.py
 endif
 
 dist_doc_examples_DATA = README
@@ -51,12 +59,27 @@ dist_doc_examples_demo_tracef_DATA = demo-tracef/Makefile \
 	demo-tracef/demo-tracef.c \
 	demo-tracef/README
 
+dist_doc_examples_demo_tracelog_DATA = demo-tracelog/Makefile \
+	demo-tracelog/demo-tracelog.c \
+	demo-tracelog/README
+
+dist_doc_examples_clock_override_DATA = clock-override/Makefile \
+	clock-override/lttng-ust-clock-override-example.c \
+	clock-override/run-clock-override \
+	clock-override/README
+
+dist_doc_examples_getcpu_override_DATA = getcpu-override/Makefile \
+	getcpu-override/lttng-ust-getcpu-override-example.c \
+	getcpu-override/run-getcpu-override \
+	getcpu-override/README
+
 if NO_SHARED
 # Don't build examples if shared libraries support was explicitly
 # disabled.
 else
 # Copies are for VPATH build support
-SUBDIRS_PROXY = easy-ust demo hello-static-lib demo-tracef
+SUBDIRS_PROXY = easy-ust demo hello-static-lib demo-tracef clock-override \
+		getcpu-override demo-tracelog
 
 if BUILD_GEN_TP_EXAMPLES
 SUBDIRS_PROXY += gen-tp

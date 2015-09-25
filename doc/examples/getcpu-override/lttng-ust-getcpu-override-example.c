@@ -1,15 +1,7 @@
-#undef TRACEPOINT_PROVIDER
-#define TRACEPOINT_PROVIDER ust_baddr_statedump
-
-#if !defined(_TRACEPOINT_UST_BADDR_STATEDUMP_H) || defined(TRACEPOINT_HEADER_MULTI_READ)
-#define _TRACEPOINT_UST_BADDR_STATEDUMP_H
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /*
- * Copyright (C) 2013  Paul Woegerer <paul_woegerer@mentor.com>
+ * lttng-getcpu-override-example.c
+ *
+ * Copyright (c) 2014 Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -30,31 +22,31 @@ extern "C" {
  * SOFTWARE.
  */
 
-#include <stdint.h>
-#include <unistd.h>
-#include <lttng/ust-events.h>
+#include <stdlib.h>
+#include <time.h>
+#include <string.h>
+#include <stdio.h>
+#include <lttng/ust-getcpu.h>
 
-#define LTTNG_UST_BADDR_STATEDUMP_PROVIDER
-#include <lttng/tracepoint.h>
-
-TRACEPOINT_EVENT(ust_baddr_statedump, soinfo,
-	TP_ARGS(struct lttng_session *, session, void *, baddr, const char*, sopath, int64_t, size, int64_t, mtime),
-	TP_FIELDS(
-		ctf_integer_hex(void *, baddr, baddr)
-		ctf_string(sopath, sopath)
-		ctf_integer(int64_t, size, size)
-		ctf_integer(int64_t, mtime, mtime)
-	)
-)
-
-#endif /* _TRACEPOINT_UST_BADDR_STATEDUMP_H */
-
-#undef TRACEPOINT_INCLUDE
-#define TRACEPOINT_INCLUDE "./ust_baddr_statedump.h"
-
-/* This part must be outside ifdef protection */
-#include <lttng/tracepoint-event.h>
-
-#ifdef __cplusplus
+static
+int plugin_getcpu(void)
+{
+	/* Dummy: always return CPU 0. */
+	return 0;
 }
-#endif
+
+void lttng_ust_getcpu_plugin_init(void)
+{
+	int ret;
+
+	ret = lttng_ust_getcpu_override(plugin_getcpu);
+	if (ret) {
+		fprintf(stderr, "Error enabling getcpu override: %s\n",
+			strerror(-ret));
+		goto error;
+	}
+	return;
+
+error:
+	exit(EXIT_FAILURE);
+}

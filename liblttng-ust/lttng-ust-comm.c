@@ -20,6 +20,7 @@
  */
 
 #define _LGPL_SOURCE
+#define _GNU_SOURCE
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/mman.h>
@@ -51,7 +52,9 @@
 #include "lttng-tracer-core.h"
 #include "compat.h"
 #include "../libringbuffer/tlsfixup.h"
-#include "lttng-ust-baddr.h"
+#include "lttng-ust-statedump.h"
+#include "clock.h"
+#include "../libringbuffer/getcpu.h"
 #include "getenv.h"
 
 /*
@@ -927,7 +930,12 @@ void cleanup_sock_info(struct sock_info *sock_info, int exiting)
 		long page_size;
 
 		page_size = sysconf(_SC_PAGE_SIZE);
-		if (page_size > 0) {
+		if (page_size <= 0) {
+			if (!page_size) {
+				errno = EINVAL;
+			}
+			PERROR("Error in sysconf(_SC_PAGE_SIZE)");
+		} else {
 			ret = munmap(sock_info->wait_shm_mmap, page_size);
 			if (ret) {
 				ERR("Error unmapping wait shm");
@@ -1109,7 +1117,11 @@ char *get_map_shm(struct sock_info *sock_info)
 	char *wait_shm_mmap;
 
 	page_size = sysconf(_SC_PAGE_SIZE);
-	if (page_size < 0) {
+	if (page_size <= 0) {
+		if (!page_size) {
+			errno = EINVAL;
+		}
+		PERROR("Error in sysconf(_SC_PAGE_SIZE)");
 		goto error;
 	}
 
@@ -1216,8 +1228,9 @@ restart:
 			 * deals with a killed or broken session daemon.
 			 */
 			sleep(5);
+		} else {
+			has_waited = 1;
 		}
-		has_waited = 1;
 		prev_connect_failed = 0;
 	}
 
@@ -1480,7 +1493,9 @@ void __attribute__((constructor)) lttng_ust_init(void)
 	 */
 	init_usterr();
 	init_tracepoint();
-	lttng_ust_baddr_statedump_init();
+	lttng_ust_clock_init();
+	lttng_ust_getcpu_init();
+	lttng_ust_statedump_init();
 	lttng_ring_buffer_metadata_client_init();
 	lttng_ring_buffer_client_overwrite_init();
 	lttng_ring_buffer_client_overwrite_rt_init();
@@ -1599,7 +1614,7 @@ void lttng_ust_cleanup(int exiting)
 	lttng_ring_buffer_client_overwrite_rt_exit();
 	lttng_ring_buffer_client_overwrite_exit();
 	lttng_ring_buffer_metadata_client_exit();
-	lttng_ust_baddr_statedump_destroy();
+	lttng_ust_statedump_destroy();
 	exit_tracepoint();
 	if (!exiting) {
 		/* Reinitialize values for fork */

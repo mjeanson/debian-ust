@@ -45,7 +45,8 @@ int channel_backend_init(struct channel_backend *chanb,
 			 const char *name,
 			 const struct lttng_ust_lib_ring_buffer_config *config,
 			 size_t subbuf_size,
-			 size_t num_subbuf, struct lttng_ust_shm_handle *handle);
+			 size_t num_subbuf, struct lttng_ust_shm_handle *handle,
+			 const int *stream_fds);
 void channel_backend_free(struct channel_backend *chanb,
 			  struct lttng_ust_shm_handle *handle);
 
@@ -484,7 +485,7 @@ static inline int lttng_ust_fls(unsigned int x)
 		r -= 2;
 	}
 	if (!(x & 0x80000000U)) {
-		x <<= 1;
+		/* No need to bit shift on last operation */
 		r -= 1;
 	}
 	return r;

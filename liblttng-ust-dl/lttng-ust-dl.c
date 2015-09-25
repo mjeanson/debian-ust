@@ -29,13 +29,13 @@
 #include <signal.h>
 #include <sched.h>
 #include <stdarg.h>
-#include "usterr.h"
+#include "usterr-signal-safe.h"
 
 #include <lttng/ust-compiler.h>
 #include <lttng/ust.h>
 
 #define TRACEPOINT_DEFINE
-#include "ust_baddr.h"
+#include "ust_dl.h"
 
 static void *(*__lttng_ust_plibc_dlopen)(const char *filename, int flag);
 static int (*__lttng_ust_plibc_dlclose)(void *handle);
@@ -67,7 +67,7 @@ int _lttng_ust_dl_libc_dlclose(void *handle)
 }
 
 static
-void lttng_ust_baddr_push(void *so_base, const char *so_name, void *ip)
+void lttng_ust_dl_dlopen(void *so_base, const char *so_name, void *ip)
 {
 	char resolved_path[PATH_MAX];
 	struct stat sostat;
@@ -82,7 +82,7 @@ void lttng_ust_baddr_push(void *so_base, const char *so_name, void *ip)
 		return;
 	}
 
-	tracepoint(ust_baddr, push,
+	tracepoint(lttng_ust_dl, dlopen,
 		so_base, resolved_path, sostat.st_size, sostat.st_mtime, ip);
 	return;
 }
@@ -94,7 +94,7 @@ void *dlopen(const char *filename, int flag)
 		struct link_map *p = NULL;
 		if (dlinfo(handle, RTLD_DI_LINKMAP, &p) != -1 && p != NULL
 				&& p->l_addr != 0)
-			lttng_ust_baddr_push((void *) p->l_addr, p->l_name,
+			lttng_ust_dl_dlopen((void *) p->l_addr, p->l_name,
 				__builtin_return_address(0));
 	}
 	return handle;
@@ -106,7 +106,7 @@ int dlclose(void *handle)
 		struct link_map *p = NULL;
 		if (dlinfo(handle, RTLD_DI_LINKMAP, &p) != -1 && p != NULL
 				&& p->l_addr != 0)
-			tracepoint(ust_baddr, pop, (void *) p->l_addr,
+			tracepoint(lttng_ust_dl, dlclose, (void *) p->l_addr,
 				__builtin_return_address(0));
 	}
 	return _lttng_ust_dl_libc_dlclose(handle);

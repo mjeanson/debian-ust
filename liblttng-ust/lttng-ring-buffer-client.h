@@ -339,6 +339,9 @@ static void client_buffer_begin(struct lttng_ust_lib_ring_buffer *buf, uint64_t 
 				handle);
 	struct lttng_channel *lttng_chan = channel_get_private(chan);
 
+	assert(header);
+	if (!header)
+		return;
 	header->magic = CTF_MAGIC_NUMBER;
 	memcpy(header->uuid, lttng_chan->uuid, sizeof(lttng_chan->uuid));
 	header->stream_id = lttng_chan->id;
@@ -366,6 +369,9 @@ static void client_buffer_end(struct lttng_ust_lib_ring_buffer *buf, uint64_t ts
 				handle);
 	unsigned long records_lost = 0;
 
+	assert(header);
+	if (!header)
+		return;
 	header->ctx.timestamp_end = tsc;
 	header->ctx.content_size =
 		(uint64_t) data_size * CHAR_BIT;		/* in bits */
@@ -388,6 +394,20 @@ static void client_buffer_finalize(struct lttng_ust_lib_ring_buffer *buf, void *
 {
 }
 
+static void client_content_size_field(const struct lttng_ust_lib_ring_buffer_config *config,
+				      size_t *offset, size_t *length)
+{
+	*offset = offsetof(struct packet_header, ctx.content_size);
+	*length = sizeof(((struct packet_header *) NULL)->ctx.content_size);
+}
+
+static void client_packet_size_field(const struct lttng_ust_lib_ring_buffer_config *config,
+				      size_t *offset, size_t *length)
+{
+	*offset = offsetof(struct packet_header, ctx.packet_size);
+	*length = sizeof(((struct packet_header *) NULL)->ctx.packet_size);
+}
+
 static struct packet_header *client_packet_header(struct lttng_ust_lib_ring_buffer *buf,
 		struct lttng_ust_shm_handle *handle)
 {
@@ -401,6 +421,8 @@ static int client_timestamp_begin(struct lttng_ust_lib_ring_buffer *buf,
 	struct packet_header *header;
 
 	header = client_packet_header(buf, handle);
+	if (!header)
+		return -1;
 	*timestamp_begin = header->ctx.timestamp_begin;
 	return 0;
 }
@@ -412,6 +434,8 @@ static int client_timestamp_end(struct lttng_ust_lib_ring_buffer *buf,
 	struct packet_header *header;
 
 	header = client_packet_header(buf, handle);
+	if (!header)
+		return -1;
 	*timestamp_end = header->ctx.timestamp_end;
 	return 0;
 }
@@ -423,6 +447,8 @@ static int client_events_discarded(struct lttng_ust_lib_ring_buffer *buf,
 	struct packet_header *header;
 
 	header = client_packet_header(buf, handle);
+	if (!header)
+		return -1;
 	*events_discarded = header->ctx.events_discarded;
 	return 0;
 }
@@ -434,6 +460,8 @@ static int client_content_size(struct lttng_ust_lib_ring_buffer *buf,
 	struct packet_header *header;
 
 	header = client_packet_header(buf, handle);
+	if (!header)
+		return -1;
 	*content_size = header->ctx.content_size;
 	return 0;
 }
@@ -445,6 +473,8 @@ static int client_packet_size(struct lttng_ust_lib_ring_buffer *buf,
 	struct packet_header *header;
 
 	header = client_packet_header(buf, handle);
+	if (!header)
+		return -1;
 	*packet_size = header->ctx.packet_size;
 	return 0;
 }
@@ -456,6 +486,8 @@ static int client_stream_id(struct lttng_ust_lib_ring_buffer *buf,
 	struct packet_header *header;
 
 	header = client_packet_header(buf, handle);
+	if (!header)
+		return -1;
 	*stream_id = header->stream_id;
 	return 0;
 }
@@ -482,6 +514,8 @@ struct lttng_ust_client_lib_ring_buffer_client_cb client_cb = {
 		.buffer_end = client_buffer_end,
 		.buffer_create = client_buffer_create,
 		.buffer_finalize = client_buffer_finalize,
+		.content_size_field = client_content_size_field,
+		.packet_size_field = client_packet_size_field,
 	},
 	.timestamp_begin = client_timestamp_begin,
 	.timestamp_end = client_timestamp_end,
@@ -500,6 +534,8 @@ static const struct lttng_ust_lib_ring_buffer_config client_config = {
 	.cb.buffer_end = client_buffer_end,
 	.cb.buffer_create = client_buffer_create,
 	.cb.buffer_finalize = client_buffer_finalize,
+	.cb.content_size_field = client_content_size_field,
+	.cb.packet_size_field = client_packet_size_field,
 
 	.tsc_bits = LTTNG_COMPACT_TSC_BITS,
 	.alloc = RING_BUFFER_ALLOC_PER_CPU,
@@ -524,7 +560,8 @@ struct lttng_channel *_channel_create(const char *name,
 				unsigned int switch_timer_interval,
 				unsigned int read_timer_interval,
 				unsigned char *uuid,
-				uint32_t chan_id)
+				uint32_t chan_id,
+				const int *stream_fds, int nr_stream_fds)
 {
 	struct lttng_channel chan_priv_init;
 	struct lttng_ust_shm_handle *handle;
@@ -539,7 +576,8 @@ struct lttng_channel *_channel_create(const char *name,
 			sizeof(struct lttng_channel),
 			&chan_priv_init,
 			buf_addr, subbuf_size, num_subbuf,
-			switch_timer_interval, read_timer_interval);
+			switch_timer_interval, read_timer_interval,
+			stream_fds, nr_stream_fds);
 	if (!handle)
 		return NULL;
 	lttng_chan = priv;
