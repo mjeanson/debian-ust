@@ -13,10 +13,12 @@ DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 #export DEB_BUILD_MAINT_OPTIONS := hardening=+all
 
 %:
-	dh $@ --with autoreconf,javahelper
+	dh $@ --with autoreconf,javahelper,python3
 
 override_dh_auto_configure:
+	PYTHON=python3 \
 	dh_auto_configure -- \
+		--enable-python-agent \
 		--enable-jni-interface \
 		--enable-java-agent-all \
 		--with-java-prefix=$(JAVA_HOME)
