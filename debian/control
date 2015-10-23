@@ -50,7 +50,8 @@ Architecture: linux-any
 Multi-Arch: same
 Depends: ${misc:Depends},
   liblttng-ust0 (= ${binary:Version}), liblttng-ust-ctl2 (= ${binary:Version}),
-  liburcu-dev (>= 0.8.4), uuid-dev
+  liblttng-ust-python-agent0 (= ${binary:Version}), liburcu-dev (>= 0.8.4),
+  uuid-dev
 Recommends: python3
 Conflicts: liblttng-ust2
 Replaces: liblttng-ust2
