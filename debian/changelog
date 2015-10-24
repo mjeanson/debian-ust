@@ -1,3 +1,15 @@
+ust (2.7.0-1) unstable; urgency=medium
+
+  [ Michael Jeanson ]
+  * [fe82554] New upstream version 2.7.0
+  * [96d01f4] Drop patch applied upstream
+  * [a37cd0d] Add python agent subpackages
+  * [c285433] Update symbols file
+  * [1c48d56] Build on linux-any architectures
+  * [afbbd1e] The dev package depends on the python agent lib
+
+ -- Jon Bernard <jbernard@debian.org>  Sat, 24 Oct 2015 19:23:03 +0000
+
 ust (2.6.3-1) unstable; urgency=medium
 
   [ Michael Jeanson ]
