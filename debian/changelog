@@ -1,3 +1,12 @@
+ust (2.7.1-1) unstable; urgency=medium
+
+  [ Michael Jeanson ]
+  * [d0d44d7] New upstream version 2.7.1
+  * [a596e16] Drop upstreamed patch fix-python-agent-build
+  * [f3d43ad] Fix java build on gcj
+
+ -- Jon Bernard <jbernard@debian.org>  Tue, 01 Dec 2015 19:58:42 +0000
+
 ust (2.7.0-1) unstable; urgency=medium
 
   [ Michael Jeanson ]
