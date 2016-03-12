@@ -1,3 +1,14 @@
+ust (2.7.2-1) unstable; urgency=medium
+
+  [ Michael Jeanson ]
+  * [b53d4b6] Add pgpsigurlmangle to watch file
+  * [bebae33] New upstream version 2.7.2
+  * [0dc0248] Update vcs fields to use secure uri
+  * [4812e35] Bump standards version to 3.9.7, no changes necessary
+  * [5f48885] Build-depend on default-jdk-headless
+
+ -- Jon Bernard <jbernard@debian.org>  Sat, 12 Mar 2016 06:48:40 -0500
+
 ust (2.7.1-1) unstable; urgency=medium
 
   [ Michael Jeanson ]
