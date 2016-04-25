@@ -141,13 +141,14 @@ am__installdirs = "$(DESTDIR)$(libdir)"
 LTLIBRARIES = $(lib_LTLIBRARIES) $(noinst_LTLIBRARIES)
 liblttng_ust_runtime_la_LIBADD =
 am__liblttng_ust_runtime_la_SOURCES_DIST = lttng-ust-comm.c \
-	lttng-ust-abi.c lttng-probes.c lttng-context-vtid.c \
-	lttng-context-vpid.c lttng-context-pthread-id.c \
-	lttng-context-procname.c lttng-context-ip.c \
-	lttng-context-cpu-id.c lttng-context.c lttng-events.c \
-	lttng-filter.c lttng-filter.h lttng-filter-validator.c \
-	lttng-filter-specialize.c lttng-filter-interpreter.c \
-	filter-bytecode.h lttng-hash-helper.h lttng-ust-statedump.c \
+	lttng-ust-abi.c lttng-probes.c lttng-context-provider.c \
+	lttng-context-vtid.c lttng-context-vpid.c \
+	lttng-context-pthread-id.c lttng-context-procname.c \
+	lttng-context-ip.c lttng-context-cpu-id.c lttng-context.c \
+	lttng-events.c lttng-filter.c lttng-filter.h \
+	lttng-filter-validator.c lttng-filter-specialize.c \
+	lttng-filter-interpreter.c filter-bytecode.h \
+	lttng-hash-helper.h lttng-ust-elf.c lttng-ust-statedump.c \
 	lttng-ust-statedump.h lttng-ust-statedump-provider.h \
 	tracepoint-internal.h clock.h compat.h wait.h jhash.h \
 	lttng-ust-uuid.h error.h tracef.c lttng-ust-tracef-provider.h \
@@ -155,13 +156,14 @@ am__liblttng_ust_runtime_la_SOURCES_DIST = lttng-ust-comm.c \
 	lttng-context-perf-counters.c
 @HAVE_PERF_EVENT_TRUE@am__objects_1 = lttng-context-perf-counters.lo
 am_liblttng_ust_runtime_la_OBJECTS = lttng-ust-comm.lo \
-	lttng-ust-abi.lo lttng-probes.lo lttng-context-vtid.lo \
-	lttng-context-vpid.lo lttng-context-pthread-id.lo \
-	lttng-context-procname.lo lttng-context-ip.lo \
-	lttng-context-cpu-id.lo lttng-context.lo lttng-events.lo \
-	lttng-filter.lo lttng-filter-validator.lo \
+	lttng-ust-abi.lo lttng-probes.lo lttng-context-provider.lo \
+	lttng-context-vtid.lo lttng-context-vpid.lo \
+	lttng-context-pthread-id.lo lttng-context-procname.lo \
+	lttng-context-ip.lo lttng-context-cpu-id.lo lttng-context.lo \
+	lttng-events.lo lttng-filter.lo lttng-filter-validator.lo \
 	lttng-filter-specialize.lo lttng-filter-interpreter.lo \
-	lttng-ust-statedump.lo tracef.lo tracelog.lo $(am__objects_1)
+	lttng-ust-elf.lo lttng-ust-statedump.lo tracef.lo tracelog.lo \
+	$(am__objects_1)
 liblttng_ust_runtime_la_OBJECTS =  \
 	$(am_liblttng_ust_runtime_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -171,7 +173,7 @@ am__v_lt_1 =
 liblttng_ust_support_la_DEPENDENCIES =  \
 	$(top_builddir)/libringbuffer/libringbuffer.la
 am_liblttng_ust_support_la_OBJECTS = ust-core.lo \
-	lttng-ring-buffer-client-discard.lo \
+	lttng-ust-dynamic-type.lo lttng-ring-buffer-client-discard.lo \
 	lttng-ring-buffer-client-discard-rt.lo \
 	lttng-ring-buffer-client-overwrite.lo \
 	lttng-ring-buffer-client-overwrite-rt.lo \
@@ -435,22 +437,23 @@ liblttng_ust_tracepoint_la_LIBADD = \
 liblttng_ust_tracepoint_la_LDFLAGS = -no-undefined -version-info $(LTTNG_UST_LIBRARY_VERSION)
 liblttng_ust_tracepoint_la_CFLAGS = -DUST_COMPONENT="liblttng_ust_tracepoint" -fno-strict-aliasing
 liblttng_ust_runtime_la_SOURCES = lttng-ust-comm.c lttng-ust-abi.c \
-	lttng-probes.c lttng-context-vtid.c lttng-context-vpid.c \
-	lttng-context-pthread-id.c lttng-context-procname.c \
-	lttng-context-ip.c lttng-context-cpu-id.c lttng-context.c \
-	lttng-events.c lttng-filter.c lttng-filter.h \
-	lttng-filter-validator.c lttng-filter-specialize.c \
-	lttng-filter-interpreter.c filter-bytecode.h \
-	lttng-hash-helper.h lttng-ust-statedump.c \
-	lttng-ust-statedump.h lttng-ust-statedump-provider.h \
-	tracepoint-internal.h clock.h compat.h wait.h jhash.h \
-	lttng-ust-uuid.h error.h tracef.c lttng-ust-tracef-provider.h \
-	tracelog.c lttng-ust-tracelog-provider.h getenv.h \
-	$(am__append_1)
+	lttng-probes.c lttng-context-provider.c lttng-context-vtid.c \
+	lttng-context-vpid.c lttng-context-pthread-id.c \
+	lttng-context-procname.c lttng-context-ip.c \
+	lttng-context-cpu-id.c lttng-context.c lttng-events.c \
+	lttng-filter.c lttng-filter.h lttng-filter-validator.c \
+	lttng-filter-specialize.c lttng-filter-interpreter.c \
+	filter-bytecode.h lttng-hash-helper.h lttng-ust-elf.c \
+	lttng-ust-statedump.c lttng-ust-statedump.h \
+	lttng-ust-statedump-provider.h tracepoint-internal.h clock.h \
+	compat.h wait.h jhash.h lttng-ust-uuid.h error.h tracef.c \
+	lttng-ust-tracef-provider.h tracelog.c \
+	lttng-ust-tracelog-provider.h getenv.h $(am__append_1)
 liblttng_ust_support_la_SOURCES = \
 	lttng-tracer.h \
 	lttng-tracer-core.h \
 	ust-core.c \
+	lttng-ust-dynamic-type.c \
 	lttng-rb-clients.h \
 	lttng-ring-buffer-client.h \
 	lttng-ring-buffer-client-discard.c \
@@ -582,6 +585,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-ip.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-perf-counters.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-procname.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-provider.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-pthread-id.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-vpid.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-context-vtid.Plo@am__quote@
@@ -600,6 +604,8 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ring-buffer-metadata-client.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-abi.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-comm.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-dynamic-type.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-elf.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-statedump.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tracef.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tracelog.Plo@am__quote@

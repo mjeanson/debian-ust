@@ -36,6 +36,7 @@
 #include <helper.h>
 #include <lttng/ust-error.h>
 #include <lttng/ust-events.h>
+#include <lttng/ust-dynamic-type.h>
 #include <usterr-signal-safe.h>
 
 #include "../liblttng-ust/compat.h"
@@ -44,6 +45,14 @@
 	(code == LTTNG_UST_OK ? 0 : (code - LTTNG_UST_ERR + 1))
 
 #define USTCOMM_MAX_SEND_FDS	4
+
+static
+ssize_t count_fields_recursive(size_t nr_fields,
+		const struct lttng_event_field *lttng_fields);
+static
+int serialize_one_field(struct lttng_session *session,
+		struct ustctl_field *fields, size_t *iter_output,
+		const struct lttng_event_field *lf);
 
 /*
  * Human readable error message.
@@ -677,6 +686,86 @@ int ustcomm_send_reg_msg(int sock,
 }
 
 static
+ssize_t count_one_type(const struct lttng_type *lt)
+{
+	switch (lt->atype) {
+	case atype_integer:
+	case atype_float:
+	case atype_string:
+	case atype_enum:
+	case atype_array:
+	case atype_sequence:
+		return 1;
+	case atype_struct:
+		//TODO: implement non-empty struct.
+		return 1;
+	case atype_dynamic:
+	{
+		const struct lttng_event_field *choices;
+		size_t nr_choices;
+		int ret;
+
+		ret = lttng_ust_dynamic_type_choices(&nr_choices,
+			&choices);
+		if (ret)
+			return ret;
+		/*
+		 * One field for enum, one field for variant, and
+		 * one field per choice.
+		 */
+		return count_fields_recursive(nr_choices, choices) + 2;
+	}
+	default:
+		return -EINVAL;
+	}
+	return 0;
+}
+
+static
+ssize_t count_fields_recursive(size_t nr_fields,
+		const struct lttng_event_field *lttng_fields)
+{
+	int i;
+	ssize_t ret, count = 0;
+
+	for (i = 0; i < nr_fields; i++) {
+		const struct lttng_event_field *lf;
+
+		lf = &lttng_fields[i];
+		/* skip 'nowrite' fields */
+		if (lf->nowrite)
+			continue;
+		ret = count_one_type(&lf->type);
+		if (ret < 0)
+			return ret;	/* error */
+		count += ret;
+	}
+	return count;
+}
+
+static
+ssize_t count_ctx_fields_recursive(size_t nr_fields,
+		const struct lttng_ctx_field *lttng_fields)
+{
+	int i;
+	ssize_t ret, count = 0;
+
+	for (i = 0; i < nr_fields; i++) {
+		const struct lttng_event_field *lf;
+
+		lf = &lttng_fields[i].event_field;
+		/* skip 'nowrite' fields */
+		if (lf->nowrite)
+			continue;
+		ret = count_one_type(&lf->type);
+		if (ret < 0)
+			return ret;	/* error */
+		count += ret;
+	}
+	return count;
+}
+
+static
 int serialize_string_encoding(enum ustctl_string_encodings *ue,
 		enum lttng_string_encodings le)
 {
@@ -697,7 +786,22 @@ int serialize_string_encoding(enum ustctl_string_encodings *ue,
 }
 
 static
-int serialize_basic_type(enum ustctl_abstract_types *uatype,
+int serialize_integer_type(struct ustctl_integer_type *uit,
+		const struct lttng_integer_type *lit)
+{
+	uit->size = lit->size;
+	uit->signedness = lit->signedness;
+	uit->reverse_byte_order = lit->reverse_byte_order;
+	uit->base = lit->base;
+	if (serialize_string_encoding(&uit->encoding, lit->encoding))
+		return -EINVAL;
+	uit->alignment = lit->alignment;
+	return 0;
+}
+
+static
+int serialize_basic_type(struct lttng_session *session,
+		enum ustctl_abstract_types *uatype,
 		enum lttng_abstract_types atype,
 		union _ustctl_basic_type *ubt,
 		const union _lttng_basic_type *lbt)
@@ -705,18 +809,8 @@ int serialize_basic_type(enum ustctl_abstract_types *uatype,
 	switch (atype) {
 	case atype_integer:
 	{
-		struct ustctl_integer_type *uit;
-		const struct lttng_integer_type *lit;
-
-		uit = &ubt->integer;
-		lit = &lbt->integer;
-		uit->size = lit->size;
-		uit->signedness = lit->signedness;
-		uit->reverse_byte_order = lit->reverse_byte_order;
-		uit->base = lit->base;
-		if (serialize_string_encoding(&uit->encoding, lit->encoding))
+		if (serialize_integer_type(&ubt->integer, &lbt->integer))
 			return -EINVAL;
-		uit->alignment = lit->alignment;
 		*uatype = ustctl_atype_integer;
 		break;
 	}
@@ -743,6 +837,27 @@ int serialize_basic_type(enum ustctl_abstract_types *uatype,
 		break;
 	}
 	case atype_enum:
+	{
+		strncpy(ubt->enumeration.name, lbt->enumeration.desc->name,
+				LTTNG_UST_SYM_NAME_LEN);
+		ubt->enumeration.name[LTTNG_UST_SYM_NAME_LEN - 1] = '\0';
+		if (serialize_integer_type(&ubt->enumeration.container_type,
+				&lbt->enumeration.container_type))
+			return -EINVAL;
+		if (session) {
+			const struct lttng_enum *_enum;
+
+			_enum = lttng_ust_enum_get(session,
+					lbt->enumeration.desc->name);
+			if (!_enum)
+				return -EINVAL;
+			ubt->enumeration.id = _enum->id;
+		} else {
+			ubt->enumeration.id = -1ULL;
+		}
+		*uatype = ustctl_atype_enum;
+		break;
+	}
 	case atype_array:
 	case atype_sequence:
 	default:
@@ -752,57 +867,165 @@ int serialize_basic_type(enum ustctl_abstract_types *uatype,
 }
 
 static
-int serialize_one_type(struct ustctl_type *ut, const struct lttng_type *lt)
+int serialize_dynamic_type(struct lttng_session *session,
+		struct ustctl_field *fields, size_t *iter_output,
+		const struct lttng_event_field *lf)
 {
+	const struct lttng_event_field *choices;
+	char tag_field_name[LTTNG_UST_SYM_NAME_LEN];
+	const struct lttng_type *tag_type;
+	const struct lttng_event_field *tag_field_generic;
+	struct lttng_event_field tag_field = {
+		.name = tag_field_name,
+		.nowrite = 0,
+	};
+	struct ustctl_field *uf;
+	size_t nr_choices, i;
 	int ret;
+
+	tag_field_generic = lttng_ust_dynamic_type_tag_field();
+	tag_type = &tag_field_generic->type;
+
+	/* Serialize enum field. */
+	strncpy(tag_field_name, lf->name, LTTNG_UST_SYM_NAME_LEN);
+	tag_field_name[LTTNG_UST_SYM_NAME_LEN - 1] = '\0';
+	strncat(tag_field_name,
+		"_tag",
+		LTTNG_UST_SYM_NAME_LEN - strlen(tag_field_name) - 1);
+	tag_field.type = *tag_type;
+	ret = serialize_one_field(session, fields, iter_output,
+		&tag_field);
+	if (ret)
+		return ret;
+
+	/* Serialize variant field. */
+	uf = &fields[*iter_output];
+	ret = lttng_ust_dynamic_type_choices(&nr_choices, &choices);
+	if (ret)
+		return ret;
+
+	strncpy(uf->name, lf->name, LTTNG_UST_SYM_NAME_LEN);
+	uf->name[LTTNG_UST_SYM_NAME_LEN - 1] = '\0';
+	uf->type.atype = ustctl_atype_variant;
+	uf->type.u.variant.nr_choices = nr_choices;
+	strncpy(uf->type.u.variant.tag_name,
+		tag_field_name,
+		LTTNG_UST_SYM_NAME_LEN);
+	uf->type.u.variant.tag_name[LTTNG_UST_SYM_NAME_LEN - 1] = '\0';
+	(*iter_output)++;
+
+	/* Serialize choice fields after variant. */
+	for (i = 0; i < nr_choices; i++) {
+		ret = serialize_one_field(session, fields,
+			iter_output, &choices[i]);
+		if (ret)
+			return ret;
+	}
+	return 0;
+}
+
+static
+int serialize_one_field(struct lttng_session *session,
+		struct ustctl_field *fields, size_t *iter_output,
+		const struct lttng_event_field *lf)
+{
+	const struct lttng_type *lt = &lf->type;
+	int ret;
+
+	/* skip 'nowrite' fields */
+	if (lf->nowrite)
+		return 0;
 
 	switch (lt->atype) {
 	case atype_integer:
 	case atype_float:
 	case atype_string:
-		ret = serialize_basic_type(&ut->atype, lt->atype,
+	case atype_enum:
+	{
+		struct ustctl_field *uf = &fields[*iter_output];
+		struct ustctl_type *ut = &uf->type;
+
+		strncpy(uf->name, lf->name, LTTNG_UST_SYM_NAME_LEN);
+		uf->name[LTTNG_UST_SYM_NAME_LEN - 1] = '\0';
+		ret = serialize_basic_type(session, &ut->atype, lt->atype,
 			&ut->u.basic, &lt->u.basic);
 		if (ret)
 			return ret;
+		(*iter_output)++;
 		break;
+	}
 	case atype_array:
 	{
+		struct ustctl_field *uf = &fields[*iter_output];
+		struct ustctl_type *ut = &uf->type;
 		struct ustctl_basic_type *ubt;
 		const struct lttng_basic_type *lbt;
-		int ret;
 
+		strncpy(uf->name, lf->name, LTTNG_UST_SYM_NAME_LEN);
+		uf->name[LTTNG_UST_SYM_NAME_LEN - 1] = '\0';
+		uf->type.atype = ustctl_atype_array;
 		ubt = &ut->u.array.elem_type;
 		lbt = &lt->u.array.elem_type;
 		ut->u.array.length = lt->u.array.length;
-		ret = serialize_basic_type(&ubt->atype, lbt->atype,
+		ret = serialize_basic_type(session, &ubt->atype, lbt->atype,
 			&ubt->u.basic, &lbt->u.basic);
 		if (ret)
 			return -EINVAL;
 		ut->atype = ustctl_atype_array;
+		(*iter_output)++;
 		break;
 	}
 	case atype_sequence:
 	{
+		struct ustctl_field *uf = &fields[*iter_output];
+		struct ustctl_type *ut = &uf->type;
 		struct ustctl_basic_type *ubt;
 		const struct lttng_basic_type *lbt;
 		int ret;
 
+		strncpy(uf->name, lf->name, LTTNG_UST_SYM_NAME_LEN);
+		uf->name[LTTNG_UST_SYM_NAME_LEN - 1] = '\0';
+		uf->type.atype = ustctl_atype_sequence;
 		ubt = &ut->u.sequence.length_type;
 		lbt = &lt->u.sequence.length_type;
-		ret = serialize_basic_type(&ubt->atype, lbt->atype,
+		ret = serialize_basic_type(session, &ubt->atype, lbt->atype,
 			&ubt->u.basic, &lbt->u.basic);
 		if (ret)
 			return -EINVAL;
 		ubt = &ut->u.sequence.elem_type;
 		lbt = &lt->u.sequence.elem_type;
-		ret = serialize_basic_type(&ubt->atype, lbt->atype,
+		ret = serialize_basic_type(session, &ubt->atype, lbt->atype,
 			&ubt->u.basic, &lbt->u.basic);
 		if (ret)
 			return -EINVAL;
 		ut->atype = ustctl_atype_sequence;
+		(*iter_output)++;
 		break;
 	}
-	case atype_enum:
+	case atype_dynamic:
+	{
+		ret = serialize_dynamic_type(session, fields, iter_output, lf);
+		if (ret)
+			return -EINVAL;
+		break;
+	}
+	case atype_struct:
+	{
+		struct ustctl_field *uf = &fields[*iter_output];
+
+		/*
+		 * TODO: add support for non-empty struct.
+		 */
+		if (lf->type.u._struct.nr_fields != 0) {
+			return -EINVAL;
+		}
+		strncpy(uf->name, lf->name, LTTNG_UST_SYM_NAME_LEN);
+		uf->name[LTTNG_UST_SYM_NAME_LEN - 1] = '\0';
+		uf->type.atype = ustctl_atype_struct;
+		uf->type.u._struct.nr_fields = 0;
+		(*iter_output)++;
+		break;
+	}
 	default:
 		return -EINVAL;
 	}
@@ -810,35 +1033,31 @@ int serialize_one_type(struct ustctl_type *ut, const struct lttng_type *lt)
 }
 
 static
-int serialize_fields(size_t *_nr_write_fields,
+int serialize_fields(struct lttng_session *session,
+		size_t *_nr_write_fields,
 		struct ustctl_field **ustctl_fields,
 		size_t nr_fields,
 		const struct lttng_event_field *lttng_fields)
 {
 	struct ustctl_field *fields;
-	int i, ret;
-	size_t nr_write_fields = 0;
+	int ret;
+	size_t i, iter_output = 0;
+	ssize_t nr_write_fields;
 
-	fields = zmalloc(nr_fields * sizeof(*fields));
+	nr_write_fields = count_fields_recursive(nr_fields, lttng_fields);
+	if (nr_write_fields < 0) {
+		return (int) nr_write_fields;
+	}
+
+	fields = zmalloc(nr_write_fields * sizeof(*fields));
 	if (!fields)
 		return -ENOMEM;
 
 	for (i = 0; i < nr_fields; i++) {
-		struct ustctl_field *f;
-		const struct lttng_event_field *lf;
-
-		f = &fields[nr_write_fields];
-		lf = &lttng_fields[i];
-
-		/* skip 'nowrite' fields */
-		if (lf->nowrite)
-			continue;
-		strncpy(f->name, lf->name, LTTNG_UST_SYM_NAME_LEN);
-		f->name[LTTNG_UST_SYM_NAME_LEN - 1] = '\0';
-		ret = serialize_one_type(&f->type, &lf->type);
+		ret = serialize_one_field(session, fields, &iter_output,
+				&lttng_fields[i]);
 		if (ret)
 			goto error_type;
-		nr_write_fields++;
 	}
 
 	*_nr_write_fields = nr_write_fields;
@@ -851,35 +1070,60 @@ error_type:
 }
 
 static
-int serialize_ctx_fields(size_t *_nr_write_fields,
+int serialize_entries(struct ustctl_enum_entry **_entries,
+		size_t nr_entries,
+		const struct lttng_enum_entry *lttng_entries)
+{
+	struct ustctl_enum_entry *entries;
+	int i;
+
+	/* Serialize the entries */
+	entries = zmalloc(nr_entries * sizeof(*entries));
+	if (!entries)
+		return -ENOMEM;
+	for (i = 0; i < nr_entries; i++) {
+		struct ustctl_enum_entry *uentry;
+		const struct lttng_enum_entry *lentry;
+
+		uentry = &entries[i];
+		lentry = &lttng_entries[i];
+
+		uentry->start = lentry->start;
+		uentry->end = lentry->end;
+		strncpy(uentry->string, lentry->string, LTTNG_UST_SYM_NAME_LEN);
+		uentry->string[LTTNG_UST_SYM_NAME_LEN - 1] = '\0';
+	}
+	*_entries = entries;
+	return 0;
+}
+
+static
+int serialize_ctx_fields(struct lttng_session *session,
+		size_t *_nr_write_fields,
 		struct ustctl_field **ustctl_fields,
 		size_t nr_fields,
 		const struct lttng_ctx_field *lttng_fields)
 {
 	struct ustctl_field *fields;
-	int i, ret;
-	size_t nr_write_fields = 0;
+	int ret;
+	size_t i, iter_output = 0;
+	ssize_t nr_write_fields;
 
-	fields = zmalloc(nr_fields * sizeof(*fields));
+	nr_write_fields = count_ctx_fields_recursive(nr_fields,
+			lttng_fields);
+	if (nr_write_fields < 0) {
+		return (int) nr_write_fields;
+	}
+
+	fields = zmalloc(nr_write_fields * sizeof(*fields));
 	if (!fields)
 		return -ENOMEM;
 
 	for (i = 0; i < nr_fields; i++) {
-		struct ustctl_field *f;
-		const struct lttng_event_field *lf;
-
-		f = &fields[nr_write_fields];
-		lf = &lttng_fields[i].event_field;
-
-		/* skip 'nowrite' fields */
-		if (lf->nowrite)
-			continue;
-		strncpy(f->name, lf->name, LTTNG_UST_SYM_NAME_LEN);
-		f->name[LTTNG_UST_SYM_NAME_LEN - 1] = '\0';
-		ret = serialize_one_type(&f->type, &lf->type);
+		ret = serialize_one_field(session, fields, &iter_output,
+				&lttng_fields[i].event_field);
 		if (ret)
 			goto error_type;
-		nr_write_fields++;
 	}
 
 	*_nr_write_fields = nr_write_fields;
@@ -895,6 +1139,7 @@ error_type:
  * Returns 0 on success, negative error value on error.
  */
 int ustcomm_register_event(int sock,
+	struct lttng_session *session,
 	int session_objd,		/* session descriptor */
 	int channel_objd,		/* channel descriptor */
 	const char *event_name,		/* event name (input) */
@@ -931,7 +1176,7 @@ int ustcomm_register_event(int sock,
 
 	/* Calculate fields len, serialize fields. */
 	if (nr_fields > 0) {
-		ret = serialize_fields(&nr_write_fields, &fields,
+		ret = serialize_fields(session, &nr_write_fields, &fields,
 				nr_fields, lttng_fields);
 		if (ret)
 			return ret;
@@ -945,6 +1190,7 @@ int ustcomm_register_event(int sock,
 		model_emf_uri_len = 0;
 	}
 	msg.m.model_emf_uri_len = model_emf_uri_len;
+
 	len = ustcomm_send_unix_sock(sock, &msg, sizeof(msg));
 	if (len > 0 && len != sizeof(msg)) {
 		ret = -EIO;
@@ -1035,7 +1281,112 @@ error_fields:
  * Returns 0 on success, negative error value on error.
  * Returns -EPIPE or -ECONNRESET if other end has hung up.
  */
+int ustcomm_register_enum(int sock,
+	int session_objd,		/* session descriptor */
+	const char *enum_name,		/* enum name (input) */
+	size_t nr_entries,		/* entries */
+	const struct lttng_enum_entry *lttng_entries,
+	uint64_t *id)
+{
+	ssize_t len;
+	struct {
+		struct ustcomm_notify_hdr header;
+		struct ustcomm_notify_enum_msg m;
+	} msg;
+	struct {
+		struct ustcomm_notify_hdr header;
+		struct ustcomm_notify_enum_reply r;
+	} reply;
+	size_t entries_len;
+	struct ustctl_enum_entry *entries = NULL;
+	int ret;
+
+	memset(&msg, 0, sizeof(msg));
+	msg.header.notify_cmd = USTCTL_NOTIFY_CMD_ENUM;
+	msg.m.session_objd = session_objd;
+	strncpy(msg.m.enum_name, enum_name, LTTNG_UST_SYM_NAME_LEN);
+	msg.m.enum_name[LTTNG_UST_SYM_NAME_LEN - 1] = '\0';
+
+	/* Calculate entries len, serialize entries. */
+	if (nr_entries > 0) {
+		ret = serialize_entries(&entries,
+				nr_entries, lttng_entries);
+		if (ret)
+			return ret;
+	}
+
+	entries_len = sizeof(*entries) * nr_entries;
+	msg.m.entries_len = entries_len;
+
+	len = ustcomm_send_unix_sock(sock, &msg, sizeof(msg));
+	if (len > 0 && len != sizeof(msg)) {
+		ret = -EIO;
+		goto error_entries;
+	}
+	if (len < 0) {
+		ret = len;
+		goto error_entries;
+	}
+
+	/* send entries */
+	if (entries_len > 0) {
+		len = ustcomm_send_unix_sock(sock, entries, entries_len);
+		if (len > 0 && len != entries_len) {
+			ret = -EIO;
+			goto error_entries;
+		}
+		if (len < 0) {
+			ret = len;
+			goto error_entries;
+		}
+	}
+	free(entries);
+	entries = NULL;
+
+	/* receive reply */
+	len = ustcomm_recv_unix_sock(sock, &reply, sizeof(reply));
+	switch (len) {
+	case 0:	/* orderly shutdown */
+		return -EPIPE;
+	case sizeof(reply):
+		if (reply.header.notify_cmd != msg.header.notify_cmd) {
+			ERR("Unexpected result message command "
+				"expected: %u vs received: %u\n",
+				msg.header.notify_cmd, reply.header.notify_cmd);
+			return -EINVAL;
+		}
+		if (reply.r.ret_code > 0)
+			return -EINVAL;
+		if (reply.r.ret_code < 0)
+			return reply.r.ret_code;
+		*id = reply.r.enum_id;
+		DBG("Sent register enum notification for name \"%s\": ret_code %d\n",
+			enum_name, reply.r.ret_code);
+		return 0;
+	default:
+		if (len < 0) {
+			/* Transport level error */
+			if (errno == EPIPE || errno == ECONNRESET)
+				len = -errno;
+			return len;
+		} else {
+			ERR("incorrect message size: %zd\n", len);
+			return len;
+		}
+	}
+	return ret;
+
+error_entries:
+	free(entries);
+	return ret;
+}
+
+/*
+ * Returns 0 on success, negative error value on error.
+ * Returns -EPIPE or -ECONNRESET if other end has hung up.
+ */
 int ustcomm_register_channel(int sock,
+	struct lttng_session *session,
 	int session_objd,		/* session descriptor */
 	int channel_objd,		/* channel descriptor */
 	size_t nr_ctx_fields,
@@ -1064,7 +1415,7 @@ int ustcomm_register_channel(int sock,
 
 	/* Calculate fields len, serialize fields. */
 	if (nr_ctx_fields > 0) {
-		ret = serialize_ctx_fields(&nr_write_fields, &fields,
+		ret = serialize_ctx_fields(session, &nr_write_fields, &fields,
 				nr_ctx_fields, ctx_fields);
 		if (ret)
 			return ret;

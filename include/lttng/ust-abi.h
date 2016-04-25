@@ -43,7 +43,7 @@
 
 /* Version for ABI between liblttng-ust, sessiond, consumerd */
 #define LTTNG_UST_ABI_MAJOR_VERSION		6
-#define LTTNG_UST_ABI_MINOR_VERSION		0
+#define LTTNG_UST_ABI_MINOR_VERSION		1
 
 enum lttng_ust_instrumentation {
 	LTTNG_UST_TRACEPOINT		= 0,
@@ -140,6 +140,7 @@ enum lttng_ust_context_type {
 	LTTNG_UST_CONTEXT_IP			= 4,
 	LTTNG_UST_CONTEXT_PERF_THREAD_COUNTER	= 5,
 	LTTNG_UST_CONTEXT_CPU_ID		= 6,
+	LTTNG_UST_CONTEXT_APP_CONTEXT		= 7,
 };
 
 struct lttng_ust_perf_counter_ctx {
@@ -156,6 +157,11 @@ struct lttng_ust_context {
 
 	union {
 		struct lttng_ust_perf_counter_ctx perf_counter;
+		struct {
+			/* Includes trailing '\0'. */
+			uint32_t provider_name_len;
+			uint32_t ctx_name_len;
+		} app_ctx;
 		char padding[LTTNG_UST_CONTEXT_PADDING2];
 	} u;
 } LTTNG_PACKED;
@@ -307,6 +313,9 @@ union ust_args {
 	struct {
 		struct lttng_ust_field_iter entry;
 	} field_list;
+	struct {
+		char *ctxname;
+	} app_context;
 };
 
 struct lttng_ust_objd_ops {

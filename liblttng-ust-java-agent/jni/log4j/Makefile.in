@@ -363,8 +363,12 @@ lib_LTLIBRARIES = liblttng-ust-log4j-jni.la
 liblttng_ust_log4j_jni_la_SOURCES = lttng_ust_log4j.c \
 				  lttng_ust_log4j.h
 
-nodist_liblttng_ust_log4j_jni_la_SOURCES = org_lttng_ust_agent_log4j_LTTngLogAppender.h
-liblttng_ust_log4j_jni_la_LIBADD = -lc -L$(top_builddir)/liblttng-ust/.libs -llttng-ust
+nodist_liblttng_ust_log4j_jni_la_SOURCES = org_lttng_ust_agent_log4j_LttngLog4jApi.h
+liblttng_ust_log4j_jni_la_LIBADD = -lc \
+								   -L$(top_builddir)/liblttng-ust/.libs \
+								   -L$(top_builddir)/liblttng-ust-java-agent/jni/common/.libs \
+								   -llttng-ust-context-jni
+
 all: all-am
 
 .SUFFIXES:
@@ -679,6 +683,7 @@ uninstall-am: uninstall-libLTLIBRARIES
 	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
 	tags tags-am uninstall uninstall-am uninstall-libLTLIBRARIES
 
+								   -llttng-ust
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

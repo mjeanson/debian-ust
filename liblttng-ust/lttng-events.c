@@ -47,6 +47,8 @@
 #include <helper.h>
 #include <lttng/ust-ctl.h>
 #include <ust-comm.h>
+#include <lttng/ust-dynamic-type.h>
+#include <lttng/ust-context-provider.h>
 #include "error.h"
 #include "compat.h"
 #include "lttng-ust-uuid.h"
@@ -72,6 +74,7 @@ struct cds_list_head *_lttng_get_sessions(void)
 }
 
 static void _lttng_event_destroy(struct lttng_event *event);
+static void _lttng_enum_destroy(struct lttng_enum *_enum);
 
 static
 void lttng_session_lazy_sync_enablers(struct lttng_session *session);
@@ -137,11 +140,18 @@ struct lttng_session *lttng_session_create(void)
 	session = zmalloc(sizeof(struct lttng_session));
 	if (!session)
 		return NULL;
+	if (lttng_session_context_init(&session->ctx)) {
+		free(session);
+		return NULL;
+	}
 	CDS_INIT_LIST_HEAD(&session->chan_head);
 	CDS_INIT_LIST_HEAD(&session->events_head);
+	CDS_INIT_LIST_HEAD(&session->enums_head);
 	CDS_INIT_LIST_HEAD(&session->enablers_head);
 	for (i = 0; i < LTTNG_UST_EVENT_HT_SIZE; i++)
 		CDS_INIT_HLIST_HEAD(&session->events_ht.table[i]);
+	for (i = 0; i < LTTNG_UST_ENUM_HT_SIZE; i++)
+		CDS_INIT_HLIST_HEAD(&session->enums_ht.table[i]);
 	cds_list_add(&session->node, &sessions);
 	return session;
 }
@@ -212,6 +222,7 @@ void lttng_session_destroy(struct lttng_session *session)
 {
 	struct lttng_channel *chan, *tmpchan;
 	struct lttng_event *event, *tmpevent;
+	struct lttng_enum *_enum, *tmp_enum;
 	struct lttng_enabler *enabler, *tmpenabler;
 
 	CMM_ACCESS_ONCE(session->active) = 0;
@@ -225,11 +236,154 @@ void lttng_session_destroy(struct lttng_session *session)
 	cds_list_for_each_entry_safe(event, tmpevent,
 			&session->events_head, node)
 		_lttng_event_destroy(event);
+	cds_list_for_each_entry_safe(_enum, tmp_enum,
+			&session->enums_head, node)
+		_lttng_enum_destroy(_enum);
 	cds_list_for_each_entry_safe(chan, tmpchan, &session->chan_head, node)
 		_lttng_channel_unmap(chan);
 	cds_list_del(&session->node);
+	lttng_destroy_context(session->ctx);
 	free(session);
 }
+
+static
+int lttng_enum_create(const struct lttng_enum_desc *desc,
+		struct lttng_session *session)
+{
+	const char *enum_name = desc->name;
+	struct lttng_enum *_enum;
+	struct cds_hlist_head *head;
+	struct cds_hlist_node *node;
+	int ret = 0;
+	size_t name_len = strlen(enum_name);
+	uint32_t hash;
+	int notify_socket;
+
+	hash = jhash(enum_name, name_len, 0);
+	head = &session->enums_ht.table[hash & (LTTNG_UST_ENUM_HT_SIZE - 1)];
+	cds_hlist_for_each_entry(_enum, node, head, hlist) {
+		assert(_enum->desc);
+		if (!strncmp(_enum->desc->name, desc->name,
+				LTTNG_UST_SYM_NAME_LEN - 1)) {
+			ret = -EEXIST;
+			goto exist;
+		}
+	}
+
+	notify_socket = lttng_get_notify_socket(session->owner);
+	if (notify_socket < 0) {
+		ret = notify_socket;
+		goto socket_error;
+	}
+
+	_enum = zmalloc(sizeof(*_enum));
+	if (!_enum) {
+		ret = -ENOMEM;
+		goto cache_error;
+	}
+	_enum->session = session;
+	_enum->desc = desc;
+
+	ret = ustcomm_register_enum(notify_socket,
+		session->objd,
+		enum_name,
+		desc->nr_entries,
+		desc->entries,
+		&_enum->id);
+	if (ret < 0) {
+		DBG("Error (%d) registering enumeration to sessiond", ret);
+		goto sessiond_register_error;
+	}
+	cds_list_add(&_enum->node, &session->enums_head);
+	cds_hlist_add_head(&_enum->hlist, head);
+	return 0;
+
+sessiond_register_error:
+	free(_enum);
+cache_error:
+socket_error:
+exist:
+	return ret;
+}
+
+static
+int lttng_create_enum_check(const struct lttng_type *type,
+		struct lttng_session *session)
+{
+	switch (type->atype) {
+	case atype_enum:
+	{
+		const struct lttng_enum_desc *enum_desc;
+		int ret;
+
+		enum_desc = type->u.basic.enumeration.desc;
+		ret = lttng_enum_create(enum_desc, session);
+		if (ret && ret != -EEXIST) {
+			DBG("Unable to create enum error: (%d)", ret);
+			return ret;
+		}
+		break;
+	}
+	case atype_dynamic:
+	{
+		const struct lttng_event_field *tag_field_generic;
+		const struct lttng_enum_desc *enum_desc;
+		int ret;
+
+		tag_field_generic = lttng_ust_dynamic_type_tag_field();
+		enum_desc = tag_field_generic->type.u.basic.enumeration.desc;
+		ret = lttng_enum_create(enum_desc, session);
+		if (ret && ret != -EEXIST) {
+			DBG("Unable to create enum error: (%d)", ret);
+			return ret;
+		}
+		break;
+	}
+	default:
+		/* TODO: nested types when they become supported. */
+		break;
+	}
+	return 0;
+}
+
+static
+int lttng_create_all_event_enums(size_t nr_fields,
+		const struct lttng_event_field *event_fields,
+		struct lttng_session *session)
+{
+	size_t i;
+	int ret;
+
+	/* For each field, ensure enum is part of the session. */
+	for (i = 0; i < nr_fields; i++) {
+		const struct lttng_type *type = &event_fields[i].type;
+
+		ret = lttng_create_enum_check(type, session);
+		if (ret)
+			return ret;
+	}
+	return 0;
+}
+
+static
+int lttng_create_all_ctx_enums(size_t nr_fields,
+		const struct lttng_ctx_field *ctx_fields,
+		struct lttng_session *session)
+{
+	size_t i;
+	int ret;
+
+	/* For each field, ensure enum is part of the session. */
+	for (i = 0; i < nr_fields; i++) {
+		const struct lttng_type *type = &ctx_fields[i].event_field.type;
+
+		ret = lttng_create_enum_check(type, session);
+		if (ret)
+			return ret;
+	}
+	return 0;
+}
+
 
 int lttng_session_enable(struct lttng_session *session)
 {
@@ -266,8 +420,15 @@ int lttng_session_enable(struct lttng_session *session)
 		if (ctx) {
 			nr_fields = ctx->nr_fields;
 			fields = ctx->fields;
+			ret = lttng_create_all_ctx_enums(nr_fields, fields,
+				session);
+			if (ret < 0) {
+				DBG("Error (%d) adding enum to session", ret);
+				return ret;
+			}
 		}
 		ret = ustcomm_register_channel(notify_socket,
+			session,
 			session->objd,
 			chan->objd,
 			nr_fields,
@@ -386,6 +547,13 @@ int lttng_event_create(const struct lttng_event_desc *desc,
 		goto socket_error;
 	}
 
+	ret = lttng_create_all_event_enums(desc->nr_fields, desc->fields,
+			session);
+	if (ret < 0) {
+		DBG("Error (%d) adding enum to session", ret);
+		goto create_enum_error;
+	}
+
 	/*
 	 * Check if loglevel match. Refuse to connect event if not.
 	 */
@@ -414,6 +582,7 @@ int lttng_event_create(const struct lttng_event_desc *desc,
 
 	/* Fetch event ID from sessiond */
 	ret = ustcomm_register_event(notify_socket,
+		session,
 		session->objd,
 		chan->objd,
 		event_name,
@@ -437,6 +606,7 @@ int lttng_event_create(const struct lttng_event_desc *desc,
 sessiond_register_error:
 	free(event);
 cache_error:
+create_enum_error:
 socket_error:
 exist:
 	return ret;
@@ -719,6 +889,13 @@ void _lttng_event_destroy(struct lttng_event *event)
 	free(event);
 }
 
+static
+void _lttng_enum_destroy(struct lttng_enum *_enum)
+{
+	cds_list_del(&_enum->node);
+	free(_enum);
+}
+
 void lttng_ust_events_exit(void)
 {
 	struct lttng_session *session, *tmpsession;
@@ -785,6 +962,7 @@ int lttng_enabler_attach_exclusion(struct lttng_enabler *enabler,
 }
 
 int lttng_attach_context(struct lttng_ust_context *context_param,
+		union ust_args *uargs,
 		struct lttng_ctx **ctx, struct lttng_session *session)
 {
 	/*
@@ -819,6 +997,9 @@ int lttng_attach_context(struct lttng_ust_context *context_param,
 		return lttng_add_ip_to_ctx(ctx);
 	case LTTNG_UST_CONTEXT_CPU_ID:
 		return lttng_add_cpu_id_to_ctx(ctx);
+	case LTTNG_UST_CONTEXT_APP_CONTEXT:
+		return lttng_ust_add_app_context_to_ctx_rcu(uargs->app_context.ctxname,
+			ctx);
 	default:
 		return -EINVAL;
 	}
@@ -948,4 +1129,45 @@ void lttng_session_lazy_sync_enablers(struct lttng_session *session)
 	if (!session->active)
 		return;
 	lttng_session_sync_enablers(session);
+}
+
+/*
+ * Update all sessions with the given app context.
+ * Called with ust lock held.
+ * This is invoked when an application context gets loaded/unloaded. It
+ * ensures the context callbacks are in sync with the application
+ * context (either app context callbacks, or dummy callbacks).
+ */
+void lttng_ust_context_set_session_provider(const char *name,
+		size_t (*get_size)(struct lttng_ctx_field *field, size_t offset),
+		void (*record)(struct lttng_ctx_field *field,
+			struct lttng_ust_lib_ring_buffer_ctx *ctx,
+			struct lttng_channel *chan),
+		void (*get_value)(struct lttng_ctx_field *field,
+			struct lttng_ctx_value *value))
+{
+	struct lttng_session *session;
+
+	cds_list_for_each_entry(session, &sessions, node) {
+		struct lttng_channel *chan;
+		struct lttng_event *event;
+		int ret;
+
+		ret = lttng_ust_context_set_provider_rcu(&session->ctx,
+				name, get_size, record, get_value);
+		if (ret)
+			abort();
+		cds_list_for_each_entry(chan, &session->chan_head, node) {
+			ret = lttng_ust_context_set_provider_rcu(&chan->ctx,
+					name, get_size, record, get_value);
+			if (ret)
+				abort();
+		}
+		cds_list_for_each_entry(event, &session->events_head, node) {
+			ret = lttng_ust_context_set_provider_rcu(&event->ctx,
+					name, get_size, record, get_value);
+			if (ret)
+				abort();
+		}
+	}
 }

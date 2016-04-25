@@ -164,7 +164,7 @@ am__define_uniq_tagged_files = \
 ETAGS = etags
 CTAGS = ctags
 DIST_SUBDIRS = utils hello same_line_tracepoint snprintf benchmark \
-	hello.cxx
+	ust-elf ctf-types test-app-ctx hello.cxx
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 am__relativize = \
   dir0=`pwd`; \
@@ -341,8 +341,8 @@ target_vendor = @target_vendor@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-SUBDIRS = utils hello same_line_tracepoint snprintf benchmark \
-	$(am__append_1)
+SUBDIRS = utils hello same_line_tracepoint snprintf benchmark ust-elf \
+	ctf-types test-app-ctx $(am__append_1)
 SCRIPT_LIST = test_loop run.sh unit_tests
 dist_noinst_SCRIPTS = $(SCRIPT_LIST)
 all: all-recursive

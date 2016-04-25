@@ -19,19 +19,16 @@
 
 #define _LGPL_SOURCE
 #define _GNU_SOURCE
+
 #include <link.h>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <limits.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <stdint.h>
-#include <stddef.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
 
-#include <usterr-signal-safe.h>
+#include <lttng/ust-elf.h>
 #include "lttng-tracer-core.h"
 #include "lttng-ust-statedump.h"
 
@@ -49,9 +46,12 @@ struct soinfo_data {
 	void *owner;
 	void *base_addr_ptr;
 	const char *resolved_path;
+	char *dbg_file;
+	uint8_t *build_id;
+	uint64_t memsz;
+	size_t build_id_len;
 	int vdso;
-	off_t size;
-	time_t mtime;
+	uint32_t crc;
 };
 
 typedef void (*tracepoint_cb)(struct lttng_session *session, void *priv);
@@ -66,14 +66,6 @@ int trace_statedump_event(tracepoint_cb tp_cb, void *owner, void *priv)
 	struct cds_list_head *sessionsp;
 	struct lttng_session *session;
 
-	/*
-	 * UST lock nests within dynamic loader lock.
-	 */
-	if (ust_lock()) {
-		ust_unlock();
-		return 1;
-	}
-
 	sessionsp = _lttng_get_sessions();
 	cds_list_for_each_entry(session, sessionsp, node) {
 		if (session->owner != owner)
@@ -82,7 +74,6 @@ int trace_statedump_event(tracepoint_cb tp_cb, void *owner, void *priv)
 			continue;
 		tp_cb(session, priv);
 	}
-	ust_unlock();
 	return 0;
 }
 
@@ -92,9 +83,28 @@ void trace_soinfo_cb(struct lttng_session *session, void *priv)
 	struct soinfo_data *so_data = (struct soinfo_data *) priv;
 
 	tracepoint(lttng_ust_statedump, soinfo,
-		   session, so_data->base_addr_ptr,
-		   so_data->resolved_path, so_data->size,
-		   so_data->mtime);
+		session, so_data->base_addr_ptr,
+		so_data->resolved_path, so_data->memsz);
+}
+
+static
+void trace_build_id_cb(struct lttng_session *session, void *priv)
+{
+	struct soinfo_data *so_data = (struct soinfo_data *) priv;
+
+	tracepoint(lttng_ust_statedump, build_id,
+		session, so_data->base_addr_ptr,
+		so_data->build_id, so_data->build_id_len);
+}
+
+static
+void trace_debug_link_cb(struct lttng_session *session, void *priv)
+{
+	struct soinfo_data *so_data = (struct soinfo_data *) priv;
+
+	tracepoint(lttng_ust_statedump, debug_link,
+		session, so_data->base_addr_ptr,
+		so_data->dbg_file, so_data->crc);
 }
 
 static
@@ -110,19 +120,77 @@ void trace_end_cb(struct lttng_session *session, void *priv)
 }
 
 static
-int trace_baddr(struct soinfo_data *so_data)
-{
-	struct stat sostat;
+int get_elf_info(struct soinfo_data *so_data, int *has_build_id,
+		int *has_debug_link) {
+	struct lttng_ust_elf *elf;
+	int ret = 0;
 
-	if (so_data->vdso || stat(so_data->resolved_path, &sostat)) {
-		sostat.st_size = 0;
-		sostat.st_mtime = -1;
+	elf = lttng_ust_elf_create(so_data->resolved_path);
+	if (!elf) {
+		ret = -1;
+		goto end;
 	}
 
-	so_data->size = sostat.st_size;
-	so_data->mtime = sostat.st_mtime;
+	ret = lttng_ust_elf_get_memsz(elf, &so_data->memsz);
+	if (ret) {
+		goto end;
+	}
 
-	return trace_statedump_event(trace_soinfo_cb, so_data->owner, so_data);
+	ret = lttng_ust_elf_get_build_id(elf, &so_data->build_id,
+					&so_data->build_id_len, has_build_id);
+	if (ret) {
+		goto end;
+	}
+	ret = lttng_ust_elf_get_debug_link(elf, &so_data->dbg_file,
+					&so_data->crc, has_debug_link);
+	if (ret) {
+		goto end;
+	}
+
+end:
+	lttng_ust_elf_destroy(elf);
+	return ret;
+}
+
+static
+int trace_baddr(struct soinfo_data *so_data)
+{
+	int ret = 0, has_build_id = 0, has_debug_link = 0;
+
+	if (!so_data->vdso) {
+		ret = get_elf_info(so_data, &has_build_id, &has_debug_link);
+		if (ret) {
+			goto end;
+		}
+	} else {
+		so_data->memsz = 0;
+	}
+
+	ret = trace_statedump_event(trace_soinfo_cb, so_data->owner, so_data);
+	if (ret) {
+		goto end;
+	}
+
+	if (has_build_id) {
+		ret = trace_statedump_event(
+			trace_build_id_cb, so_data->owner, so_data);
+		free(so_data->build_id);
+		if (ret) {
+			goto end;
+		}
+	}
+
+	if (has_debug_link) {
+		ret = trace_statedump_event(
+			trace_debug_link_cb, so_data->owner, so_data);
+		free(so_data->dbg_file);
+		if (ret) {
+			goto end;
+		}
+	}
+
+end:
+	return ret;
 }
 
 static
@@ -140,8 +208,19 @@ int trace_statedump_end(void *owner)
 static
 int extract_soinfo_events(struct dl_phdr_info *info, size_t size, void *_data)
 {
-	int j;
+	int j, ret = 0;
 	struct dl_iterate_data *data = _data;
+
+	/*
+	 * UST lock nests within dynamic loader lock.
+	 *
+	 * Hold this lock across handling of the entire module to
+	 * protect memory allocation at early process start, due to
+	 * interactions with libc-wrapper lttng malloc instrumentation.
+	 */
+	if (ust_lock()) {
+		goto end;
+	}
 
 	for (j = 0; j < info->dlpi_phnum; j++) {
 		struct soinfo_data so_data;
@@ -199,10 +278,12 @@ int extract_soinfo_events(struct dl_phdr_info *info, size_t size, void *_data)
 		so_data.owner = data->owner;
 		so_data.base_addr_ptr = base_addr_ptr;
 		so_data.resolved_path = resolved_path;
-		return trace_baddr(&so_data);
+		ret = trace_baddr(&so_data);
+		break;
 	}
-
-	return 0;
+end:
+	ust_unlock();
+	return ret;
 }
 
 /*

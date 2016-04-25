@@ -82,19 +82,19 @@ target_triplet = @target@
 @HAVE_DLINFO_TRUE@am__append_1 = liblttng-ust-dl
 @BUILD_JNI_INTERFACE_TRUE@am__append_2 = liblttng-ust-java
 @BUILD_JAVA_AGENT_TRUE@am__append_3 = liblttng-ust-java-agent
-@BUILD_PYTHON_AGENT_TRUE@am__append_4 = liblttng-ust-python-agent
+@BUILD_PYTHON_AGENT_TRUE@am__append_4 = python-lttngust
 subdir = .
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(top_srcdir)/configure $(am__configure_deps) \
 	$(srcdir)/config.h.in \
 	$(top_srcdir)/include/lttng/ust-config.h.in \
 	$(top_srcdir)/include/lttng/ust-version.h.in \
-	$(top_srcdir)/liblttng-ust-python-agent/lttngust/__init__.py.in \
+	$(top_srcdir)/python-lttngust/lttngust/__init__.py.in \
 	$(srcdir)/lttng-ust.pc.in \
-	$(top_srcdir)/liblttng-ust-python-agent/lttngust/agent.py \
-	$(top_srcdir)/liblttng-ust-python-agent/lttngust/cmd.py \
-	$(top_srcdir)/liblttng-ust-python-agent/lttngust/debug.py \
-	$(top_srcdir)/liblttng-ust-python-agent/lttngust/loghandler.py \
+	$(top_srcdir)/python-lttngust/lttngust/agent.py \
+	$(top_srcdir)/python-lttngust/lttngust/cmd.py \
+	$(top_srcdir)/python-lttngust/lttngust/debug.py \
+	$(top_srcdir)/python-lttngust/lttngust/loghandler.py \
 	$(dist_doc_DATA) $(dist_noinst_DATA) COPYING ChangeLog \
 	config/compile config/config.guess config/config.sub \
 	config/depcomp config/install-sh config/missing \
@@ -128,12 +128,11 @@ am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
 mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = config.h $(top_builddir)/include/lttng/ust-config.h
 CONFIG_CLEAN_FILES = include/lttng/ust-version.h \
-	liblttng-ust-python-agent/lttngust/__init__.py lttng-ust.pc
-CONFIG_CLEAN_VPATH_FILES =  \
-	liblttng-ust-python-agent/lttngust/agent.py \
-	liblttng-ust-python-agent/lttngust/cmd.py \
-	liblttng-ust-python-agent/lttngust/debug.py \
-	liblttng-ust-python-agent/lttngust/loghandler.py
+	python-lttngust/lttngust/__init__.py lttng-ust.pc
+CONFIG_CLEAN_VPATH_FILES = python-lttngust/lttngust/agent.py \
+	python-lttngust/lttngust/cmd.py \
+	python-lttngust/lttngust/debug.py \
+	python-lttngust/lttngust/loghandler.py
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -221,9 +220,10 @@ CTAGS = ctags
 CSCOPE = cscope
 DIST_SUBDIRS = . include snprintf libringbuffer liblttng-ust-comm \
 	liblttng-ust liblttng-ust-ctl liblttng-ust-fork \
-	liblttng-ust-libc-wrapper liblttng-ust-cyg-profile tools \
-	liblttng-ust-dl liblttng-ust-java liblttng-ust-java-agent \
-	liblttng-ust-python-agent tests doc
+	liblttng-ust-libc-wrapper liblttng-ust-cyg-profile \
+	liblttng-ust-python-agent tools liblttng-ust-dl \
+	liblttng-ust-java liblttng-ust-java-agent python-lttngust \
+	tests doc
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 distdir = $(PACKAGE)-$(VERSION)
 top_distdir = $(distdir)
@@ -419,9 +419,9 @@ top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I config
 SUBDIRS = . include snprintf libringbuffer liblttng-ust-comm \
 	liblttng-ust liblttng-ust-ctl liblttng-ust-fork \
-	liblttng-ust-libc-wrapper liblttng-ust-cyg-profile tools \
-	$(am__append_1) $(am__append_2) $(am__append_3) \
-	$(am__append_4) tests doc
+	liblttng-ust-libc-wrapper liblttng-ust-cyg-profile \
+	liblttng-ust-python-agent tools $(am__append_1) \
+	$(am__append_2) $(am__append_3) $(am__append_4) tests doc
 
 #temporarily disabled
 # liblttng-ust-malloc
@@ -492,7 +492,7 @@ distclean-hdr:
 	-rm -f config.h stamp-h1 include/lttng/ust-config.h include/lttng/stamp-h2
 include/lttng/ust-version.h: $(top_builddir)/config.status $(top_srcdir)/include/lttng/ust-version.h.in
 	cd $(top_builddir) && $(SHELL) ./config.status $@
-liblttng-ust-python-agent/lttngust/__init__.py: $(top_builddir)/config.status $(top_srcdir)/liblttng-ust-python-agent/lttngust/__init__.py.in
+python-lttngust/lttngust/__init__.py: $(top_builddir)/config.status $(top_srcdir)/python-lttngust/lttngust/__init__.py.in
 	cd $(top_builddir) && $(SHELL) ./config.status $@
 lttng-ust.pc: $(top_builddir)/config.status $(srcdir)/lttng-ust.pc.in
 	cd $(top_builddir) && $(SHELL) ./config.status $@
