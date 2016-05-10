@@ -1,124 +1,243 @@
-.TH "LTTNG-GEN-TP" "1" "February 16, 2012" "" ""
-
+'\" t
+.\"     Title: lttng-gen-tp
+.\"    Author: [see the "AUTHOR" section]
+.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
+.\"      Date: 04/26/2016
+.\"    Manual: LTTng Manual
+.\"    Source: LTTng 2.8.0-rc2
+.\"  Language: English
+.\"
+.TH "LTTNG\-GEN\-TP" "1" "04/26/2016" "LTTng 2\&.8\&.0\-rc2" "LTTng Manual"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
+.\" -----------------------------------------------------------------
+.\" * set default formatting
+.\" -----------------------------------------------------------------
+.\" disable hyphenation
+.nh
+.\" disable justification (adjust text to left margin only)
+.ad l
+.\" -----------------------------------------------------------------
+.\" * MAIN CONTENT STARTS HERE *
+.\" -----------------------------------------------------------------
 .SH "NAME"
-lttng-gen-tp \(em LTTng UST 2.x tracepoint code generator
-
+lttng-gen-tp \- Generate LTTng\-UST tracepoint provider code
 .SH "SYNOPSIS"
-
-.PP
+.sp
 .nf
-lttng\-gen\-tp [OPTIONS] TEMPLATE_FILE
+\fBlttng\-gen\-tp\fR [\fB--verbose\fR] [\fB--output\fR=\fIFILE\fR\&.c]
+             [\fB--output\fR=\fIFILE\fR\&.h] [\fB--output\fR=\fIFILE\fR\&.o] \fITEMPLATE\fR
 .fi
 .SH "DESCRIPTION"
-
-.PP
-The LTTng project aims at providing highly efficient tracing tools for Linux.
-Its tracers help in tracking down performance issues and debugging problems
-involving multiple concurrent processes and threads. Tracing across multiple
-systems is also possible.
-
-The \fBlttng\-gen\-tp\fP tool simplifies the generation of the UST tracepoint
-files. It takes a simple template file and generates the necessary code to use the defined tracepoints in your application.
-The section TEMPLATE FILE FORMAT describes the content of the template file.
-
-Currently, the tool can generate the .h, .c and .o associated with your
-tracepoint. The generated .h can be directly included in your application.
-You can let the tool generate the .o or compile the .c yourself.
-You can compile the .c into a .o, .a or .so at your choice and
-link it with your application.
-Refer to the UST documentation for the
-advantages and disadvantage of each form.
-To compile the resulting .c file, you need to add the options
-"\-llttng-ust \-I.".
-
-.SH "OPTIONS"
-
-.PP
-This program follows the usual GNU command line syntax with long options starting with
-two dashes. Below is a summary of the available options.
-.PP
-
-.TP
-.BR "\-h, \-\-help"
-Show summary of possible options and commands.
-.TP
-.BR "\-v, \-\-verbose"
-Increase verbosity.
-.TP
-.BR "\-o, \-\-output"
-Specify the generated file. The type of the generated file depend on the file
-extension (.h, .c, .o).
-This option can be specified multiple times to generate different file type.
-
-.PP
-When no output is specified the default files are generated with the same base filename as the template file. The default files are: .h, .c, .o.
-
-.SH "TEMPLATE FILE FORMAT"
-
-The template file, which has the usual extension \fB.tp\fP, contains a list of
-TRACEPOINT_EVENT definitions and other optional definition entries like
-TRACEPOINT_LOGLEVEL.
-(See lttng-ust(3) for the complete list of available definition.)
-
-You write them as you would write them in a C header file. You can add
-comments with \fB/* */\fP, \fB//\fP and \fB#\fP.
-
-The provider name (the first field of TRACEPOINT_EVENT) must be
-the same for the whole file.
-
-.TP
-.SH "Example"
-.TP
+.sp
+The \fBlttng-gen-tp\fR tool simplifies the generation of LTTng\-UST tracepoint provider files\&. It takes a simple template file, \fITEMPLATE\fR, and generates the necessary C code to use the defined tracepoints in your application\&. See the \fITemplate file format\fR section below for more information about the format of \fITEMPLATE\fR\&.
+.sp
+Currently, \fBlttng-gen-tp\fR can generate the \fB.h\fR, \fB.c\fR, and \fB.o\fR files associated with your tracepoint provider\&. The generated \fB.h\fR file can be included directly in your application\&. You can let \fBlttng-gen-tp\fR generate the \fB.o\fR file or compile the \fB.c\fR file yourself\&. See \fBlttng-ust\fR(3) for more information about compiling LTTng\-UST tracepoint providers\&.
+.sp
+By default, \fBlttng-gen-tp\fR generates the \fB.h\fR, \fB.c\fR, and \fB.o\fR files, their basename being the basename of \fITEMPLATE\fR\&. You can generate one or more specific file types with the \fB--output\fR option, repeated if needed\&.
+.SS "Template file format"
+.sp
+The template file, which usually has the \fB.tp\fR extension, contains a list of \fBTRACEPOINT_EVENT()\fR definitions and other optional definition entries, like \fBTRACEPOINT_LOGLEVEL()\fR\&. See \fBlttng-ust\fR(3) for the complete list of available definitions\&.
+.sp
+The \fBTRACEPOINT_EVENT()\fR definitions are written as you would write them in an LTTng\-UST template provider header file\&. C comments are supported (\fB/* */\fR and \fB//\fR), as well as lines starting with \fB#\fR\&.
+.if n \{\
+.sp
+.\}
+.RS 4
+.it 1 an-trap
+.nr an-no-space-flag 1
+.nr an-break-flag 1
+.br
+.ps +1
+\fBNote\fR
+.ps -1
+.br
+.sp
+The provider name (the first argument of \fBTRACEPOINT_EVENT()\fR) must be the same in all the \fBTRACEPOINT_EVENT()\fR macros of \fITEMPLATE\fR\&.
+.sp .5v
+.RE
+.sp
+Here\(cqs an example:
+.sp
+.if n \{\
+.RS 4
+.\}
 .nf
 TRACEPOINT_EVENT(
-    sample_tracepoint,
-    message, // Comment
+    // Tracepoint provider name
+    my_provider,
+
+    // Tracepoint/event name
+    my_event,
+
+    // Tracepoint arguments (input)
     TP_ARGS(char *, text),
-    /* Next are the fields */
+
+    // Tracepoint/event fields (output)
     TP_FIELDS(
         ctf_string(message, text)
     )
 )
+.fi
+.if n \{\
+.RE
+.\}
+.SH "OPTIONS"
+.PP
+\fB-o\fR, \fB--output\fR=\fIFILE\fR
+.RS 4
+Do not generate default files: generate
+\fIFILE\fR\&.
+.sp
+The extension of
+\fIFILE\fR
+determines what is generated, amongst
+\fB.h\fR,
+\fB.c\fR, and
+\fB.o\fR\&. This option can be used more than one time to generate different file types\&.
+.RE
+.PP
+\fB-v\fR, \fB--verbose\fR
+.RS 4
+Increase verbosity\&.
+.RE
+.PP
+\fB-h\fR, \fB--help\fR
+.RS 4
+Show command help\&.
+.RE
 .SH "ENVIRONMENT VARIABLES"
-
 .PP
-When the tool generates a .o file, it will look for the following environment variables
+\fBCC\fR
+.RS 4
+C compiler to use\&. Default:
+\fBcc\fR, then
+\fBgcc\fR
+if
+\fBcc\fR
+is not found\&. This option is only relevant when generating the
+\fB.o\fR
+file\&.
+.RE
 .PP
-
+\fBCFLAGS\fR
+.RS 4
+Flags and options passed directly to the compiler (\fB$CC\fR)\&. This option is only relevant when generating the
+\fB.o\fR
+file\&.
+.RE
+.SH "EXIT STATUS"
 .PP
-.IP "CC"
-Specify which C compiler to use. If the variable is not specified, the
-tool will try "cc" and "gcc"
-
-.IP "CFLAGS"
-Flags directly passed to the compiler
-.SH "SEE ALSO"
-
+\fB0\fR
+.RS 4
+Success
+.RE
 .PP
-lttng-ust(3), lttng(1)
-.PP
+\fBNon\-zero\fR
+.RS 4
+Error
+.RE
 .SH "BUGS"
-
-.PP
-If you encounter any issues or usability problem, please report it on our
-mailing list <lttng-dev@lists.lttng.org> to help improve this project.
-.SH "CREDITS"
-
-.PP
-lttng\-gen\-tp is distributed under the GNU General Public License version 2. See the file
-COPYING for details.
-.PP
-A Web site is available at http://lttng.org for more information on the LTTng
-project.
-.PP
-You can also find our git tree at http://git.lttng.org.
-.PP
-Mailing lists for support and development: <lttng-dev@lists.lttng.org>.
-.PP
-You can find us on IRC server irc.oftc.net (OFTC) in #lttng.
-.PP
-.SH "AUTHORS"
-
-.PP
-lttng\-gen\-tp is written by Yannick Brosseau <yannick.brosseau@gmail.com>.
-.PP
+.sp
+If you encounter any issue or usability problem, please report it on the LTTng bug tracker <https://bugs.lttng.org/projects/lttng-ust>\&.
+.SH "RESOURCES"
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+LTTng project website <http://lttng.org>
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+LTTng documentation <http://lttng.org/docs>
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Git repositories <http://git.lttng.org>
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+GitHub organization <http://github.com/lttng>
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Continuous integration <http://ci.lttng.org/>
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Mailing list <http://lists.lttng.org>
+for support and development:
+\fBlttng-dev@lists.lttng.org\fR
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+IRC channel <irc://irc.oftc.net/lttng>:
+\fB#lttng\fR
+on
+\fBirc.oftc.net\fR
+.RE
+.SH "COPYRIGHTS"
+.sp
+\fBlttng-gen-tp\fR is part of the LTTng\-UST project\&.
+.sp
+\fBlttng-gen-tp\fR is distributed under the GNU General Public License, version 2 <http://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html>\&. See the \fBCOPYING\fR <https://github.com/lttng/lttng-ust/blob/master/COPYING> file for more details\&.
+.SH "AUTHOR"
+.sp
+\fBlttng-gen-tp\fR was originally written by Yannick Brosseau <mailto:yannick.brosseau@gmail.com>\&. It is currently maintained by Mathieu Desnoyers <mailto:mathieu.desnoyers@efficios.com>\&.
+.SH "SEE ALSO"
+.sp
+\fBlttng-ust\fR(3)

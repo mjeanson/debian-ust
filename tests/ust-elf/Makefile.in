@@ -184,6 +184,7 @@ ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
 AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
 AR = @AR@
+ASCIIDOC = @ASCIIDOC@
 AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
@@ -268,6 +269,7 @@ UUDECODE = @UUDECODE@
 VERSION = @VERSION@
 WEAK_ALIAS = @WEAK_ALIAS@
 WEAK_ALIAS_CROSSFILE = @WEAK_ALIAS_CROSSFILE@
+XMLTO = @XMLTO@
 _ACJNI_JAVAC = @_ACJNI_JAVAC@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
@@ -337,7 +339,22 @@ prog_LDADD = $(top_builddir)/liblttng-ust/liblttng-ust.la \
 
 noinst_SCRIPTS = test_ust_elf
 CLEANFILES = $(noinst_SCRIPTS)
-EXTRA_DIST = test_ust_elf.in $(srcdir)/data/**
+EXTRA_DIST = test_ust_elf.in \
+	$(srcdir)/data/main.c \
+	$(srcdir)/data/aarch64_be/main.elf \
+	$(srcdir)/data/aarch64_be/main.elf.debug \
+	$(srcdir)/data/armeb/main.elf \
+	$(srcdir)/data/armeb/main.elf.debug \
+	$(srcdir)/data/x86/main.elf \
+	$(srcdir)/data/x86/main.elf.debug \
+	$(srcdir)/data/x86_64/main.elf \
+	$(srcdir)/data/x86_64/main.elf.debug \
+	$(srcdir)/data/pic/hello.exec \
+	$(srcdir)/data/pic/hello.pie \
+	$(srcdir)/data/pic/hello.pic \
+	$(srcdir)/data/pic/hello.c \
+	$(srcdir)/data/pic/libhello.c
+
 all: all-am
 
 .SUFFIXES:
