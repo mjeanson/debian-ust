@@ -15,6 +15,7 @@ liblttng-ust-ctl.so.2 liblttng-ust-ctl2 #MINVER#
  channel_handle_create@Base 2.5.0
  channel_handle_get_nr_streams@Base 2.5.0
  channel_reset@Base 2.5.0
+ dt_var_fields@Base 2.8.0
  init_usterr@Base 2.5.0
  lib_ring_buffer_backend_create@Base 2.5.0
  lib_ring_buffer_backend_reset@Base 2.5.0
@@ -39,6 +40,7 @@ liblttng-ust-ctl.so.2 liblttng-ust-ctl2 #MINVER#
  lttng_client_callbacks_metadata@Base 2.5.0
  lttng_client_callbacks_overwrite@Base 2.5.0
  lttng_client_callbacks_overwrite_rt@Base 2.5.0
+ lttng_context_is_app@Base 2.8.0
  lttng_crash_magic_xor@Base 2.7.0
  lttng_fixup_ringbuffer_tls@Base 2.5.0
  lttng_get_cpu@Base 2.7.0
@@ -57,7 +59,14 @@ liblttng-ust-ctl.so.2 liblttng-ust-ctl2 #MINVER#
  lttng_transport_register@Base 2.5.0
  lttng_transport_unregister@Base 2.5.0
  lttng_ust_clock_init@Base 2.7.0
+ lttng_ust_dummy_get_size@Base 2.8.0
+ lttng_ust_dummy_get_value@Base 2.8.0
+ lttng_ust_dummy_record@Base 2.8.0
+ lttng_ust_dynamic_type_choices@Base 2.8.0
+ lttng_ust_dynamic_type_field@Base 2.8.0
+ lttng_ust_dynamic_type_tag_field@Base 2.8.0
  lttng_ust_enable_trace_clock_override@Base 2.7.0
+ lttng_ust_enum_get@Base 2.8.0
  lttng_ust_getcpu_init@Base 2.7.0
  lttng_ust_getcpu_override@Base 2.7.0
  lttng_ust_strerror@Base 2.5.0
@@ -94,6 +103,7 @@ liblttng-ust-ctl.so.2 liblttng-ust-ctl2 #MINVER#
  ustcomm_recv_stream_from_sessiond@Base 2.5.0
  ustcomm_recv_unix_sock@Base 2.5.0
  ustcomm_register_channel@Base 2.5.0
+ ustcomm_register_enum@Base 2.8.0
  ustcomm_register_event@Base 2.5.0
  ustcomm_send_app_cmd@Base 2.5.0
  ustcomm_send_app_msg@Base 2.5.0
@@ -121,6 +131,7 @@ liblttng-ust-ctl.so.2 liblttng-ust-ctl2 #MINVER#
  ustctl_get_content_size@Base 2.5.0
  ustctl_get_current_timestamp@Base 2.5.0
  ustctl_get_events_discarded@Base 2.5.0
+ ustctl_get_instance_id@Base 2.8.0
  ustctl_get_max_subbuf_size@Base 2.5.0
  ustctl_get_mmap_base@Base 2.5.0
  ustctl_get_mmap_len@Base 2.5.0
@@ -129,6 +140,7 @@ liblttng-ust-ctl.so.2 liblttng-ust-ctl2 #MINVER#
  ustctl_get_nr_stream_per_channel@Base 2.7.0
  ustctl_get_packet_size@Base 2.5.0
  ustctl_get_padded_subbuf_size@Base 2.5.0
+ ustctl_get_sequence_number@Base 2.8.0
  ustctl_get_stream_id@Base 2.5.0
  ustctl_get_subbuf@Base 2.5.0
  ustctl_get_subbuf_size@Base 2.5.0
@@ -141,12 +153,14 @@ liblttng-ust-ctl.so.2 liblttng-ust-ctl2 #MINVER#
  ustctl_recv_notify@Base 2.5.0
  ustctl_recv_reg_msg@Base 2.5.0
  ustctl_recv_register_channel@Base 2.5.0
+ ustctl_recv_register_enum@Base 2.8.0
  ustctl_recv_register_event@Base 2.5.0
  ustctl_recv_stream_from_consumer@Base 2.5.0
  ustctl_register_done@Base 2.5.0
  ustctl_release_handle@Base 2.5.0
  ustctl_release_object@Base 2.5.0
  ustctl_reply_register_channel@Base 2.5.0
+ ustctl_reply_register_enum@Base 2.8.0
  ustctl_reply_register_event@Base 2.5.0
  ustctl_send_channel_to_sessiond@Base 2.5.0
  ustctl_send_channel_to_ust@Base 2.5.0
