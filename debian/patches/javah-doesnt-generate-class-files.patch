@@ -1,6 +1,6 @@
 --- a/liblttng-ust-java/Makefile.am
 +++ b/liblttng-ust-java/Makefile.am
-@@ -20,6 +20,7 @@
+@@ -22,6 +22,7 @@
  org_lttng_ust_LTTngUst.h: jni-header.stamp
  
  jni-header.stamp: $(dist_noinst_JAVA)
