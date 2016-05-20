@@ -28,7 +28,10 @@
 #include <lttng/ringbuffer-config.h>
 #include <lttng/ust-compiler.h>
 #include <lttng/tracepoint.h>
+#include <byteswap.h>
 #include <string.h>
+
+#define __LTTNG_UST_NULL_STRING	"(null)"
 
 #undef tp_list_for_each_entry_rcu
 #define tp_list_for_each_entry_rcu(pos, head, member)	\
@@ -118,6 +121,59 @@ static const char							\
 #include TRACEPOINT_INCLUDE
 
 /*
+ * Stage 0.9 of tracepoint event generation
+ *
+ * Unfolding the enums
+ */
+#include <lttng/ust-tracepoint-event-reset.h>
+
+/* Enumeration entry (single value) */
+#undef ctf_enum_value
+#define ctf_enum_value(_string, _value)					\
+	{								\
+		.start = {						\
+			.signedness = lttng_is_signed_type(__typeof__(_value)), \
+			.value = lttng_is_signed_type(__typeof__(_value)) ? \
+				(long long) (_value) : (_value),	\
+		},							\
+		.end = {						\
+			.signedness = lttng_is_signed_type(__typeof__(_value)), \
+			.value = lttng_is_signed_type(__typeof__(_value)) ? \
+				(long long) (_value) : (_value),	\
+		},							\
+		.string = (_string),					\
+	},
+
+/* Enumeration entry (range) */
+#undef ctf_enum_range
+#define ctf_enum_range(_string, _range_start, _range_end)		\
+	{								\
+		.start = {						\
+			.signedness = lttng_is_signed_type(__typeof__(_range_start)), \
+			.value = lttng_is_signed_type(__typeof__(_range_start)) ? \
+				(long long) (_range_start) : (_range_start), \
+		},							\
+		.end = {						\
+			.signedness = lttng_is_signed_type(__typeof__(_range_end)), \
+			.value = lttng_is_signed_type(__typeof__(_range_end)) ? \
+				(long long) (_range_end) : (_range_end), \
+		},							\
+		.string = (_string),					\
+	},
+
+#undef TP_ENUM_VALUES
+#define TP_ENUM_VALUES(...)						\
+	__VA_ARGS__
+
+#undef TRACEPOINT_ENUM
+#define TRACEPOINT_ENUM(_provider, _name, _values)			\
+	const struct lttng_enum_entry __enum_values__##_provider##_##_name[] = { \
+		_values							\
+	};
+
+#include TRACEPOINT_INCLUDE
+
+/*
  * Stage 1 of tracepoint event generation.
  *
  * Create event field type metadata section.
@@ -200,6 +256,31 @@ static const char							\
 	  .nowrite = _nowrite,					\
 	},
 
+#undef _ctf_enum
+#define _ctf_enum(_provider, _name, _type, _item, _src, _nowrite) \
+	{							\
+		.name = #_item,					\
+		.type = {					\
+			.atype = atype_enum,			\
+			.u = {					\
+				.basic = {			\
+					.enumeration = {	\
+						.desc = &__enum_##_provider##_##_name, \
+						.container_type = { \
+							.size = sizeof(_type) * CHAR_BIT, \
+							.alignment = lttng_alignof(_type) * CHAR_BIT, \
+							.signedness = lttng_is_signed_type(_type), \
+							.reverse_byte_order = 0, \
+							.base = 10, \
+							.encoding = lttng_encode_none, \
+						},		\
+					},			\
+				 },				\
+			},					\
+		},						\
+		.nowrite = _nowrite,				\
+	},
+
 #undef TP_FIELDS
 #define TP_FIELDS(...) __VA_ARGS__	/* Only one used in this phase */
 
@@ -207,6 +288,14 @@ static const char							\
 #define TRACEPOINT_EVENT_CLASS(_provider, _name, _args, _fields)		   	     \
 	static const struct lttng_event_field __event_fields___##_provider##___##_name[] = { \
 		_fields									     \
+	};
+
+#undef TRACEPOINT_ENUM
+#define TRACEPOINT_ENUM(_provider, _name, _values)					\
+	static const struct lttng_enum_desc __enum_##_provider##_##_name = {		\
+		.name = #_provider "_" #_name,						\
+		.entries = __enum_values__##_provider##_##_name,			\
+		.nr_entries = _TP_ARRAY_SIZE(__enum_values__##_provider##_##_name),	\
 	};
 
 #include TRACEPOINT_INCLUDE
@@ -230,7 +319,7 @@ static void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args));
 #include TRACEPOINT_INCLUDE
 
 /*
- * Stage 3 of tracepoint event generation.
+ * Stage 3.0 of tracepoint event generation.
  *
  * Create static inline function that calculates event size.
  */
@@ -266,7 +355,12 @@ static void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args));
 
 #undef _ctf_string
 #define _ctf_string(_item, _src, _nowrite)				       \
-	__event_len += __dynamic_len[__dynamic_len_idx++] = strlen(_src) + 1;
+	__event_len += __dynamic_len[__dynamic_len_idx++] =		       \
+		strlen((_src) ? (_src) : __LTTNG_UST_NULL_STRING) + 1;
+
+#undef _ctf_enum
+#define _ctf_enum(_provider, _name, _type, _item, _src, _nowrite)		\
+	_ctf_integer_ext(_type, _item, _src, BYTE_ORDER, 10, _nowrite)
 
 #undef TP_ARGS
 #define TP_ARGS(...) __VA_ARGS__
@@ -318,18 +412,24 @@ size_t __event_get_size__##_provider##___##_name(size_t *__dynamic_len, _TP_ARGS
 		case 2:							       \
 		{							       \
 			union { _type t; int16_t v; } __tmp = { (_type) (_src) }; \
+			if (_byte_order != BYTE_ORDER)			       \
+				__tmp.v = bswap_16(__tmp.v);		       \
 			__ctf_tmp_int64 = (int64_t) __tmp.v;		       \
 			break;						       \
 		}							       \
 		case 4:							       \
 		{							       \
 			union { _type t; int32_t v; } __tmp = { (_type) (_src) }; \
+			if (_byte_order != BYTE_ORDER)			       \
+				__tmp.v = bswap_32(__tmp.v);		       \
 			__ctf_tmp_int64 = (int64_t) __tmp.v;		       \
 			break;						       \
 		}							       \
 		case 8:							       \
 		{							       \
 			union { _type t; int64_t v; } __tmp = { (_type) (_src) }; \
+			if (_byte_order != BYTE_ORDER)			       \
+				__tmp.v = bswap_64(__tmp.v);		       \
 			__ctf_tmp_int64 = (int64_t) __tmp.v;		       \
 			break;						       \
 		}							       \
@@ -349,18 +449,24 @@ size_t __event_get_size__##_provider##___##_name(size_t *__dynamic_len, _TP_ARGS
 		case 2:							       \
 		{							       \
 			union { _type t; uint16_t v; } __tmp = { (_type) (_src) }; \
+			if (_byte_order != BYTE_ORDER)			       \
+				__tmp.v = bswap_16(__tmp.v);		       \
 			__ctf_tmp_uint64 = (uint64_t) __tmp.v;		       \
 			break;						       \
 		}							       \
 		case 4:							       \
 		{							       \
 			union { _type t; uint32_t v; } __tmp = { (_type) (_src) }; \
+			if (_byte_order != BYTE_ORDER)			       \
+				__tmp.v = bswap_32(__tmp.v);		       \
 			__ctf_tmp_uint64 = (uint64_t) __tmp.v;		       \
 			break;						       \
 		}							       \
 		case 8:							       \
 		{							       \
 			union { _type t; uint64_t v; } __tmp = { (_type) (_src) }; \
+			if (_byte_order != BYTE_ORDER)			       \
+				__tmp.v = bswap_64(__tmp.v);		       \
 			__ctf_tmp_uint64 = (uint64_t) __tmp.v;		       \
 			break;						       \
 		}							       \
@@ -405,10 +511,15 @@ size_t __event_get_size__##_provider##___##_name(size_t *__dynamic_len, _TP_ARGS
 #undef _ctf_string
 #define _ctf_string(_item, _src, _nowrite)				       \
 	{								       \
-		const void *__ctf_tmp_ptr = (_src);			       \
+		const void *__ctf_tmp_ptr =				       \
+			((_src) ? (_src) : __LTTNG_UST_NULL_STRING);	       \
 		memcpy(__stack_data, &__ctf_tmp_ptr, sizeof(void *));	       \
 		__stack_data += sizeof(void *);				       \
 	}
+
+#undef _ctf_enum
+#define _ctf_enum(_provider, _name, _type, _item, _src, _nowrite)		\
+	_ctf_integer_ext(_type, _item, _src, BYTE_ORDER, 10, _nowrite)
 
 #undef TP_ARGS
 #define TP_ARGS(...) __VA_ARGS__
@@ -426,8 +537,6 @@ void __event_prepare_filter_stack__##_provider##___##_name(char *__stack_data,\
 }
 
 #include TRACEPOINT_INCLUDE
-
-
 
 /*
  * Stage 4 of tracepoint event generation.
@@ -459,6 +568,10 @@ void __event_prepare_filter_stack__##_provider##___##_name(char *__stack_data,\
 
 #undef _ctf_string
 #define _ctf_string(_item, _src, _nowrite)
+
+#undef _ctf_enum
+#define _ctf_enum(_provider, _name, _type, _item, _src, _nowrite)		\
+	_ctf_integer_ext(_type, _item, _src, BYTE_ORDER, 10, _nowrite)
 
 #undef TP_ARGS
 #define TP_ARGS(...) __VA_ARGS__
@@ -536,13 +649,23 @@ size_t __event_get_align__##_provider##___##_name(_TP_ARGS_PROTO(_args))      \
 
 #undef _ctf_string
 #define _ctf_string(_item, _src, _nowrite)			        \
-	lib_ring_buffer_align_ctx(&__ctx, lttng_alignof(*(_src)));	\
-	if (__chan->ops->u.has_strcpy)					\
-		__chan->ops->event_strcpy(&__ctx, _src,			\
-			__get_dynamic_len(dest));			\
-	else								\
-		__chan->ops->event_write(&__ctx, _src,			\
-			__get_dynamic_len(dest));
+	{									\
+		const char *__ctf_tmp_string =					\
+			((_src) ? (_src) : __LTTNG_UST_NULL_STRING);		\
+		lib_ring_buffer_align_ctx(&__ctx,				\
+			lttng_alignof(*__ctf_tmp_string));			\
+		if (__chan->ops->u.has_strcpy)					\
+			__chan->ops->event_strcpy(&__ctx, __ctf_tmp_string,	\
+				__get_dynamic_len(dest));			\
+		else								\
+			__chan->ops->event_write(&__ctx, __ctf_tmp_string,	\
+				__get_dynamic_len(dest));			\
+	}
+
+
+#undef _ctf_enum
+#define _ctf_enum(_provider, _name, _type, _item, _src, _nowrite)	\
+	_ctf_integer_ext(_type, _item, _src, BYTE_ORDER, 10, _nowrite)
 
 /* Beware: this get len actually consumes the len value */
 #undef __get_dynamic_len
@@ -599,9 +722,10 @@ void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args));      \
 static									      \
 void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args))	      \
 {									      \
-	struct lttng_event *__event = (struct lttng_event *) __tp_data;			      \
+	struct lttng_event *__event = (struct lttng_event *) __tp_data;	      \
 	struct lttng_channel *__chan = __event->chan;			      \
 	struct lttng_ust_lib_ring_buffer_ctx __ctx;			      \
+	struct lttng_stack_ctx __lttng_ctx;				      \
 	size_t __event_len, __event_align;				      \
 	size_t __dynamic_len_idx = 0;					      \
 	union {								      \
@@ -639,8 +763,12 @@ void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args))	      \
 	__event_len = __event_get_size__##_provider##___##_name(__stackvar.__dynamic_len, \
 		 _TP_ARGS_DATA_VAR(_args));				      \
 	__event_align = __event_get_align__##_provider##___##_name(_TP_ARGS_VAR(_args)); \
+	memset(&__lttng_ctx, 0, sizeof(__lttng_ctx));			      \
+	__lttng_ctx.event = __event;					      \
+	__lttng_ctx.chan_ctx = tp_rcu_dereference_bp(__chan->ctx);	      \
+	__lttng_ctx.event_ctx = tp_rcu_dereference_bp(__event->ctx);	      \
 	lib_ring_buffer_ctx_init(&__ctx, __chan->chan, __event, __event_len,  \
-				 __event_align, -1, __chan->handle);	      \
+				 __event_align, -1, __chan->handle, &__lttng_ctx); \
 	__ctx.ip = _TP_IP_PARAM(TP_IP_PARAM);				      \
 	__ret = __chan->ops->event_reserve(&__ctx, __event->id);	      \
 	if (__ret < 0)							      \
@@ -669,7 +797,7 @@ void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args))	      \
 
 #undef TRACEPOINT_EVENT_CLASS
 #define TRACEPOINT_EVENT_CLASS(_provider, _name, _args, _fields)	\
-const char __tp_event_signature___##_provider##___##_name[] = 		\
+static const char __tp_event_signature___##_provider##___##_name[] = 	\
 		_TP_EXTRACT_STRING2(_args);
 
 #include TRACEPOINT_INCLUDE
@@ -730,7 +858,7 @@ static const int *							       \
 static const char *							       \
 	__ref_model_emf_uri___##_provider##___##_name			       \
 	__attribute__((weakref ("_model_emf_uri___" #_provider "___" #_name)));\
-const struct lttng_event_desc __event_desc___##_provider##_##_name = {	       \
+static const struct lttng_event_desc __event_desc___##_provider##_##_name = {	       \
 	.name = #_provider ":" #_name,					       \
 	.probe_callback = (void (*)(void)) &__event_probe__##_provider##___##_template,\
 	.ctx = NULL,							       \
@@ -738,7 +866,11 @@ const struct lttng_event_desc __event_desc___##_provider##_##_name = {	       \
 	.nr_fields = _TP_ARRAY_SIZE(__event_fields___##_provider##___##_template), \
 	.loglevel = &__ref_loglevel___##_provider##___##_name,		       \
 	.signature = __tp_event_signature___##_provider##___##_template,       \
-	.u = { .ext = { .model_emf_uri = &__ref_model_emf_uri___##_provider##___##_name } }, \
+	.u = {								       \
+	    .ext = {							       \
+		  .model_emf_uri = &__ref_model_emf_uri___##_provider##___##_name, \
+		},							       \
+	},								       \
 };
 
 #include TRACEPOINT_INCLUDE

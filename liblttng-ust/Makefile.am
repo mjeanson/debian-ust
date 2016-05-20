@@ -7,6 +7,7 @@ lib_LTLIBRARIES = liblttng-ust-tracepoint.la liblttng-ust.la
 
 liblttng_ust_tracepoint_la_SOURCES = \
 	tracepoint.c \
+	tracepoint-weak-test.c \
 	tracepoint-internal.h \
 	lttng-tracer-core.h \
 	jhash.h \
@@ -21,6 +22,7 @@ liblttng_ust_runtime_la_SOURCES = \
 	lttng-ust-comm.c \
 	lttng-ust-abi.c \
 	lttng-probes.c \
+	lttng-context-provider.c \
 	lttng-context-vtid.c \
 	lttng-context-vpid.c \
 	lttng-context-pthread-id.c \
@@ -36,6 +38,7 @@ liblttng_ust_runtime_la_SOURCES = \
 	lttng-filter-interpreter.c \
 	filter-bytecode.h \
 	lttng-hash-helper.h \
+	lttng-ust-elf.c \
 	lttng-ust-statedump.c \
 	lttng-ust-statedump.h \
 	lttng-ust-statedump-provider.h \
@@ -61,6 +64,7 @@ liblttng_ust_support_la_SOURCES = \
 	lttng-tracer.h \
 	lttng-tracer-core.h \
 	ust-core.c \
+	lttng-ust-dynamic-type.c \
 	lttng-rb-clients.h \
 	lttng-ring-buffer-client.h \
 	lttng-ring-buffer-client-discard.c \

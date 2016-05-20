@@ -1,52 +1,283 @@
-.TH "LTTNG-UST-DL" "3" "December 19, 2013" "" ""
-
+'\" t
+.\"     Title: lttng-ust-dl
+.\"    Author: [see the "AUTHORS" section]
+.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
+.\"      Date: 05/20/2016
+.\"    Manual: LTTng Manual
+.\"    Source: LTTng 2.8.0-rc2
+.\"  Language: English
+.\"
+.TH "LTTNG\-UST\-DL" "3" "05/20/2016" "LTTng 2\&.8\&.0\-rc2" "LTTng Manual"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
+.\" -----------------------------------------------------------------
+.\" * set default formatting
+.\" -----------------------------------------------------------------
+.\" disable hyphenation
+.nh
+.\" disable justification (adjust text to left margin only)
+.ad l
+.\" -----------------------------------------------------------------
+.\" * MAIN CONTENT STARTS HERE *
+.\" -----------------------------------------------------------------
 .SH "NAME"
-lttng-ust-dl \(em LTTng UST 2.x Dynamic Linker Tracing
-
+lttng-ust-dl \- Dynamic linker tracing (LTTng\-UST helper)
 .SH "SYNOPSIS"
-Launch your application with:
-.TP
-\fBLD_PRELOAD=liblttng-ust-dl.so\fP appname
-.PP
-This LD_PRELOAD library causes all calls to dlopen and dlclose in the
-application to be traced with LTTng. In addition to loading this
-library, enabling this tracing requires the following two events to be
-enabled: "ust_baddr:push" and "ust_baddr:pop".
-
+.sp
+Launch your application by preloading \fBliblttng-ust-dl.so\fR:
+.sp
+.nf
+\fBLD_PRELOAD=liblttng\-ust\-dl\&.so\fR my\-app
+.fi
 .SH "DESCRIPTION"
-The events have the following detailed definitions:
+.sp
+When the \fBliblttng-ust-dl.so\fR library is preloaded before a given application starts, it causes all calls to \fBdlopen\fR(3) and \fBdlclose\fR(3) in said application to be traced with LTTng\-UST (see \fBlttng-ust\fR(3))\&.
+.sp
+See \fBlttng\fR(1) to learn more about how to control LTTng tracing sessions\&.
+.sp
+The following LTTng\-UST events are available when using this library:
 .PP
-.IP "ust_baddr:push"
-This event is used to trace dlopen calls. The base address (where the
-dynamic linker has placed the shared object) is recorded in the "baddr"
-field. The path to the shared object gets recorded in the "sopath" field
-(as string). The file size of the loaded object (in bytes) is recorded
-to the "size" field and its time of last modification (in seconds since
-Epoch) is recorded in the "mtime" field.
-.IP "ust_baddr:pop"
-This event is used to trace dlclose calls. The base address of the shared
-object that got closed is recorded in the "baddr" field.
+\fBlttng_ust_dl:dlopen\fR
+.RS 4
+Emitted when
+\fBdlopen\fR(3)
+is called\&.
+.sp
+Fields:
+.TS
+allbox tab(:);
+ltB ltB.
+T{
+Field name
+T}:T{
+Description
+T}
+.T&
+lt lt
+lt lt
+lt lt.
+T{
+\fBbaddr\fR
+T}:T{
+Base address of loaded library
+T}
+T{
+\fBmemsz\fR
+T}:T{
+Size of loaded library in memory
+T}
+T{
+\fBpath\fR
+T}:T{
+Path to loaded library file
+T}
+.TE
+.sp 1
+.RE
 .PP
-
-.SH "SEE ALSO"
-lttng-ust(3), dlopen(3), lttng(1)
-
+\fBlttng_ust_dl:dlclose\fR
+.RS 4
+Emitted when
+\fBdlclose\fR(3)
+is called\&.
+.sp
+Fields:
+.TS
+allbox tab(:);
+ltB ltB.
+T{
+Field name
+T}:T{
+Description
+T}
+.T&
+lt lt.
+T{
+\fBbaddr\fR
+T}:T{
+Base address of loaded library
+T}
+.TE
+.sp 1
+.RE
+.PP
+\fBlttng_ust_dl:debug_link\fR
+.RS 4
+Emitted when debug link information is found when loading a library with
+\fBdlopen\fR(3)\&. See
+Debugging Information in Separate Files <https://sourceware.org/gdb/onlinedocs/gdb/Separate-Debug-Files.html>
+for more information about debug links\&.
+.sp
+Fields:
+.TS
+allbox tab(:);
+ltB ltB.
+T{
+Field name
+T}:T{
+Description
+T}
+.T&
+lt lt
+lt lt
+lt lt.
+T{
+\fBbaddr\fR
+T}:T{
+Base address of loaded library
+T}
+T{
+\fBfilename\fR
+T}:T{
+Debug link file name
+T}
+T{
+\fBcrc\fR
+T}:T{
+Debug link file\(cqs CRC
+T}
+.TE
+.sp 1
+.RE
+.PP
+\fBlttng_ust_dl:build_id\fR
+.RS 4
+Emitted when a build ID is found when loading a library with
+\fBdlopen\fR(3)\&. See
+Debugging Information in Separate Files <https://sourceware.org/gdb/onlinedocs/gdb/Separate-Debug-Files.html>
+for more information about build IDs\&.
+.sp
+Fields:
+.TS
+allbox tab(:);
+ltB ltB.
+T{
+Field name
+T}:T{
+Description
+T}
+.T&
+lt lt
+lt lt.
+T{
+\fBbaddr\fR
+T}:T{
+Base address of loaded library
+T}
+T{
+\fBbuild_id\fR
+T}:T{
+Build ID
+T}
+.TE
+.sp 1
+.RE
 .SH "BUGS"
-If you encounter any issues or usability problem, please report it on
-our mailing list <lttng-dev@lists.lttng.org> to help improve this
-project.
-
-.SH "CREDITS"
-liblttng-ust is distributed under the GNU Lesser General Public License
-version 2.1. The headers are distributed under the MIT license.
-
-See http://lttng.org for more information on the LTTng project.
-
-Mailing list for support and development: <lttng-dev@lists.lttng.org>.
-
-You can find us on IRC server irc.oftc.net (OFTC) in #lttng.
-
+.sp
+If you encounter any issue or usability problem, please report it on the LTTng bug tracker <https://bugs.lttng.org/projects/lttng-ust>\&.
+.SH "RESOURCES"
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+LTTng project website <http://lttng.org>
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+LTTng documentation <http://lttng.org/docs>
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Git repositories <http://git.lttng.org>
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+GitHub organization <http://github.com/lttng>
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Continuous integration <http://ci.lttng.org/>
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Mailing list <http://lists.lttng.org>
+for support and development:
+\fBlttng-dev@lists.lttng.org\fR
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+IRC channel <irc://irc.oftc.net/lttng>:
+\fB#lttng\fR
+on
+\fBirc.oftc.net\fR
+.RE
+.SH "COPYRIGHTS"
+.sp
+This library is part of the LTTng\-UST project\&.
+.sp
+This library is distributed under the GNU Lesser General Public License, version 2\&.1 <http://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html>\&. See the \fBCOPYING\fR <https://github.com/lttng/lttng-ust/blob/master/COPYING> file for more details\&.
+.SH "THANKS"
+.sp
+Thanks to Ericsson for funding this work, providing real\-life use cases, and testing\&.
+.sp
+Special thanks to Michel Dagenais and the DORSAL laboratory <http://www.dorsal.polymtl.ca/> at \('Ecole Polytechnique de Montr\('eal for the LTTng journey\&.
 .SH "AUTHORS"
-liblttng-ust was originally written by Mathieu Desnoyers, with additional
-contributions from various other people. It is currently maintained by
-Mathieu Desnoyers <mathieu.desnoyers@efficios.com>.
+.sp
+LTTng\-UST was originally written by Mathieu Desnoyers, with additional contributions from various other people\&. It is currently maintained by Mathieu Desnoyers <mailto:mathieu.desnoyers@efficios.com>\&.
+.SH "SEE ALSO"
+.sp
+\fBlttng-ust\fR(3), \fBdlopen\fR(3), \fBlttng\fR(1)

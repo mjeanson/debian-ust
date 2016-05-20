@@ -1,5 +1,8 @@
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
+/* LTTNG_UST_DEFAULT_CONSTRUCTOR_TIMEOUT_MS */
+#undef CONFIG_LTTNG_UST_DEFAULT_CONSTRUCTOR_TIMEOUT_MS
+
 /* Define to 1 if you have the declaration of `RTLD_DI_LINKMAP', and to 0 if
    you don't. */
 #undef HAVE_DECL_RTLD_DI_LINKMAP
@@ -135,21 +138,6 @@
 
 /* Version number of package */
 #undef VERSION
-
-/* UST version description */
-#undef VERSION_DESCRIPTION
-
-/* UST major version number */
-#undef VERSION_MAJOR
-
-/* UST minor version number */
-#undef VERSION_MINOR
-
-/* UST version name */
-#undef VERSION_NAME
-
-/* UST patchlevel version number */
-#undef VERSION_PATCHLEVEL
 
 /* Define to `__inline__' or `__inline' if that's what the C compiler
    calls it, or to nothing if 'inline' is not supported under any name.  */

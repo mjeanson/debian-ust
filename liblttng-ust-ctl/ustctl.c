@@ -212,34 +212,86 @@ int ustctl_create_event(int sock, struct lttng_ust_event *ev,
 	return 0;
 }
 
-int ustctl_add_context(int sock, struct lttng_ust_context *ctx,
+int ustctl_add_context(int sock, struct lttng_ust_context_attr *ctx,
 		struct lttng_ust_object_data *obj_data,
 		struct lttng_ust_object_data **_context_data)
 {
 	struct ustcomm_ust_msg lum;
 	struct ustcomm_ust_reply lur;
-	struct lttng_ust_object_data *context_data;
+	struct lttng_ust_object_data *context_data = NULL;
+	char *buf = NULL;
+	size_t len;
 	int ret;
 
-	if (!obj_data || !_context_data)
-		return -EINVAL;
+	if (!obj_data || !_context_data) {
+		ret = -EINVAL;
+		goto end;
+	}
 
 	context_data = zmalloc(sizeof(*context_data));
-	if (!context_data)
-		return -ENOMEM;
+	if (!context_data) {
+		ret = -ENOMEM;
+		goto end;
+	}
 	context_data->type = LTTNG_UST_OBJECT_TYPE_CONTEXT;
 	memset(&lum, 0, sizeof(lum));
 	lum.handle = obj_data->handle;
 	lum.cmd = LTTNG_UST_CONTEXT;
-	lum.u.context = *ctx;
-	ret = ustcomm_send_app_cmd(sock, &lum, &lur);
-	if (ret) {
-		free(context_data);
-		return ret;
+
+	lum.u.context.ctx = ctx->ctx;
+	switch (ctx->ctx) {
+	case LTTNG_UST_CONTEXT_PERF_THREAD_COUNTER:
+		lum.u.context.u.perf_counter = ctx->u.perf_counter;
+		break;
+	case LTTNG_UST_CONTEXT_APP_CONTEXT:
+	{
+		size_t provider_name_len = strlen(
+				ctx->u.app_ctx.provider_name) + 1;
+		size_t ctx_name_len = strlen(ctx->u.app_ctx.ctx_name) + 1;
+
+		lum.u.context.u.app_ctx.provider_name_len = provider_name_len;
+		lum.u.context.u.app_ctx.ctx_name_len = ctx_name_len;
+
+		len = provider_name_len + ctx_name_len;
+		buf = zmalloc(len);
+		if (!buf) {
+			ret = -ENOMEM;
+			goto end;
+		}
+		memcpy(buf, ctx->u.app_ctx.provider_name,
+				provider_name_len);
+		memcpy(buf + provider_name_len, ctx->u.app_ctx.ctx_name,
+				ctx_name_len);
+		break;
+	}
+	default:
+		break;
+	}
+	ret = ustcomm_send_app_msg(sock, &lum);
+	if (ret)
+		goto end;
+	if (buf) {
+		/* send var len ctx_name */
+		ret = ustcomm_send_unix_sock(sock, buf, len);
+		if (ret < 0) {
+			goto end;
+		}
+		if (ret != len) {
+			ret = -EINVAL;
+			goto end;
+		}
+	}
+	ret = ustcomm_recv_app_reply(sock, &lur, lum.handle, lum.cmd);
+	if (ret < 0) {
+		goto end;
 	}
 	context_data->handle = -1;
 	DBG("Context created successfully");
 	*_context_data = context_data;
+	context_data = NULL;
+end:
+	free(context_data);
+	free(buf);
 	return ret;
 }
 
@@ -1071,7 +1123,7 @@ int ustctl_write_metadata_to_channel(
 				chan->ops->packet_avail_size(chan->chan, chan->handle),
 				len - pos);
 		lib_ring_buffer_ctx_init(&ctx, chan->chan, NULL, reserve_len,
-					 sizeof(char), -1, chan->handle);
+					 sizeof(char), -1, chan->handle, NULL);
 		/*
 		 * We don't care about metadata buffer's records lost
 		 * count, because we always retry here. Report error if
@@ -1118,7 +1170,7 @@ ssize_t ustctl_write_one_packet_to_channel(
 			chan->ops->packet_avail_size(chan->chan, chan->handle),
 			len);
 	lib_ring_buffer_ctx_init(&ctx, chan->chan, NULL, reserve_len,
-			sizeof(char), -1, chan->handle);
+			sizeof(char), -1, chan->handle, NULL);
 	ret = chan->ops->event_reserve(&ctx, 0);
 	if (ret != 0) {
 		DBG("LTTng: event reservation failed");
@@ -1656,6 +1708,40 @@ int ustctl_get_current_timestamp(struct ustctl_consumer_stream *stream,
 	return client_cb->current_timestamp(buf, handle, ts);
 }
 
+int ustctl_get_sequence_number(struct ustctl_consumer_stream *stream,
+		uint64_t *seq)
+{
+	struct lttng_ust_client_lib_ring_buffer_client_cb *client_cb;
+	struct lttng_ust_lib_ring_buffer *buf;
+	struct lttng_ust_shm_handle *handle;
+
+	if (!stream || !seq)
+		return -EINVAL;
+	buf = stream->buf;
+	handle = stream->chan->chan->handle;
+	client_cb = get_client_cb(buf, handle);
+	if (!client_cb || !client_cb->sequence_number)
+		return -ENOSYS;
+	return client_cb->sequence_number(buf, handle, seq);
+}
+
+int ustctl_get_instance_id(struct ustctl_consumer_stream *stream,
+		uint64_t *id)
+{
+	struct lttng_ust_client_lib_ring_buffer_client_cb *client_cb;
+	struct lttng_ust_lib_ring_buffer *buf;
+	struct lttng_ust_shm_handle *handle;
+
+	if (!stream || !id)
+		return -EINVAL;
+	buf = stream->buf;
+	handle = stream->chan->chan->handle;
+	client_cb = get_client_cb(buf, handle);
+	if (!client_cb)
+		return -ENOSYS;
+	return client_cb->instance_id(buf, handle, id);
+}
+
 #if defined(__x86_64__) || defined(__i386__)
 
 int ustctl_has_perf_counters(void)
@@ -1758,6 +1844,9 @@ int ustctl_recv_notify(int sock, enum ustctl_notify_cmd *notify_cmd)
 		break;
 	case 1:
 		*notify_cmd = USTCTL_NOTIFY_CMD_CHANNEL;
+		break;
+	case 2:
+		*notify_cmd = USTCTL_NOTIFY_CMD_ENUM;
 		break;
 	default:
 		return -EINVAL;
@@ -1903,6 +1992,90 @@ int ustctl_reply_register_event(int sock,
 	reply.header.notify_cmd = USTCTL_NOTIFY_CMD_EVENT;
 	reply.r.ret_code = ret_code;
 	reply.r.event_id = id;
+	len = ustcomm_send_unix_sock(sock, &reply, sizeof(reply));
+	if (len > 0 && len != sizeof(reply))
+		return -EIO;
+	if (len < 0)
+		return len;
+	return 0;
+}
+
+/*
+ * Returns 0 on success, negative UST or system error value on error.
+ */
+int ustctl_recv_register_enum(int sock,
+	int *session_objd,
+	char *enum_name,
+	struct ustctl_enum_entry **entries,
+	size_t *nr_entries)
+{
+	ssize_t len;
+	struct ustcomm_notify_enum_msg msg;
+	size_t entries_len;
+	struct ustctl_enum_entry *a_entries = NULL;
+
+	len = ustcomm_recv_unix_sock(sock, &msg, sizeof(msg));
+	if (len > 0 && len != sizeof(msg))
+		return -EIO;
+	if (len == 0)
+		return -EPIPE;
+	if (len < 0)
+		return len;
+
+	*session_objd = msg.session_objd;
+	strncpy(enum_name, msg.enum_name, LTTNG_UST_SYM_NAME_LEN);
+	enum_name[LTTNG_UST_SYM_NAME_LEN - 1] = '\0';
+	entries_len = msg.entries_len;
+
+	if (entries_len % sizeof(*a_entries) != 0) {
+		return -EINVAL;
+	}
+
+	/* recv entries */
+	if (entries_len) {
+		a_entries = zmalloc(entries_len);
+		if (!a_entries)
+			return -ENOMEM;
+		len = ustcomm_recv_unix_sock(sock, a_entries, entries_len);
+		if (len > 0 && len != entries_len) {
+			len = -EIO;
+			goto entries_error;
+		}
+		if (len == 0) {
+			len = -EPIPE;
+			goto entries_error;
+		}
+		if (len < 0) {
+			goto entries_error;
+		}
+	}
+	*nr_entries = entries_len / sizeof(*a_entries);
+	*entries = a_entries;
+
+	return 0;
+
+entries_error:
+	free(a_entries);
+	return len;
+}
+
+/*
+ * Returns 0 on success, negative error value on error.
+ */
+int ustctl_reply_register_enum(int sock,
+	uint64_t id,
+	int ret_code)
+{
+	ssize_t len;
+	struct {
+		struct ustcomm_notify_hdr header;
+		struct ustcomm_notify_enum_reply r;
+	} reply;
+
+	memset(&reply, 0, sizeof(reply));
+	reply.header.notify_cmd = USTCTL_NOTIFY_CMD_ENUM;
+	reply.r.ret_code = ret_code;
+	reply.r.enum_id = id;
 	len = ustcomm_send_unix_sock(sock, &reply, sizeof(reply));
 	if (len > 0 && len != sizeof(reply))
 		return -EIO;

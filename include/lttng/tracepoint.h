@@ -227,6 +227,21 @@ struct lttng_ust_tracepoint_dlopen {
 
 extern struct lttng_ust_tracepoint_dlopen tracepoint_dlopen;
 
+/* Disable tracepoint destructors. */
+int __tracepoints__disable_destructors __attribute__((weak));
+
+/*
+ * Programs that have threads that survive after they exit, and
+ * therefore call library destructors, should disable the tracepoint
+ * destructors by calling tracepoint_disable_destructors(). This will
+ * leak the tracepoint instrumentation library shared object, leaving
+ * its teardown to the operating system process teardown.
+ */
+static inline void tracepoint_disable_destructors(void)
+{
+	__tracepoints__disable_destructors = 1;
+}
+
 #if defined(TRACEPOINT_DEFINE) || defined(TRACEPOINT_CREATE_PROBES)
 
 /*
@@ -301,7 +316,9 @@ __tracepoints__destroy(void)
 
 	if (--__tracepoint_registered)
 		return;
-	if (tracepoint_dlopen.liblttngust_handle && !__tracepoint_ptrs_registered) {
+	if (!__tracepoints__disable_destructors
+			&& tracepoint_dlopen.liblttngust_handle
+			&& !__tracepoint_ptrs_registered) {
 		ret = dlclose(tracepoint_dlopen.liblttngust_handle);
 		if (ret) {
 			fprintf(stderr, "Error (%d) in dlclose\n", ret);
@@ -406,7 +423,9 @@ __tracepoints__ptrs_destroy(void)
 		return;
 	if (tracepoint_dlopen.tracepoint_unregister_lib)
 		tracepoint_dlopen.tracepoint_unregister_lib(__start___tracepoints_ptrs);
-	if (tracepoint_dlopen.liblttngust_handle && !__tracepoint_registered) {
+	if (!__tracepoints__disable_destructors
+			&& tracepoint_dlopen.liblttngust_handle
+			&& !__tracepoint_ptrs_registered) {
 		ret = dlclose(tracepoint_dlopen.liblttngust_handle);
 		if (ret) {
 			fprintf(stderr, "Error (%d) in dlclose\n", ret);
@@ -430,6 +449,50 @@ __tracepoints__ptrs_destroy(void)
 
 /* The following declarations must be outside re-inclusion protection. */
 
+#ifndef TRACEPOINT_ENUM
+
+/*
+ * Tracepoint Enumerations
+ *
+ * The enumeration is a mapping between an integer, or range of integers, and
+ * a string. It can be used to have a more compact trace in cases where the
+ * possible values for a field are limited:
+ *
+ * An example:
+ *
+ * TRACEPOINT_ENUM(someproject_component, enumname,
+ *	TP_ENUM_VALUES(
+ *		ctf_enum_value("even", 0)
+ *		ctf_enum_value("uneven", 1)
+ *		ctf_enum_range("twoto4", 2, 4)
+ *		ctf_enum_value("five", 5)
+ *	)
+ * )
+ *
+ * Where "someproject_component" is the name of the component this enumeration
+ * belongs to and "enumname" identifies this enumeration. Inside the
+ * TP_ENUM_VALUES macro is the actual mapping. Each string value can map
+ * to either a single value with ctf_enum_value or a range of values
+ * with ctf_enum_range.
+ *
+ * Enumeration ranges may overlap, but the behavior is implementation-defined,
+ * each trace reader will handle overlapping as it wishes.
+ *
+ * That enumeration can then be used in a field inside the TP_FIELD macro using
+ * the following line:
+ *
+ * ctf_enum(someproject_component, enumname, enumtype, enumfield, enumval)
+ *
+ * Where "someproject_component" and "enumname" match those in the
+ * TRACEPOINT_ENUM, "enumtype" is a signed or unsigned integer type
+ * backing the enumeration, "enumfield" is the name of the field and
+ * "enumval" is the value.
+ */
+
+#define TRACEPOINT_ENUM(provider, name, values)
+
+#endif /* #ifndef TRACEPOINT_ENUM */
+
 #ifndef TRACEPOINT_EVENT
 
 /*
@@ -452,6 +515,9 @@ __tracepoints__ptrs_destroy(void)
  *
  *         * Integer, printed with 0x base 16 * 
  *         ctf_integer_hex(unsigned long, field_d, arg1)
+ *
+ *         * Enumeration *
+ *         ctf_enum(someproject_component, enum_name, int, field_e, arg0)
  *
  *         * Array Sequence, printed as UTF8-encoded array of bytes * 
  *         ctf_array_text(char, field_b, string, FIXED_LEN)

@@ -6,6 +6,7 @@ SUBDIRS = . include snprintf libringbuffer liblttng-ust-comm \
 		liblttng-ust-fork \
 		liblttng-ust-libc-wrapper \
 		liblttng-ust-cyg-profile \
+		liblttng-ust-python-agent \
 		tools
 
 if HAVE_DLINFO
@@ -21,7 +22,7 @@ SUBDIRS += liblttng-ust-java-agent
 endif
 
 if BUILD_PYTHON_AGENT
-SUBDIRS += liblttng-ust-python-agent
+SUBDIRS += python-lttngust
 endif
 
 SUBDIRS += tests doc
@@ -35,3 +36,7 @@ pkgconfig_DATA = lttng-ust.pc
 dist_doc_DATA = README.md ChangeLog
 
 dist_noinst_DATA = CodingStyle
+
+check-loop:
+	cd tests && $(MAKE) $(AM_MAKEFLAGS) check-loop
+.PHONY: check-loop
