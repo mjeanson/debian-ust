@@ -1,4 +1,5 @@
 /*
+ * Copyright (C) 2015 - EfficiOS Inc., Alexandre Montplaisir <alexmonthy@efficios.com>
  * Copyright (C) 2014 - Christian Babeux <christian.babeux@efficios.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -19,37 +20,73 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
+
 import java.io.IOException;
 
-import org.apache.log4j.Logger;
+import org.apache.log4j.Appender;
 import org.apache.log4j.BasicConfigurator;
+import org.apache.log4j.Logger;
+import org.lttng.ust.agent.log4j.LttngLogAppender;
 
-import org.lttng.ust.agent.LTTngAgent;
+/**
+ * Example application using the LTTng-UST Java log4j agent.
+ *
+ * <p>
+ * To obtain LTTng trace events, you should run the following sequence of
+ * commands:
+ * </p>
+ *
+ * <ul>
+ * <li>$ lttng create</li>
+ * <li>$ lttng enable-event -l -a</li>
+ * <li>$ lttng start</li>
+ * <li>(run this program)</li>
+ * <li>$ lttng stop</li>
+ * <li>$ lttng view</li>
+ * <li>$ lttng destroy</li>
+ * </ul>
+ *
+ * @author Alexandre Montplaisir
+ * @author Christian Babeux
+ */
+public class Hello {
 
-public class Hello
-{
-	/* Of course :) */
-	private static final int answer = 42;
+	private static final Logger HELLO_LOG = Logger.getLogger(Hello.class);
 
-	static Logger helloLog = Logger.getLogger(Hello.class);
-
-	private static LTTngAgent lttngAgent;
-
-	public static void main(String args[]) throws Exception
-	{
+	/**
+	 * Application start
+	 *
+	 * @param args
+	 *            Command-line arguments
+	 * @throws IOException
+	 *             If the required native libraries cannot be found. You may
+	 *             have to specify "-Djava.library.path=..." on the "java"
+	 *             command line.
+	 */
+	public static void main(String args[]) throws IOException {
+		/* Start with the default Log4j configuration, which logs to console */
 		BasicConfigurator.configure();
-		lttngAgent = LTTngAgent.getLTTngAgent();
 
 		/*
-		 * Gives you time to do some lttng commands before any event is hit.
+		 * Instantiate a LTTng log appender and attach it to the logger, which
+		 * will now send the logged events to UST.
 		 */
-		Thread.sleep(5000);
+		Appender lttngAppender = new LttngLogAppender();
+		HELLO_LOG.addAppender(lttngAppender);
 
-		/* Trigger a tracing event using the JUL Logger created before. */
-		helloLog.info("Hello World, the answer is " + answer);
+		/*
+		 * Here we've set up the appender programmatically, but it could also be
+		 * defined at runtime, by reading a configuration file for example:
+		 */
+		// PropertyConfigurator.configure(fileName);
 
-		System.out.println("Firing hello delay in 5 seconds...");
-		Thread.sleep(5000);
-		helloLog.info("Hello World delayed...");
+		/* Trigger some tracing events using the Log4j Logger created before. */
+		HELLO_LOG.info("Hello World, the answer is " + 42);
+		HELLO_LOG.info("Another info event");
+		HELLO_LOG.error("An error event");
+
+		/* Cleanup */
+		HELLO_LOG.removeAppender(lttngAppender);
+		lttngAppender.close();
 	}
 }

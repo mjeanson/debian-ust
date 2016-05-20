@@ -24,10 +24,32 @@ This source tree is based on the Autotools suite from GNU to simplify
 portability. Here are some things you should have on your system in order to
 compile the Git repository tree:
 
-  - GNU Autotools (Automake >= 1.10, Autoconf >= 2.50, Autoheader >= 2.50;
+  - [GNU Autotools](http://www.gnu.org/software/autoconf/)
+    (**Automake >= 1.10**, **Autoconf >= 2.50**,
+    **Autoheader >= 2.50**;
     make sure your system-wide `automake` points to a recent version!)
-  - [GNU Libtool](http://www.gnu.org/software/autoconf/) >= 2.2
-  - Perl (optional: needed for `make check` and tests)
+  - **[GNU Libtool](https://www.gnu.org/software/libtool/) >= 2.2**
+
+
+### Optional dependencies
+
+Optional packages to build LTTng-ust man pages:
+
+  - **[AsciiDoc](http://www.methods.co.nz/asciidoc/) >= 8.4.5**
+    (previous versions may work, but were not tested)
+  - **[xmlto](https://fedorahosted.org/xmlto/) >= 0.0.21** (previous
+    versions may work, but were not tested)
+
+Note that the man pages are already built in a distribution tarball.
+In this case, you only need AsciiDoc and xmlto if you indend to modify
+the AsciiDoc man page sources.
+
+Needed for `make check` and tests:
+
+  - **[Perl](https://www.perl.org/)**
+
+
+### Building steps
 
 If you get the tree from the Git repository, you will need to run
 
@@ -204,14 +226,18 @@ This package contains the following elements:
     `liblttng-ust` may be linked at build time.
   - `liblttng-ust-java`: a simple library that uses JNI to allow tracing
     in Java programs.
-  - `liblttng-ust-jul`: a package that includes a JNI library and a JAR
-    library to provide an LTTng-UST logging back-end for Java application
-    using Java Util Logging.
+  - `liblttng-ust-java-agent`: a package that includes a JNI library and a
+    JAR library to provide an LTTng-UST logging back-end for Java
+    applications using Java Util Logging or Log4j.
   - `liblttng-ust-libc-wrapper`: an example library that can be
     preloaded to instrument some calls to libc (currently `malloc()` and
     `free()`) and to POSIX threads (mutexes currently instrumented) in
     any program without need to recompile it.
+  - `liblttng-ust-python-agent`: a library used by python-lttngust to allow
+    tracing in Python applications.
   - `libringbuffer`: the ring buffer implementation used within LTTng-UST.
+  - `python-lttngust`: a package to provide an LTTng-UST logging back-end
+    for Python applications using the standard logging framework.
   - `snprintf`: an asynchronous signal-safe version of `snprintf()`.
   - `tests`: various test programs.
   - `tools`: home of `lttng-gen-tp`.

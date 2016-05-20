@@ -212,6 +212,7 @@ ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
 AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
 AR = @AR@
+ASCIIDOC = @ASCIIDOC@
 AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
@@ -260,6 +261,7 @@ LIPO = @LIPO@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
 LTTNG_UST_CTL_LIBRARY_VERSION = @LTTNG_UST_CTL_LIBRARY_VERSION@
+LTTNG_UST_DEFAULT_CONSTRUCTOR_TIMEOUT_MS = @LTTNG_UST_DEFAULT_CONSTRUCTOR_TIMEOUT_MS@
 LTTNG_UST_LIBRARY_VERSION = @LTTNG_UST_LIBRARY_VERSION@
 MAINT = @MAINT@
 MAJOR_VERSION = @MAJOR_VERSION@
@@ -296,6 +298,7 @@ UUDECODE = @UUDECODE@
 VERSION = @VERSION@
 WEAK_ALIAS = @WEAK_ALIAS@
 WEAK_ALIAS_CROSSFILE = @WEAK_ALIAS_CROSSFILE@
+XMLTO = @XMLTO@
 _ACJNI_JAVAC = @_ACJNI_JAVAC@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
@@ -361,10 +364,15 @@ top_srcdir = @top_srcdir@
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_builddir)/include
 lib_LTLIBRARIES = liblttng-ust-jul-jni.la
 liblttng_ust_jul_jni_la_SOURCES = lttng_ust_jul.c \
-				  lttng_ust_jul.h
+	lttng_ust_jul.h
 
-nodist_liblttng_ust_jul_jni_la_SOURCES = org_lttng_ust_agent_jul_LTTngLogHandler.h
-liblttng_ust_jul_jni_la_LIBADD = -lc -L$(top_builddir)/liblttng-ust/.libs -llttng-ust
+nodist_liblttng_ust_jul_jni_la_SOURCES = org_lttng_ust_agent_jul_LttngJulApi.h
+liblttng_ust_jul_jni_la_LIBADD = -lc \
+	-L$(top_builddir)/liblttng-ust/.libs \
+	-L$(top_builddir)/liblttng-ust-java-agent/jni/common/.libs \
+	-llttng-ust-context-jni \
+	-llttng-ust
+
 all: all-am
 
 .SUFFIXES:

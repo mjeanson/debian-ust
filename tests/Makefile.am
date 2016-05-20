@@ -1,26 +1,24 @@
-SUBDIRS = utils hello same_line_tracepoint snprintf benchmark
+SUBDIRS = utils hello same_line_tracepoint snprintf benchmark ust-elf \
+		ctf-types test-app-ctx gcc-weak-hidden
 
 if CXX_WORKS
 SUBDIRS += hello.cxx
 endif
 
-SCRIPT_LIST = test_loop run.sh unit_tests
+LOG_DRIVER_FLAGS='--merge'
+LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
+	$(top_srcdir)/config/tap-driver.sh
 
-dist_noinst_SCRIPTS = $(SCRIPT_LIST)
+TESTS = snprintf/test_snprintf \
+	ust-elf/test_ust_elf \
+	gcc-weak-hidden/test_gcc_weak_hidden
 
-all-local:
-	@if [ x"$(srcdir)" != x"$(builddir)" ]; then \
-		for script in $(SCRIPT_LIST); do \
-			cp -f $(srcdir)/$$script $(builddir); \
-		done; \
-	fi
+check-loop:
+	while [ 0 ]; do \
+		$(MAKE) $(AM_MAKEFLAGS) check; \
+		if [ "$$?" != "0" ]; then \
+			break; \
+		fi \
+	done
 
-clean-local:
-	@if [ x"$(srcdir)" != x"$(builddir)" ]; then \
-		for script in $(SCRIPT_LIST); do \
-			rm -f $(builddir)/$$script; \
-		done; \
-	fi
-
-check-am:
-	./run.sh unit_tests
+.PHONY: check-loop

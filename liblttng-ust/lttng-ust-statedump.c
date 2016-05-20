@@ -19,19 +19,16 @@
 
 #define _LGPL_SOURCE
 #define _GNU_SOURCE
+
 #include <link.h>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <limits.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <stdint.h>
-#include <stddef.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
 
-#include <usterr-signal-safe.h>
+#include <lttng/ust-elf.h>
 #include "lttng-tracer-core.h"
 #include "lttng-ust-statedump.h"
 
@@ -45,13 +42,19 @@ struct dl_iterate_data {
 	int exec_found;
 };
 
-struct soinfo_data {
+struct bin_info_data {
 	void *owner;
 	void *base_addr_ptr;
 	const char *resolved_path;
+	char *dbg_file;
+	uint8_t *build_id;
+	uint64_t memsz;
+	size_t build_id_len;
 	int vdso;
-	off_t size;
-	time_t mtime;
+	uint32_t crc;
+	uint8_t is_pic;
+	uint8_t has_build_id;
+	uint8_t has_debug_link;
 };
 
 typedef void (*tracepoint_cb)(struct lttng_session *session, void *priv);
@@ -66,14 +69,6 @@ int trace_statedump_event(tracepoint_cb tp_cb, void *owner, void *priv)
 	struct cds_list_head *sessionsp;
 	struct lttng_session *session;
 
-	/*
-	 * UST lock nests within dynamic loader lock.
-	 */
-	if (ust_lock()) {
-		ust_unlock();
-		return 1;
-	}
-
 	sessionsp = _lttng_get_sessions();
 	cds_list_for_each_entry(session, sessionsp, node) {
 		if (session->owner != owner)
@@ -82,19 +77,39 @@ int trace_statedump_event(tracepoint_cb tp_cb, void *owner, void *priv)
 			continue;
 		tp_cb(session, priv);
 	}
-	ust_unlock();
 	return 0;
 }
 
 static
-void trace_soinfo_cb(struct lttng_session *session, void *priv)
+void trace_bin_info_cb(struct lttng_session *session, void *priv)
 {
-	struct soinfo_data *so_data = (struct soinfo_data *) priv;
+	struct bin_info_data *bin_data = (struct bin_info_data *) priv;
 
-	tracepoint(lttng_ust_statedump, soinfo,
-		   session, so_data->base_addr_ptr,
-		   so_data->resolved_path, so_data->size,
-		   so_data->mtime);
+	tracepoint(lttng_ust_statedump, bin_info,
+		session, bin_data->base_addr_ptr,
+		bin_data->resolved_path, bin_data->memsz,
+		bin_data->is_pic, bin_data->has_build_id,
+		bin_data->has_debug_link);
+}
+
+static
+void trace_build_id_cb(struct lttng_session *session, void *priv)
+{
+	struct bin_info_data *bin_data = (struct bin_info_data *) priv;
+
+	tracepoint(lttng_ust_statedump, build_id,
+		session, bin_data->base_addr_ptr,
+		bin_data->build_id, bin_data->build_id_len);
+}
+
+static
+void trace_debug_link_cb(struct lttng_session *session, void *priv)
+{
+	struct bin_info_data *bin_data = (struct bin_info_data *) priv;
+
+	tracepoint(lttng_ust_statedump, debug_link,
+		session, bin_data->base_addr_ptr,
+		bin_data->dbg_file, bin_data->crc);
 }
 
 static
@@ -110,19 +125,88 @@ void trace_end_cb(struct lttng_session *session, void *priv)
 }
 
 static
-int trace_baddr(struct soinfo_data *so_data)
+int get_elf_info(struct bin_info_data *bin_data)
 {
-	struct stat sostat;
+	struct lttng_ust_elf *elf;
+	int ret = 0, found;
 
-	if (so_data->vdso || stat(so_data->resolved_path, &sostat)) {
-		sostat.st_size = 0;
-		sostat.st_mtime = -1;
+	elf = lttng_ust_elf_create(bin_data->resolved_path);
+	if (!elf) {
+		ret = -1;
+		goto end;
 	}
 
-	so_data->size = sostat.st_size;
-	so_data->mtime = sostat.st_mtime;
+	ret = lttng_ust_elf_get_memsz(elf, &bin_data->memsz);
+	if (ret) {
+		goto end;
+	}
 
-	return trace_statedump_event(trace_soinfo_cb, so_data->owner, so_data);
+	found = 0;
+	ret = lttng_ust_elf_get_build_id(elf, &bin_data->build_id,
+					&bin_data->build_id_len,
+					&found);
+	if (ret) {
+		goto end;
+	}
+	bin_data->has_build_id = !!found;
+	found = 0;
+	ret = lttng_ust_elf_get_debug_link(elf, &bin_data->dbg_file,
+					&bin_data->crc,
+					&found);
+	if (ret) {
+		goto end;
+	}
+	bin_data->has_debug_link = !!found;
+
+	bin_data->is_pic = lttng_ust_elf_is_pic(elf);
+
+end:
+	lttng_ust_elf_destroy(elf);
+	return ret;
+}
+
+static
+int trace_baddr(struct bin_info_data *bin_data)
+{
+	int ret = 0;
+
+	if (!bin_data->vdso) {
+		ret = get_elf_info(bin_data);
+		if (ret) {
+			goto end;
+		}
+	} else {
+		bin_data->memsz = 0;
+		bin_data->has_build_id = 0;
+		bin_data->has_debug_link = 0;
+	}
+
+	ret = trace_statedump_event(trace_bin_info_cb, bin_data->owner,
+			bin_data);
+	if (ret) {
+		goto end;
+	}
+
+	if (bin_data->has_build_id) {
+		ret = trace_statedump_event(
+			trace_build_id_cb, bin_data->owner, bin_data);
+		free(bin_data->build_id);
+		if (ret) {
+			goto end;
+		}
+	}
+
+	if (bin_data->has_debug_link) {
+		ret = trace_statedump_event(
+			trace_debug_link_cb, bin_data->owner, bin_data);
+		free(bin_data->dbg_file);
+		if (ret) {
+			goto end;
+		}
+	}
+
+end:
+	return ret;
 }
 
 static
@@ -138,13 +222,24 @@ int trace_statedump_end(void *owner)
 }
 
 static
-int extract_soinfo_events(struct dl_phdr_info *info, size_t size, void *_data)
+int extract_bin_info_events(struct dl_phdr_info *info, size_t size, void *_data)
 {
-	int j;
+	int j, ret = 0;
 	struct dl_iterate_data *data = _data;
 
+	/*
+	 * UST lock nests within dynamic loader lock.
+	 *
+	 * Hold this lock across handling of the entire module to
+	 * protect memory allocation at early process start, due to
+	 * interactions with libc-wrapper lttng malloc instrumentation.
+	 */
+	if (ust_lock()) {
+		goto end;
+	}
+
 	for (j = 0; j < info->dlpi_phnum; j++) {
-		struct soinfo_data so_data;
+		struct bin_info_data bin_data;
 		char resolved_path[PATH_MAX];
 		void *base_addr_ptr;
 
@@ -176,33 +271,35 @@ int extract_soinfo_events(struct dl_phdr_info *info, size_t size, void *_data)
 					break;
 
 				resolved_path[path_len] = '\0';
-				so_data.vdso = 0;
+				bin_data.vdso = 0;
 			} else {
 				snprintf(resolved_path, PATH_MAX - 1, "[vdso]");
-				so_data.vdso = 1;
+				bin_data.vdso = 1;
 			}
 		} else {
 			/*
 			 * For regular dl_phdr_info entries check if
-			 * the path to the SO really exists. If not,
+			 * the path to the binary really exists. If not,
 			 * treat as vdso and use dlpi_name as 'path'.
 			 */
 			if (!realpath(info->dlpi_name, resolved_path)) {
 				snprintf(resolved_path, PATH_MAX - 1, "[%s]",
 					info->dlpi_name);
-				so_data.vdso = 1;
+				bin_data.vdso = 1;
 			} else {
-				so_data.vdso = 0;
+				bin_data.vdso = 0;
 			}
 		}
 
-		so_data.owner = data->owner;
-		so_data.base_addr_ptr = base_addr_ptr;
-		so_data.resolved_path = resolved_path;
-		return trace_baddr(&so_data);
+		bin_data.owner = data->owner;
+		bin_data.base_addr_ptr = base_addr_ptr;
+		bin_data.resolved_path = resolved_path;
+		ret = trace_baddr(&bin_data);
+		break;
 	}
-
-	return 0;
+end:
+	ust_unlock();
+	return ret;
 }
 
 /*
@@ -223,9 +320,9 @@ int do_baddr_statedump(void *owner)
 	/*
 	 * Iterate through the list of currently loaded shared objects and
 	 * generate events for loadable segments using
-	 * extract_soinfo_events.
+	 * extract_bin_info_events.
 	 */
-	dl_iterate_phdr(extract_soinfo_events, &data);
+	dl_iterate_phdr(extract_bin_info_events, &data);
 
 	return 0;
 }

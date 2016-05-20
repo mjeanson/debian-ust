@@ -329,6 +329,24 @@ extern void lttng_ring_buffer_client_discard_exit(void);
 extern void lttng_ring_buffer_client_discard_rt_exit(void);
 extern void lttng_ring_buffer_metadata_client_exit(void);
 
+ssize_t lttng_ust_read(int fd, void *buf, size_t len)
+{
+	ssize_t ret;
+	size_t copied = 0, to_copy = len;
+
+	do {
+		ret = read(fd, buf + copied, to_copy);
+		if (ret > 0) {
+			copied += ret;
+			to_copy -= ret;
+		}
+	} while ((ret > 0 && to_copy > 0)
+		|| (ret < 0 && errno == EINTR));
+	if (ret > 0) {
+		ret = copied;
+	}
+	return ret;
+}
 /*
  * Returns the HOME directory path. Caller MUST NOT free(3) the returned
  * pointer.
@@ -573,6 +591,7 @@ int handle_message(struct sock_info *sock_info,
 	const struct lttng_ust_objd_ops *ops;
 	struct ustcomm_ust_reply lur;
 	union ust_args args;
+	char ctxstr[LTTNG_UST_SYM_NAME_LEN];	/* App context string. */
 	ssize_t len;
 
 	memset(&lur, 0, sizeof(lur));
@@ -792,6 +811,64 @@ int handle_message(struct sock_info *sock_info,
 			ret = -ENOSYS;
 		break;
 	}
+	case LTTNG_UST_CONTEXT:
+		switch (lum->u.context.ctx) {
+		case LTTNG_UST_CONTEXT_APP_CONTEXT:
+		{
+			char *p;
+			size_t ctxlen, recvlen;
+
+			ctxlen = strlen("$app.") + lum->u.context.u.app_ctx.provider_name_len - 1
+					+ strlen(":") + lum->u.context.u.app_ctx.ctx_name_len;
+			if (ctxlen >= LTTNG_UST_SYM_NAME_LEN) {
+				ERR("Application context string length size is too large: %zu bytes",
+					ctxlen);
+				ret = -EINVAL;
+				goto error;
+			}
+			strcpy(ctxstr, "$app.");
+			p = &ctxstr[strlen("$app.")];
+			recvlen = ctxlen - strlen("$app.");
+			len = ustcomm_recv_unix_sock(sock, p, recvlen);
+			switch (len) {
+			case 0:	/* orderly shutdown */
+				ret = 0;
+				goto error;
+			default:
+				if (len == recvlen) {
+					DBG("app context data received");
+					break;
+				} else if (len < 0) {
+					DBG("Receive failed from lttng-sessiond with errno %d", (int) -len);
+					if (len == -ECONNRESET) {
+						ERR("%s remote end closed connection", sock_info->name);
+						ret = len;
+						goto error;
+					}
+					ret = len;
+					goto error;
+				} else {
+					DBG("incorrect app context data message size: %zd", len);
+					ret = -EINVAL;
+					goto error;
+				}
+			}
+			/* Put : between provider and ctxname. */
+			p[lum->u.context.u.app_ctx.provider_name_len - 1] = ':';
+			args.app_context.ctxname = ctxstr;
+			break;
+		}
+		default:
+			break;
+		}
+		if (ops->cmd) {
+			ret = ops->cmd(lum->handle, lum->cmd,
+					(unsigned long) &lum->u,
+					&args, sock_info);
+		} else {
+			ret = -ENOSYS;
+		}
+		break;
 	default:
 		if (ops->cmd)
 			ret = ops->cmd(lum->handle, lum->cmd,
@@ -1505,7 +1582,6 @@ void __attribute__((constructor)) lttng_ust_init(void)
 	lttng_ring_buffer_client_discard_init();
 	lttng_ring_buffer_client_discard_rt_init();
 	lttng_perf_counter_init();
-	lttng_context_init();
 	/*
 	 * Invoke ust malloc wrapper init before starting other threads.
 	 */
@@ -1514,7 +1590,9 @@ void __attribute__((constructor)) lttng_ust_init(void)
 	timeout_mode = get_constructor_timeout(&constructor_timeout);
 
 	ret = sem_init(&constructor_wait, 0, 0);
-	assert(!ret);
+	if (ret) {
+		PERROR("sem_init");
+	}
 
 	ret = setup_local_apps();
 	if (ret) {
@@ -1579,17 +1657,34 @@ void __attribute__((constructor)) lttng_ust_init(void)
 			ret = sem_timedwait(&constructor_wait,
 					&constructor_timeout);
 		} while (ret < 0 && errno == EINTR);
-		if (ret < 0 && errno == ETIMEDOUT) {
-			ERR("Timed out waiting for lttng-sessiond");
-		} else {
-			assert(!ret);
+		if (ret < 0) {
+			switch (errno) {
+			case ETIMEDOUT:
+				ERR("Timed out waiting for lttng-sessiond");
+				break;
+			case EINVAL:
+				PERROR("sem_timedwait");
+				break;
+			default:
+				ERR("Unexpected error \"%s\" returned by sem_timedwait",
+					strerror(errno));
+			}
 		}
 		break;
 	case -1:/* wait forever */
 		do {
 			ret = sem_wait(&constructor_wait);
 		} while (ret < 0 && errno == EINTR);
-		assert(!ret);
+		if (ret < 0) {
+			switch (errno) {
+			case EINVAL:
+				PERROR("sem_wait");
+				break;
+			default:
+				ERR("Unexpected error \"%s\" returned by sem_wait",
+					strerror(errno));
+			}
+		}
 		break;
 	case 0:	/* no timeout */
 		break;
@@ -1610,7 +1705,6 @@ void lttng_ust_cleanup(int exiting)
 	 */
 	lttng_ust_abi_exit();
 	lttng_ust_events_exit();
-	lttng_context_exit();
 	lttng_perf_counter_exit();
 	lttng_ring_buffer_client_discard_rt_exit();
 	lttng_ring_buffer_client_discard_exit();

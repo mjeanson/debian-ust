@@ -1,79 +1,315 @@
-.TH "LTTNG-UST-CYG-PROFILE" "3" "March 26, 2013" "" ""
+'\" t
+.\"     Title: lttng-ust-dl
+.\"    Author: [see the "AUTHORS" section]
+.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
+.\"      Date: 05/20/2016
+.\"    Manual: LTTng Manual
+.\"    Source: LTTng 2.8.0-rc2
+.\"  Language: English
+.\"
+.TH "LTTNG\-UST\-DL" "3" "05/20/2016" "LTTng 2\&.8\&.0\-rc2" "LTTng Manual"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
+.\" -----------------------------------------------------------------
+.\" * set default formatting
+.\" -----------------------------------------------------------------
+.\" disable hyphenation
+.nh
+.\" disable justification (adjust text to left margin only)
+.ad l
+.\" -----------------------------------------------------------------
+.\" * MAIN CONTENT STARTS HERE *
+.\" -----------------------------------------------------------------
 .SH "NAME"
-lttng-ust-cyg-profile \(em LTTng UST 2.x Function Tracing
+lttng-ust-cyg-profile \- Function tracing (LTTng\-UST helper)
 .SH "SYNOPSIS"
-Compile the application source code with option \fB-finstrument-functions\fP
-and launch your application either with:
-.TP
-\fBLD_PRELOAD=liblttng-ust-cyg-profile-fast.so\fP appname
-.PP
-or (to use verbose function tracing)
-.TP
-\fBLD_PRELOAD=liblttng-ust-cyg-profile.so\fP appname
-.PP
-All events emitted for function tracing are provided on loglevel
-TRACE_DEBUG_FUNCTION. The following command can be used to add
-function tracing events in your trace session:
-.TP
-.B lttng enable-event -u -a --loglevel-only TRACE_DEBUG_FUNCTION
+.sp
+Compile your application with compiler option \fB-finstrument-functions\fR\&.
+.sp
+Launch your application by preloading \fBliblttng-ust-cyg-profile-fast.so\fR for fast function tracing:
+.sp
+.nf
+\fBLD_PRELOAD=liblttng\-ust\-cyg\-profile\-fast\&.so\fR my\-app
+.fi
+.sp
+Launch your application by preloading \fBliblttng-ust-cyg-profile.so\fR for slower, more verbose function tracing:
+.sp
+.nf
+\fBLD_PRELOAD=liblttng\-ust\-cyg\-profile\&.so\fR my\-app
+.fi
 .SH "DESCRIPTION"
-For compilers that provide code generation option
-\fB-finstrument-functions\fP (e.g. GCC and LLVM/Clang) LTTng-UST provides
-shared libraries that allow users to trace the function flow of their
-applications.
-
-Function tracing comes in two flavors (each providing different trade-offs):
-.IP liblttng-ust-cyg-profile-fast.so
+.sp
+When the \fBliblttng-ust-cyg-profile.so\fR or the \fBliblttng-ust-cyg-profile-fast.so\fR library is preloaded before a given application starts, all function entry and return points are traced by LTTng\-UST (see \fBlttng-ust\fR(3)), provided said application was compiled with the \fB-finstrument-functions\fR compiler option\&.
+.sp
+See \fBlttng\fR(1) to learn more about how to control LTTng tracing sessions\&.
+.sp
+Function tracing with LTTng\-UST comes in two flavors, each one providing a different trade\-off between performance and robustness:
+.PP
+\fBliblttng-ust-cyg-profile-fast.so\fR
+.RS 4
 This is a lightweight variant that should only be used where it can be
-guaranteed that the complete event stream is recorded without any missing
-events. Any kind of duplicate information is left out.
-
-At each function entry the address of the called function is recored as
-lttng_ust_cyg_profile_fast:func_entry. Function exit is recorded as
-lttng_ust_cyg_profile_fast:func_exit (without any field data).
-
-.IP liblttng-ust-cyg-profile.so
-This is a more robust variant which also works for use-cases where events
-might get discarded or not recorded from application startup. In these cases
-the trace analyzer needs extra information to be able to reconstruct the
-program flow.
-
-For each function entry and exit the address of the called function and the
-call site address are recorded as lttng_ust_cyg_profile:func_entry and
-lttng_ust_cyg_profile:func_exit.
-.SH "USAGE"
-To use function tracing you need to make sure the sources of your application
-are compiled with \-finstrument\-functions. It might be necessary to limit
-the number of source files where this option is used to prevent excessive
-amount of trace data to be generated during run time. Usually there are
-additional compiler flags that allow you to specify more fine grained selection
-of function instrumentation.
-
-For each instrumented function the executable will contain calls to profiling
-function hooks (after function entry and just before function exit).
-
-By preloading (LD_PRELOAD) one of the provided shared libraries, these
-profiling hooks get defined to emit LTTng events (as described above).
-
-Using this feature can result in massive amount trace data to be generated
-by the instrumented application. Application runtime is also considerably
-affected. Be careful on systems with limited resources.
-.SH "SEE ALSO"
-lttng-ust(3), lttng(1), gcc(1), ld.so(8)
+\fIguaranteed\fR
+that the complete event stream is recorded without any missing events\&. Any kind of duplicate information is left out\&.
+.sp
+At each function entry, the address of the called function is recorded in an LTTng\-UST event\&. Function exits are recorded as another, empty LTTng\-UST event\&.
+.sp
+See the
+\fIFast function tracing\fR
+section below for the complete list of emitted events and their fields\&.
+.RE
+.PP
+\fBliblttng-ust-cyg-profile.so\fR
+.RS 4
+This is a more robust variant which also works for use cases where events might get discarded, or not recorded from application startup\&. In these cases, the trace analyzer needs extra information to be able to reconstruct the program flow\&.
+.sp
+At each function entry
+\fIand\fR
+exit, the address of the called function
+\fIand\fR
+the call site address are recorded in an LTTng\-UST event\&.
+.sp
+See the
+\fIVerbose function tracing\fR
+section below for the complete list of emitted events and their fields\&.
+.RE
+.SS "Usage"
+.sp
+To use LTTng\-UST function tracing, you need to make sure the sources of your application are compiled with the \fB-finstrument-functions\fR compiler option\&.
+.sp
+It might be necessary to limit the number of source files where this option is used to prevent excessive amount of trace data to be generated at run time\&. Usually, there are additional compiler flags that allow you to specify a more fine\-grained selection of function instrumentation\&.
+.sp
+For each instrumented function, the executable will contain calls to profiling function hooks (after function entry, named \fB__cyg_profile_func_enter()\fR, and just before function exit, named \fB__cyg_profile_func_exit()\fR)\&.
+.sp
+By preloading (using the \fBLD_PRELOAD\fR environment variable) one of the provided shared libraries, these profiling hooks get defined to emit LTTng events (as described below)\&.
+.if n \{\
+.sp
+.\}
+.RS 4
+.it 1 an-trap
+.nr an-no-space-flag 1
+.nr an-break-flag 1
+.br
+.ps +1
+\fBNote\fR
+.ps -1
+.br
+.sp
+Using this feature can result in a \fBmassive amount\fR of trace data to be generated by the instrumented application\&. Application run time is also considerably affected\&. Be careful on systems with limited resources\&.
+.sp .5v
+.RE
+.SS "Fast function tracing"
+.sp
+The following LTTng\-UST events are available when using \fBliblttng-ust-cyg-profile-fast.so\fR\&. Their log level is set to \fBTRACE_DEBUG_FUNCTION\fR\&.
+.PP
+\fBlttng_ust_cyg_profile_fast:func_entry\fR
+.RS 4
+Emitted when an application function is entered, or more specifically, when
+\fB__cyg_profile_func_enter()\fR
+is called\&.
+.sp
+Fields:
+.TS
+allbox tab(:);
+ltB ltB.
+T{
+Field name
+T}:T{
+Description
+T}
+.T&
+lt lt.
+T{
+\fBfunc_addr\fR
+T}:T{
+Function address
+T}
+.TE
+.sp 1
+.RE
+.PP
+\fBlttng_ust_cyg_profile_fast:func_exit\fR
+.RS 4
+Emitted when an application function returns, or more specifically, when
+\fB__cyg_profile_func_exit()\fR
+is called\&.
+.sp
+This event has no fields\&. Since the
+\fBliblttng-ust-cyg-profile-fast.so\fR
+library should only be used when it can be guaranteed that the complete event stream is recorded without any missing events, a per\-thread, stack\-based approach can be used on the trace analyzer side to match function entry and return events\&.
+.RE
+.SS "Verbose function tracing"
+.sp
+The following LTTng\-UST events are available when using \fBliblttng-ust-cyg-profile.so\fR\&. Their log level is set to \fBTRACE_DEBUG_FUNCTION\fR\&.
+.PP
+\fBlttng_ust_cyg_profile:func_entry\fR
+.RS 4
+Emitted when an application function is entered, or more specifically, when
+\fB__cyg_profile_func_enter()\fR
+is called\&.
+.sp
+Fields:
+.TS
+allbox tab(:);
+ltB ltB.
+T{
+Field name
+T}:T{
+Description
+T}
+.T&
+lt lt
+lt lt.
+T{
+\fBfunc_addr\fR
+T}:T{
+Function address
+T}
+T{
+\fBcall_site\fR
+T}:T{
+Address from which this function was called
+T}
+.TE
+.sp 1
+.RE
+.PP
+\fBlttng_ust_cyg_profile:func_exit\fR
+.RS 4
+Emitted when an application function returns, or more specifically, when
+\fB__cyg_profile_func_exit()\fR
+is called\&.
+.sp
+Fields:
+.TS
+allbox tab(:);
+ltB ltB.
+T{
+Field name
+T}:T{
+Description
+T}
+.T&
+lt lt
+lt lt.
+T{
+\fBfunc_addr\fR
+T}:T{
+Function address
+T}
+T{
+\fBcall_site\fR
+T}:T{
+Address from which this function was called
+T}
+.TE
+.sp 1
+.RE
 .SH "BUGS"
-If you encounter any issues or usability problem, please report it on
-our mailing list <lttng-dev@lists.lttng.org> to help improve this
-project.
-.SH "CREDITS"
-liblttng-ust is distributed under the GNU Lesser General Public License
-version 2.1. The headers are distributed under the MIT license.
-
-See http://lttng.org for more information on the LTTng project.
-
-Mailing list for support and development: <lttng-dev@lists.lttng.org>.
-
-You can find us on IRC server irc.oftc.net (OFTC) in #lttng.
+.sp
+If you encounter any issue or usability problem, please report it on the LTTng bug tracker <https://bugs.lttng.org/projects/lttng-ust>\&.
+.SH "RESOURCES"
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+LTTng project website <http://lttng.org>
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+LTTng documentation <http://lttng.org/docs>
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Git repositories <http://git.lttng.org>
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+GitHub organization <http://github.com/lttng>
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Continuous integration <http://ci.lttng.org/>
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Mailing list <http://lists.lttng.org>
+for support and development:
+\fBlttng-dev@lists.lttng.org\fR
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+IRC channel <irc://irc.oftc.net/lttng>:
+\fB#lttng\fR
+on
+\fBirc.oftc.net\fR
+.RE
+.SH "COPYRIGHTS"
+.sp
+This library is part of the LTTng\-UST project\&.
+.sp
+This library is distributed under the GNU Lesser General Public License, version 2\&.1 <http://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html>\&. See the \fBCOPYING\fR <https://github.com/lttng/lttng-ust/blob/master/COPYING> file for more details\&.
+.SH "THANKS"
+.sp
+Thanks to Ericsson for funding this work, providing real\-life use cases, and testing\&.
+.sp
+Special thanks to Michel Dagenais and the DORSAL laboratory <http://www.dorsal.polymtl.ca/> at \('Ecole Polytechnique de Montr\('eal for the LTTng journey\&.
 .SH "AUTHORS"
-liblttng-ust was originally written by Mathieu Desnoyers, with additional
-contributions from various other people. It is currently maintained by
-Mathieu Desnoyers <mathieu.desnoyers@efficios.com>.
+.sp
+LTTng\-UST was originally written by Mathieu Desnoyers, with additional contributions from various other people\&. It is currently maintained by Mathieu Desnoyers <mailto:mathieu.desnoyers@efficios.com>\&.
+.SH "SEE ALSO"
+.sp
+\fBlttng-ust\fR(3), \fBlttng\fR(1), \fBgcc\fR(1), \fBld.so\fR(8)
