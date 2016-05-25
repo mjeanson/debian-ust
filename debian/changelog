@@ -1,3 +1,15 @@
+ust (2.8.0-1) unstable; urgency=medium
+
+  [ Michael Jeanson ]
+  * [f4dc524] New upstream version 2.8.0
+  * [4cc3ed0] Update java agent files for 2.8.0
+  * [4731103] Update symbols for 2.8.0
+  * [8f462e0] Refreshed patches for 2.8.0
+  * [46d005b] Bump standards version to 3.9.8, no changes necessary
+  * [2399a6e] Updated debian copyright
+
+ -- Jon Bernard <jbernard@debian.org>  Tue, 24 May 2016 21:42:37 -0400
+
 ust (2.7.2-1) unstable; urgency=medium
 
   [ Michael Jeanson ]
