@@ -1,3 +1,6 @@
+Description: Fix incompatible java bytecode format
+Author: Michael Jeanson <mjeanson@ubuntu.com>
+
 --- a/liblttng-ust-java/Makefile.am
 +++ b/liblttng-ust-java/Makefile.am
 @@ -1,4 +1,5 @@
