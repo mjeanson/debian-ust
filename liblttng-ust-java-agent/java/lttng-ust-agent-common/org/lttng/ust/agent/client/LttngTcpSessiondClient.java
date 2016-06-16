@@ -21,15 +21,16 @@ package org.lttng.ust.agent.client;
 import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.Charset;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -45,6 +46,7 @@ public class LttngTcpSessiondClient implements Runnable {
 	private static final String SESSION_HOST = "127.0.0.1";
 	private static final String ROOT_PORT_FILE = "/var/run/lttng/agent.port";
 	private static final String USER_PORT_FILE = "/.lttng/agent.port";
+	private static final Charset PORT_FILE_ENCODING = Charset.forName("UTF-8");
 
 	private static final int PROTOCOL_MAJOR_VERSION = 2;
 	private static final int PROTOCOL_MINOR_VERSION = 0;
@@ -112,14 +114,14 @@ public class LttngTcpSessiondClient implements Runnable {
 				/*
 				 * Connect to the session daemon before anything else.
 				 */
-				LttngUstAgentLogger.log(getClass(), "Connecting to sessiond");
+				log("Connecting to sessiond");
 				connectToSessiond();
 
 				/*
 				 * Register to the session daemon as the Java component of the
 				 * UST application.
 				 */
-				LttngUstAgentLogger.log(getClass(), "Registering to sessiond");
+				log("Registering to sessiond");
 				registerToSessiond();
 
 				/*
@@ -127,7 +129,7 @@ public class LttngTcpSessiondClient implements Runnable {
 				 * session daemon. This will return if and only if there is a
 				 * fatal error or the socket closes.
 				 */
-				LttngUstAgentLogger.log(getClass(), "Waiting on sessiond commands...");
+				log("Waiting on sessiond commands...");
 				handleSessiondCmd();
 			} catch (UnknownHostException uhe) {
 				uhe.printStackTrace();
@@ -145,7 +147,7 @@ public class LttngTcpSessiondClient implements Runnable {
 	 * Dispose this client and close any socket connection it may hold.
 	 */
 	public void close() {
-		LttngUstAgentLogger.log(getClass(), "Closing client");
+		log("Closing client");
 		this.quit = true;
 
 		try {
@@ -158,23 +160,27 @@ public class LttngTcpSessiondClient implements Runnable {
 	}
 
 	private void connectToSessiond() throws IOException {
-		int port;
+		int rootPort = getPortFromFile(ROOT_PORT_FILE);
+		int userPort = getPortFromFile(getHomePath() + USER_PORT_FILE);
 
-		if (this.isRoot) {
-			port = getPortFromFile(ROOT_PORT_FILE);
-			if (port == 0) {
-				/* No session daemon available. Stop and retry later. */
-				throw new IOException();
-			}
-		} else {
-			port = getPortFromFile(getHomePath() + USER_PORT_FILE);
-			if (port == 0) {
-				/* No session daemon available. Stop and retry later. */
-				throw new IOException();
-			}
+		/*
+		 * Check for the edge case of both files existing but pointing to the
+		 * same port. In this case, let the root client handle it.
+		 */
+		if ((rootPort != 0) && (rootPort == userPort) && (!isRoot)) {
+			log("User and root config files both point to port " + rootPort +
+					". Letting the root client handle it.");
+			throw new IOException();
 		}
 
-		this.sessiondSock = new Socket(SESSION_HOST, port);
+		int portToUse = (isRoot ? rootPort : userPort);
+
+		if (portToUse == 0) {
+			/* No session daemon available. Stop and retry later. */
+			throw new IOException();
+		}
+
+		this.sessiondSock = new Socket(SESSION_HOST, portToUse);
 		this.inFromSessiond = new DataInputStream(sessiondSock.getInputStream());
 		this.outToSessiond = new DataOutputStream(sessiondSock.getOutputStream());
 	}
@@ -200,10 +206,9 @@ public class LttngTcpSessiondClient implements Runnable {
 	private static int getPortFromFile(String path) throws IOException {
 		int port;
 		BufferedReader br = null;
-		File file = new File(path);
 
 		try {
-			br = new BufferedReader(new FileReader(file));
+			br = new BufferedReader(new InputStreamReader(new FileInputStream(path), PORT_FILE_ENCODING));
 			String line = br.readLine();
 			port = Integer.parseInt(line, 10);
 			if (port < 0 || port > 65535) {
@@ -264,7 +269,7 @@ public class LttngTcpSessiondClient implements Runnable {
 				 * We don't send any reply to the registration done command.
 				 * This just marks the end of the initial session setup.
 				 */
-				LttngUstAgentLogger.log(getClass(), "Registration done");
+				log("Registration done");
 				continue;
 			}
 			case CMD_LIST:
@@ -272,7 +277,7 @@ public class LttngTcpSessiondClient implements Runnable {
 				SessiondCommand listLoggerCmd = new SessiondListLoggersCommand();
 				LttngAgentResponse response = listLoggerCmd.execute(logAgent);
 				responseData = response.getBytes();
-				LttngUstAgentLogger.log(getClass(), "Received list loggers command");
+				log("Received list loggers command");
 				break;
 			}
 			case CMD_EVENT_ENABLE:
@@ -285,7 +290,7 @@ public class LttngTcpSessiondClient implements Runnable {
 				SessiondCommand enableEventCmd = new SessiondEnableEventCommand(inputData);
 				LttngAgentResponse response = enableEventCmd.execute(logAgent);
 				responseData = response.getBytes();
-				LttngUstAgentLogger.log(getClass(), "Received enable event command");
+				log("Received enable event command");
 				break;
 			}
 			case CMD_EVENT_DISABLE:
@@ -298,7 +303,7 @@ public class LttngTcpSessiondClient implements Runnable {
 				SessiondCommand disableEventCmd = new SessiondDisableEventCommand(inputData);
 				LttngAgentResponse response = disableEventCmd.execute(logAgent);
 				responseData = response.getBytes();
-				LttngUstAgentLogger.log(getClass(), "Received disable event command");
+				log("Received disable event command");
 				break;
 			}
 			case CMD_APP_CTX_ENABLE:
@@ -311,7 +316,7 @@ public class LttngTcpSessiondClient implements Runnable {
 				SessiondCommand enableAppCtxCmd = new SessiondEnableAppContextCommand(inputData);
 				LttngAgentResponse response = enableAppCtxCmd.execute(logAgent);
 				responseData = response.getBytes();
-				LttngUstAgentLogger.log(getClass(), "Received enable app-context command");
+				log("Received enable app-context command");
 				break;
 			}
 			case CMD_APP_CTX_DISABLE:
@@ -324,7 +329,7 @@ public class LttngTcpSessiondClient implements Runnable {
 				SessiondCommand disableAppCtxCmd = new SessiondDisableAppContextCommand(inputData);
 				LttngAgentResponse response = disableAppCtxCmd.execute(logAgent);
 				responseData = response.getBytes();
-				LttngUstAgentLogger.log(getClass(), "Received disable app-context command");
+				log("Received disable app-context command");
 				break;
 			}
 			default:
@@ -333,13 +338,13 @@ public class LttngTcpSessiondClient implements Runnable {
 				responseData = new byte[4];
 				ByteBuffer buf = ByteBuffer.wrap(responseData);
 				buf.order(ByteOrder.BIG_ENDIAN);
-				LttngUstAgentLogger.log(getClass(), "Received unknown command, ignoring");
+				log("Received unknown command, ignoring");
 				break;
 			}
 			}
 
 			/* Send response to the session daemon. */
-			LttngUstAgentLogger.log(getClass(), "Sending response");
+			log("Sending response");
 			this.outToSessiond.write(responseData, 0, responseData.length);
 			this.outToSessiond.flush();
 		}
@@ -381,4 +386,12 @@ public class LttngTcpSessiondClient implements Runnable {
 		return payload;
 	}
 
+	/**
+	 * Wrapper for this class's logging, adds the connection's characteristics
+	 * to help differentiate between multiple TCP clients.
+	 */
+	private void log(String message) {
+		LttngUstAgentLogger.log(getClass(),
+				"(root=" + isRoot + ", domain=" + domainValue + ") " + message);
+	}
 }
