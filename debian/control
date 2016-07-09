@@ -1,6 +1,7 @@
 Source: ust
 Priority: extra
 Maintainer: Jon Bernard <jbernard@debian.org>
+Uploaders: Michael Jeanson <mjeanson@ubuntu.com>
 Build-Depends: debhelper (>= 9), dh-autoreconf, liburcu-dev (>= 0.8.4),
   uuid-dev, texinfo, python3:any, dh-python, javahelper,
   default-jdk | default-jdk-headless,
