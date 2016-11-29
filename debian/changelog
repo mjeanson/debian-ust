@@ -1,3 +1,12 @@
+ust (2.9.0-1) unstable; urgency=medium
+
+  * [35684de] Add Michael Jeanson as uploader
+  * [8aecff4] New upstream version 2.9.0
+  * [3164b44] Refreshed patches for 2.9.0
+  * [0015ce7] Update symbols for 2.9.0
+
+ -- Michael Jeanson <mjeanson@ubuntu.com>  Tue, 29 Nov 2016 18:07:41 -0500
+
 ust (2.8.1-1) unstable; urgency=medium
 
   [ Michael Jeanson ]
