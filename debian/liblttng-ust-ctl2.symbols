@@ -19,6 +19,7 @@ liblttng-ust-ctl.so.2 liblttng-ust-ctl2 #MINVER#
  init_usterr@Base 2.5.0
  lib_ring_buffer_backend_create@Base 2.5.0
  lib_ring_buffer_backend_reset@Base 2.5.0
+ lib_ring_buffer_check_deliver_slow@Base 2.9.0
  lib_ring_buffer_create@Base 2.5.0
  lib_ring_buffer_get_subbuf@Base 2.5.0
  lib_ring_buffer_move_consumer@Base 2.5.0
@@ -58,7 +59,9 @@ liblttng-ust-ctl.so.2 liblttng-ust-ctl2 #MINVER#
  lttng_transport_find@Base 2.5.0
  lttng_transport_register@Base 2.5.0
  lttng_transport_unregister@Base 2.5.0
+ lttng_ust_add_fd_to_tracker@Base 2.9.0
  lttng_ust_clock_init@Base 2.7.0
+ lttng_ust_delete_fd_from_tracker@Base 2.9.0
  lttng_ust_dummy_get_size@Base 2.8.0
  lttng_ust_dummy_get_value@Base 2.8.0
  lttng_ust_dummy_record@Base 2.8.0
@@ -67,14 +70,20 @@ liblttng-ust-ctl.so.2 liblttng-ust-ctl2 #MINVER#
  lttng_ust_dynamic_type_tag_field@Base 2.8.0
  lttng_ust_enable_trace_clock_override@Base 2.7.0
  lttng_ust_enum_get@Base 2.8.0
+ lttng_ust_fixup_fd_tracker_tls@Base 2.9.0
  lttng_ust_getcpu_init@Base 2.7.0
  lttng_ust_getcpu_override@Base 2.7.0
+ lttng_ust_init_fd_tracker@Base 2.9.0
+ lttng_ust_lock_fd_tracker@Base 2.9.0
+ lttng_ust_safe_close_fd@Base 2.9.0
+ lttng_ust_safe_closefrom_fd@Base 2.9.0
  lttng_ust_strerror@Base 2.5.0
  lttng_ust_trace_clock_set_description_cb@Base 2.7.0
  lttng_ust_trace_clock_set_freq_cb@Base 2.7.0
  lttng_ust_trace_clock_set_name_cb@Base 2.7.0
  lttng_ust_trace_clock_set_read64_cb@Base 2.7.0
  lttng_ust_trace_clock_set_uuid_cb@Base 2.7.0
+ lttng_ust_unlock_fd_tracker@Base 2.9.0
  patient_send@Base 2.5.0
  patient_write@Base 2.5.0
  ring_buffer_channel_close_wait_fd@Base 2.5.0
@@ -156,6 +165,7 @@ liblttng-ust-ctl.so.2 liblttng-ust-ctl2 #MINVER#
  ustctl_recv_register_enum@Base 2.8.0
  ustctl_recv_register_event@Base 2.5.0
  ustctl_recv_stream_from_consumer@Base 2.5.0
+ ustctl_regenerate_statedump@Base 2.9.0
  ustctl_register_done@Base 2.5.0
  ustctl_release_handle@Base 2.5.0
  ustctl_release_object@Base 2.5.0

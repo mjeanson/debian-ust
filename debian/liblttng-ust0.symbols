@@ -16,10 +16,12 @@ liblttng-ust-dl.so.0 liblttng-ust0 #MINVER#
  __tracepoint_lttng_ust_dl___build_id@Base 2.8.0
  __tracepoint_lttng_ust_dl___debug_link@Base 2.8.0
  __tracepoint_lttng_ust_dl___dlclose@Base 2.7.0
+ __tracepoint_lttng_ust_dl___dlmopen@Base 2.9.0
  __tracepoint_lttng_ust_dl___dlopen@Base 2.7.0
  __tracepoint_provider_lttng_ust_dl@Base 2.7.0
  __tracepoints__disable_destructors@Base 2.8.0
  dlclose@Base 2.5.0
+ dlmopen@Base 2.9.0
  dlopen@Base 2.5.0
 liblttng-ust-fork.so.0 liblttng-ust0 #MINVER#
  clone@Base 2.5.0
@@ -55,8 +57,11 @@ liblttng-ust-tracepoint.so.0 liblttng-ust0 #MINVER#
  __sflush@Base 2.5.0
  __sfvwrite@Base 2.5.0
  __swsetup@Base 2.5.0
+ __tracepoint_probe_prune_release_queue@Base 2.9.0
  __tracepoint_probe_register@Base 2.5.0
+ __tracepoint_probe_register_queue_release@Base 2.9.0
  __tracepoint_probe_unregister@Base 2.5.0
+ __tracepoint_probe_unregister_queue_release@Base 2.9.0
  __tracepoints__disable_destructors@Base 2.8.0
  exit_tracepoint@Base 2.5.0
  init_tracepoint@Base 2.5.0
@@ -83,6 +88,10 @@ liblttng-ust.so.0 liblttng-ust0 #MINVER#
  __sflush@Base 2.5.0
  __sfvwrite@Base 2.5.0
  __swsetup@Base 2.5.0
+ __tracepoint_lttng_ust_lib___build_id@Base 2.9.0
+ __tracepoint_lttng_ust_lib___debug_link@Base 2.9.0
+ __tracepoint_lttng_ust_lib___load@Base 2.9.0
+ __tracepoint_lttng_ust_lib___unload@Base 2.9.0
  __tracepoint_lttng_ust_statedump___bin_info@Base 2.8.0
  __tracepoint_lttng_ust_statedump___build_id@Base 2.8.0
  __tracepoint_lttng_ust_statedump___debug_link@Base 2.8.0
@@ -104,6 +113,7 @@ liblttng-ust.so.0 liblttng-ust0 #MINVER#
  __tracepoint_lttng_ust_tracelog___TRACE_INFO@Base 2.7.0
  __tracepoint_lttng_ust_tracelog___TRACE_NOTICE@Base 2.7.0
  __tracepoint_lttng_ust_tracelog___TRACE_WARNING@Base 2.7.0
+ __tracepoint_provider_lttng_ust_lib@Base 2.9.0
  __tracepoint_provider_lttng_ust_statedump@Base 2.7.0
  __tracepoint_provider_lttng_ust_tracef@Base 2.5.0
  __tracepoint_provider_lttng_ust_tracelog@Base 2.7.0
@@ -137,12 +147,14 @@ liblttng-ust.so.0 liblttng-ust0 #MINVER#
  channel_handle_create@Base 2.5.0
  channel_handle_get_nr_streams@Base 2.5.0
  channel_reset@Base 2.5.0
+ dl_state_table@Base 2.9.0
  do_lttng_ust_statedump@Base 2.7.0
  dt_var_fields@Base 2.8.0
  global_apps@Base 2.5.0
  init_usterr@Base 2.5.0
  lib_ring_buffer_backend_create@Base 2.5.0
  lib_ring_buffer_backend_reset@Base 2.5.0
+ lib_ring_buffer_check_deliver_slow@Base 2.9.0
  lib_ring_buffer_create@Base 2.5.0
  lib_ring_buffer_get_subbuf@Base 2.5.0
  lib_ring_buffer_move_consumer@Base 2.5.0
@@ -240,6 +252,7 @@ liblttng-ust.so.0 liblttng-ust0 #MINVER#
  lttng_session_destroy@Base 2.5.0
  lttng_session_disable@Base 2.5.0
  lttng_session_enable@Base 2.5.0
+ lttng_session_statedump@Base 2.9.0
  lttng_static_ctx@Base 2.5.0
  lttng_trace_clock@Base 2.7.0
  lttng_transport_find@Base 2.5.0
@@ -247,11 +260,14 @@ liblttng-ust.so.0 liblttng-ust0 #MINVER#
  lttng_transport_unregister@Base 2.5.0
  lttng_ust_abi_exit@Base 2.5.0
  lttng_ust_add_app_context_to_ctx_rcu@Base 2.8.0
+ lttng_ust_add_fd_to_tracker@Base 2.9.0
  lttng_ust_clock_init@Base 2.7.0
  lttng_ust_context_provider_register@Base 2.8.0
  lttng_ust_context_provider_unregister@Base 2.8.0
  lttng_ust_context_set_provider_rcu@Base 2.8.0
  lttng_ust_context_set_session_provider@Base 2.8.0
+ lttng_ust_delete_fd_from_tracker@Base 2.9.0
+ lttng_ust_dl_update@Base 2.9.0
  lttng_ust_dummy_get_size@Base 2.8.0
  lttng_ust_dummy_get_value@Base 2.8.0
  lttng_ust_dummy_record@Base 2.8.0
@@ -270,14 +286,21 @@ liblttng-ust.so.0 liblttng-ust0 #MINVER#
  lttng_ust_events_exit@Base 2.5.0
  lttng_ust_exit@Base 2.5.0
  lttng_ust_field_list_get_iter_next@Base 2.5.0
+ lttng_ust_fixup_fd_tracker_tls@Base 2.9.0
+ lttng_ust_fixup_tls@Base 2.9.0
  lttng_ust_getcpu_init@Base 2.7.0
  lttng_ust_getcpu_override@Base 2.7.0
  lttng_ust_init@Base 2.5.0
+ lttng_ust_init_fd_tracker@Base 2.9.0
+ lttng_ust_loaded@Base 2.9.0
+ lttng_ust_lock_fd_tracker@Base 2.9.0
  lttng_ust_malloc_wrapper_init@Base 2.5.0
  lttng_ust_obj_get_name@Base 2.5.0
  lttng_ust_objd_table_owner_cleanup@Base 2.5.0
  lttng_ust_objd_unref@Base 2.5.0
  lttng_ust_read@Base 2.8.0
+ lttng_ust_safe_close_fd@Base 2.9.0
+ lttng_ust_safe_closefrom_fd@Base 2.9.0
  lttng_ust_sockinfo_session_enabled@Base 2.5.0
  lttng_ust_statedump_destroy@Base 2.7.0
  lttng_ust_statedump_init@Base 2.7.0
@@ -288,6 +311,7 @@ liblttng-ust.so.0 liblttng-ust0 #MINVER#
  lttng_ust_trace_clock_set_read64_cb@Base 2.7.0
  lttng_ust_trace_clock_set_uuid_cb@Base 2.7.0
  lttng_ust_tracepoint_list_get_iter_next@Base 2.5.0
+ lttng_ust_unlock_fd_tracker@Base 2.9.0
  objd_ops@Base 2.5.0
  patient_send@Base 2.5.0
  patient_write@Base 2.5.0
