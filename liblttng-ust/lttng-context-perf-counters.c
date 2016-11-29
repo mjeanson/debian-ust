@@ -20,14 +20,15 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#define _LGPL_SOURCE
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
-#include <linux/perf_event.h>
 #include <lttng/ust-events.h>
 #include <lttng/ust-tracer.h>
 #include <lttng/ringbuffer-config.h>
@@ -38,6 +39,7 @@
 #include <urcu/ref.h>
 #include <usterr-signal-safe.h>
 #include <signal.h>
+#include "perf_event.h"
 #include "lttng-tracer-core.h"
 
 /*
@@ -55,6 +57,7 @@ struct lttng_perf_counter_thread_field {
 	struct perf_event_mmap_page *pc;
 	struct cds_list_head thread_field_node;	/* Per-field list of thread fields (node) */
 	struct cds_list_head rcu_field_node;	/* RCU per-thread list of fields (node) */
+	int fd;					/* Perf FD */
 };
 
 struct lttng_perf_counter_thread {
@@ -78,6 +81,22 @@ size_t perf_counter_get_size(struct lttng_ctx_field *field, size_t offset)
 	return size;
 }
 
+static
+uint64_t read_perf_counter_syscall(
+		struct lttng_perf_counter_thread_field *thread_field)
+{
+	uint64_t count;
+
+	if (caa_unlikely(thread_field->fd < 0))
+		return 0;
+
+	if (caa_unlikely(read(thread_field->fd, &count, sizeof(count))
+				< sizeof(count)))
+		return 0;
+
+	return count;
+}
+
 #if defined(__x86_64__) || defined(__i386__)
 
 static
@@ -90,17 +109,22 @@ uint64_t rdpmc(unsigned int counter)
 	return low | ((uint64_t) high) << 32;
 }
 
-#else /* defined(__x86_64__) || defined(__i386__) */
-
-#error "Perf event counters are only supported on x86 so far."
-
-#endif /* #else defined(__x86_64__) || defined(__i386__) */
+static
+bool has_rdpmc(struct perf_event_mmap_page *pc)
+{
+	if (caa_unlikely(!pc->cap_bit0_is_deprecated))
+		return false;
+	/* Since Linux kernel 3.12. */
+	return pc->cap_user_rdpmc;
+}
 
 static
-uint64_t read_perf_counter(struct perf_event_mmap_page *pc)
+uint64_t arch_read_perf_counter(
+		struct lttng_perf_counter_thread_field *thread_field)
 {
 	uint32_t seq, idx;
 	uint64_t count;
+	struct perf_event_mmap_page *pc = thread_field->pc;
 
 	if (caa_unlikely(!pc))
 		return 0;
@@ -110,16 +134,51 @@ uint64_t read_perf_counter(struct perf_event_mmap_page *pc)
 		cmm_barrier();
 
 		idx = pc->index;
-		if (idx)
-			count = pc->offset + rdpmc(idx - 1);
-		else
-			count = 0;
+		if (caa_likely(has_rdpmc(pc) && idx)) {
+			int64_t pmcval;
 
+			pmcval = rdpmc(idx - 1);
+			/* Sign-extend the pmc register result. */
+			pmcval <<= 64 - pc->pmc_width;
+			pmcval >>= 64 - pc->pmc_width;
+			count = pc->offset + pmcval;
+		} else {
+			/* Fall-back on system call if rdpmc cannot be used. */
+			return read_perf_counter_syscall(thread_field);
+		}
 		cmm_barrier();
 	} while (CMM_LOAD_SHARED(pc->lock) != seq);
 
 	return count;
 }
+
+static
+int arch_perf_keep_fd(struct lttng_perf_counter_thread_field *thread_field)
+{
+	struct perf_event_mmap_page *pc = thread_field->pc;
+
+	if (!pc)
+		return 0;
+	return !has_rdpmc(pc);
+}
+
+#else
+
+/* Generic (slow) implementation using a read system call. */
+static
+uint64_t arch_read_perf_counter(
+		struct lttng_perf_counter_thread_field *thread_field)
+{
+	return read_perf_counter_syscall(thread_field);
+}
+
+static
+int arch_perf_keep_fd(struct lttng_perf_counter_thread_field *thread_field)
+{
+	return 1;
+}
+
+#endif
 
 static
 int sys_perf_event_open(struct perf_event_attr *attr,
@@ -131,24 +190,45 @@ int sys_perf_event_open(struct perf_event_attr *attr,
 }
 
 static
-struct perf_event_mmap_page *setup_perf(struct perf_event_attr *attr)
+int open_perf_fd(struct perf_event_attr *attr)
 {
-	void *perf_addr;
-	int fd, ret;
+	int fd;
 
 	fd = sys_perf_event_open(attr, 0, -1, -1, 0);
 	if (fd < 0)
-		return NULL;
+		return -1;
 
-	perf_addr = mmap(NULL, sizeof(struct perf_event_mmap_page),
-			PROT_READ, MAP_SHARED, fd, 0);
-	if (perf_addr == MAP_FAILED)
-		return NULL;
+	return fd;
+}
+
+static
+void close_perf_fd(int fd)
+{
+	int ret;
+
+	if (fd < 0)
+		return;
+
 	ret = close(fd);
 	if (ret) {
 		perror("Error closing LTTng-UST perf memory mapping FD");
 	}
-	return perf_addr;
+}
+
+static void setup_perf(struct lttng_perf_counter_thread_field *thread_field)
+{
+	void *perf_addr;
+
+	perf_addr = mmap(NULL, sizeof(struct perf_event_mmap_page),
+			PROT_READ, MAP_SHARED, thread_field->fd, 0);
+	if (perf_addr == MAP_FAILED)
+		perf_addr = NULL;
+	thread_field->pc = perf_addr;
+
+	if (!arch_perf_keep_fd(thread_field)) {
+		close_perf_fd(thread_field->fd);
+		thread_field->fd = -1;
+	}
 }
 
 static
@@ -221,8 +301,13 @@ struct lttng_perf_counter_thread_field *
 	if (!thread_field)
 		abort();
 	thread_field->field = perf_field;
-	thread_field->pc = setup_perf(&perf_field->attr);
-	/* Note: thread_field->pc can be NULL if setup_perf() fails. */
+	thread_field->fd = open_perf_fd(&perf_field->attr);
+	if (thread_field->fd >= 0)
+		setup_perf(thread_field);
+	/*
+	 * Note: thread_field->pc can be NULL if setup_perf() fails.
+	 * Also, thread_field->fd can be -1 if open_perf_fd() fails.
+	 */
 	ust_lock_nocheck();
 	cds_list_add_rcu(&thread_field->rcu_field_node,
 			&perf_thread->rcu_field_list);
@@ -263,7 +348,7 @@ uint64_t wrapper_perf_counter_read(struct lttng_ctx_field *field)
 
 	perf_field = field->u.perf_counter;
 	perf_thread_field = get_thread_field(perf_field);
-	return read_perf_counter(perf_thread_field->pc);
+	return arch_read_perf_counter(perf_thread_field);
 }
 
 static
@@ -293,6 +378,7 @@ static
 void lttng_destroy_perf_thread_field(
 		struct lttng_perf_counter_thread_field *thread_field)
 {
+	close_perf_fd(thread_field->fd);
 	unmap_perf_page(thread_field->pc);
 	cds_list_del_rcu(&thread_field->rcu_field_node);
 	cds_list_del(&thread_field->thread_field_node);
@@ -333,6 +419,24 @@ void lttng_destroy_perf_counter_field(struct lttng_ctx_field *field)
 	free(perf_field);
 }
 
+#ifdef __ARM_ARCH_7A__
+
+static
+int perf_get_exclude_kernel(void)
+{
+	return 0;
+}
+
+#else /* __ARM_ARCH_7A__ */
+
+static
+int perf_get_exclude_kernel(void)
+{
+	return 1;
+}
+
+#endif /* __ARM_ARCH_7A__ */
+
 /* Called with UST lock held */
 int lttng_add_perf_counter_to_ctx(uint32_t type,
 				uint64_t config,
@@ -341,7 +445,6 @@ int lttng_add_perf_counter_to_ctx(uint32_t type,
 {
 	struct lttng_ctx_field *field;
 	struct lttng_perf_counter_field *perf_field;
-	struct perf_event_mmap_page *tmp_pc;
 	char *name_alloc;
 	int ret;
 
@@ -384,17 +487,17 @@ int lttng_add_perf_counter_to_ctx(uint32_t type,
 
 	perf_field->attr.type = type;
 	perf_field->attr.config = config;
-	perf_field->attr.exclude_kernel = 1;
+	perf_field->attr.exclude_kernel = perf_get_exclude_kernel();
 	CDS_INIT_LIST_HEAD(&perf_field->thread_field_list);
 	field->u.perf_counter = perf_field;
 
 	/* Ensure that this perf counter can be used in this process. */
-	tmp_pc = setup_perf(&perf_field->attr);
-	if (!tmp_pc) {
+	ret = open_perf_fd(&perf_field->attr);
+	if (ret < 0) {
 		ret = -ENODEV;
 		goto setup_error;
 	}
-	unmap_perf_page(tmp_pc);
+	close_perf_fd(ret);
 
 	/*
 	 * Contexts can only be added before tracing is started, so we

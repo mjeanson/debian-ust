@@ -37,6 +37,7 @@
  *     - Takes instrumentation source specific arguments.
  */
 
+#define _LGPL_SOURCE
 #include <lttng/ust-abi.h>
 #include <lttng/ust-error.h>
 #include <urcu/compiler.h>
@@ -44,6 +45,7 @@
 #include <lttng/ust-events.h>
 #include <lttng/ust-version.h>
 #include <lttng/tracepoint.h>
+#include <ust-fd.h>
 #include "tracepoint-internal.h"
 #include <usterr-signal-safe.h>
 #include <helper.h>
@@ -513,7 +515,6 @@ int lttng_abi_map_channel(int session_objd,
 	/* error path after channel was created */
 objd_error:
 notransport:
-	free(lttng_chan);
 alloc_error:
 	channel_destroy(chan, channel_handle, 0);
 	return ret;
@@ -528,7 +529,9 @@ invalid:
 	{
 		int close_ret;
 
+		lttng_ust_lock_fd_tracker();
 		close_ret = close(wakeup_fd);
+		lttng_ust_unlock_fd_tracker();
 		if (close_ret) {
 			PERROR("close");
 		}
@@ -573,6 +576,8 @@ long lttng_session_cmd(int objd, unsigned int cmd, unsigned long arg,
 	case LTTNG_UST_SESSION_STOP:
 	case LTTNG_UST_DISABLE:
 		return lttng_session_disable(session);
+	case LTTNG_UST_SESSION_STATEDUMP:
+		return lttng_session_statedump(session);
 	default:
 		return -EINVAL;
 	}

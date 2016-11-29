@@ -17,6 +17,7 @@
  */
 
 #define _GNU_SOURCE
+#define _LGPL_SOURCE
 #include <helper.h>
 #include <string.h>
 #include <lttng/align.h>
@@ -25,6 +26,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include "lttng-tracer-core.h"
 
 #define BUF_LEN	4096

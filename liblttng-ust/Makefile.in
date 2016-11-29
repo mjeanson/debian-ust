@@ -80,7 +80,8 @@ build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
 @HAVE_PERF_EVENT_TRUE@am__append_1 = \
-@HAVE_PERF_EVENT_TRUE@	lttng-context-perf-counters.c
+@HAVE_PERF_EVENT_TRUE@	lttng-context-perf-counters.c \
+@HAVE_PERF_EVENT_TRUE@	perf_event.h
 
 subdir = liblttng-ust
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
@@ -149,11 +150,12 @@ am__liblttng_ust_runtime_la_SOURCES_DIST = lttng-ust-comm.c \
 	lttng-filter-validator.c lttng-filter-specialize.c \
 	lttng-filter-interpreter.c filter-bytecode.h \
 	lttng-hash-helper.h lttng-ust-elf.c lttng-ust-statedump.c \
-	lttng-ust-statedump.h lttng-ust-statedump-provider.h \
-	tracepoint-internal.h clock.h compat.h wait.h jhash.h \
-	lttng-ust-uuid.h error.h tracef.c lttng-ust-tracef-provider.h \
-	tracelog.c lttng-ust-tracelog-provider.h getenv.h \
-	lttng-context-perf-counters.c
+	lttng-ust-statedump.h lttng-ust-statedump-provider.h ust_lib.c \
+	ust_lib.h tracepoint-internal.h clock.h compat.h wait.h \
+	jhash.h lttng-ust-uuid.h error.h tracef.c \
+	lttng-ust-tracef-provider.h tracelog.c \
+	lttng-ust-tracelog-provider.h getenv.h \
+	lttng-context-perf-counters.c perf_event.h
 @HAVE_PERF_EVENT_TRUE@am__objects_1 = lttng-context-perf-counters.lo
 am_liblttng_ust_runtime_la_OBJECTS = lttng-ust-comm.lo \
 	lttng-ust-abi.lo lttng-probes.lo lttng-context-provider.lo \
@@ -162,8 +164,8 @@ am_liblttng_ust_runtime_la_OBJECTS = lttng-ust-comm.lo \
 	lttng-context-ip.lo lttng-context-cpu-id.lo lttng-context.lo \
 	lttng-events.lo lttng-filter.lo lttng-filter-validator.lo \
 	lttng-filter-specialize.lo lttng-filter-interpreter.lo \
-	lttng-ust-elf.lo lttng-ust-statedump.lo tracef.lo tracelog.lo \
-	$(am__objects_1)
+	lttng-ust-elf.lo lttng-ust-statedump.lo ust_lib.lo tracef.lo \
+	tracelog.lo $(am__objects_1)
 liblttng_ust_runtime_la_OBJECTS =  \
 	$(am_liblttng_ust_runtime_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -302,6 +304,7 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GREP = @GREP@
+HAVE_CMAKE = @HAVE_CMAKE@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -437,6 +440,7 @@ liblttng_ust_tracepoint_la_SOURCES = \
 
 liblttng_ust_tracepoint_la_LIBADD = \
 	-lurcu-bp \
+	-lpthread \
 	$(top_builddir)/snprintf/libustsnprintf.la
 
 liblttng_ust_tracepoint_la_LDFLAGS = -no-undefined -version-info $(LTTNG_UST_LIBRARY_VERSION)
@@ -450,10 +454,11 @@ liblttng_ust_runtime_la_SOURCES = lttng-ust-comm.c lttng-ust-abi.c \
 	lttng-filter-specialize.c lttng-filter-interpreter.c \
 	filter-bytecode.h lttng-hash-helper.h lttng-ust-elf.c \
 	lttng-ust-statedump.c lttng-ust-statedump.h \
-	lttng-ust-statedump-provider.h tracepoint-internal.h clock.h \
-	compat.h wait.h jhash.h lttng-ust-uuid.h error.h tracef.c \
-	lttng-ust-tracef-provider.h tracelog.c \
-	lttng-ust-tracelog-provider.h getenv.h $(am__append_1)
+	lttng-ust-statedump-provider.h ust_lib.c ust_lib.h \
+	tracepoint-internal.h clock.h compat.h wait.h jhash.h \
+	lttng-ust-uuid.h error.h tracef.c lttng-ust-tracef-provider.h \
+	tracelog.c lttng-ust-tracelog-provider.h getenv.h \
+	$(am__append_1)
 liblttng_ust_support_la_SOURCES = \
 	lttng-tracer.h \
 	lttng-tracer-core.h \
@@ -616,6 +621,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tracef.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tracelog.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ust-core.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ust_lib.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<

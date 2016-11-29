@@ -2,12 +2,12 @@
 .\"     Title: lttng-ust
 .\"    Author: [see the "AUTHORS" section]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 06/05/2016
+.\"      Date: 11/29/2016
 .\"    Manual: LTTng Manual
-.\"    Source: LTTng 2.9.0-pre
+.\"    Source: LTTng 2.9.0-
 .\"  Language: English
 .\"
-.TH "LTTNG\-UST" "3" "06/05/2016" "LTTng 2\&.9\&.0\-pre" "LTTng Manual"
+.TH "LTTNG\-UST" "3" "11/29/2016" "LTTng 2\&.9\&.0\-" "LTTng Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -38,18 +38,22 @@ lttng-ust \- LTTng user space tracing
 .nf
 #define \fBTRACEPOINT_ENUM\fR(\fIprov_name\fR, \fIenum_name\fR, \fImappings\fR)
 #define \fBTRACEPOINT_EVENT\fR(\fIprov_name\fR, \fIt_name\fR, \fIargs\fR, \fIfields\fR)
-#define \fBTRACEPOINT_EVENT_CLASS\fR(\fIprov_name\fR, \fIclass_name\fR,
-                               \fIargs\fR, \fIfields\fR)
-#define \fBTRACEPOINT_EVENT_INSTANCE\fR(\fIprov_name\fR, \fIclass_name\fR,
-                                  \fIt_name\fR, \fIargs\fR)
+#define \fBTRACEPOINT_EVENT_CLASS\fR(\fIprov_name\fR, \fIclass_name\fR, \fIargs\fR, \fIfields\fR)
+#define \fBTRACEPOINT_EVENT_INSTANCE\fR(\fIprov_name\fR, \fIclass_name\fR, \fIt_name\fR, \fIargs\fR)
 #define \fBTRACEPOINT_LOGLEVEL\fR(\fIprov_name\fR, \fIt_name\fR, \fIlevel\fR)
 #define \fBctf_array\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
 #define \fBctf_array_nowrite\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
+#define \fBctf_array_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
+#define \fBctf_array_nowrite_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
+#define \fBctf_array_network\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
+#define \fBctf_array_network_nowrite\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
+#define \fBctf_array_network_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
+#define \fBctf_array_network_nowrite_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
 #define \fBctf_array_text\fR(char, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
 #define \fBctf_array_text_nowrite\fR(char, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
 #define \fBctf_enum\fR(\fIprov_name\fR, \fIenum_name\fR, \fIint_type\fR, \fIfield_name\fR, \fIexpr\fR)
-#define \fBctf_enum_nowrite\fR(\fIprov_name\fR, \fIenum_name\fR, \fIint_type\fR,
-                         \fIfield_name\fR, \fIexpr\fR)
+#define \fBctf_enum_nowrite\fR(\fIprov_name\fR, \fIenum_name\fR, \fIint_type\fR, \fIfield_name\fR,
+                         \fIexpr\fR)
 #define \fBctf_enum_value\fR(\fIlabel\fR, \fIvalue\fR)
 #define \fBctf_enum_range\fR(\fIlabel\fR, \fIstart\fR, \fIend\fR)
 #define \fBctf_float\fR(\fIfloat_type\fR, \fIfield_name\fR, \fIexpr\fR)
@@ -60,11 +64,23 @@ lttng-ust \- LTTng user space tracing
 #define \fBctf_integer_network_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR)
 #define \fBctf_integer_nowrite\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR)
 #define \fBctf_sequence\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIlen_type\fR, \fIlen_expr\fR)
-#define \fBctf_sequence_nowrite\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR,
-                             \fIlen_type\fR, \fIlen_expr\fR)
+#define \fBctf_sequence_nowrite\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIlen_type\fR,
+                             \fIlen_expr\fR)
+#define \fBctf_sequence_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIlen_type\fR,
+                         \fIlen_expr\fR)
+#define \fBctf_sequence_nowrite_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIlen_type\fR,
+                                 \fIlen_expr\fR)
+#define \fBctf_sequence_network\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIlen_type\fR,
+                             \fIlen_expr\fR)
+#define \fBctf_sequence_network_nowrite\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR,
+                                     \fIlen_type\fR, \fIlen_expr\fR)
+#define \fBctf_sequence_network_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIlen_type\fR,
+                                 \fIlen_expr\fR)
+#define \fBctf_sequence_network_nowrite_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR,
+                                         \fIlen_type\fR, \fIlen_expr\fR)
 #define \fBctf_sequence_text\fR(char, \fIfield_name\fR, \fIexpr\fR, \fIlen_type\fR, \fIlen_expr\fR)
-#define \fBctf_sequence_text_nowrite\fR(char, \fIfield_name\fR, \fIexpr\fR,
-                                  \fIlen_type\fR, \fIlen_expr\fR)
+#define \fBctf_sequence_text_nowrite\fR(char, \fIfield_name\fR, \fIexpr\fR, \fIlen_type\fR,
+                                  \fIlen_expr\fR)
 #define \fBctf_string\fR(\fIfield_name\fR, \fIexpr\fR)
 #define \fBctf_string_nowrite\fR(\fIfield_name\fR, \fIexpr\fR)
 #define \fBdo_tracepoint\fR(\fIprov_name\fR, \fIt_name\fR, \&...)
@@ -373,7 +389,7 @@ Null\-terminated string:
 .RE
 .\}
 .sp
-Statically\-sized array of integers:
+Statically\-sized array of integers (\fB_hex\fR versions displayed in hexadecimal, \fB_network\fR versions in network byte order):
 .sp
 .if n \{\
 .RS 4
@@ -381,6 +397,12 @@ Statically\-sized array of integers:
 .nf
 \fBctf_array\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
 \fBctf_array_nowrite\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
+\fBctf_array_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
+\fBctf_array_nowrite_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
+\fBctf_array_network\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
+\fBctf_array_network_nowrite\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
+\fBctf_array_network_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
+\fBctf_array_network_nowrite_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIcount\fR)
 .fi
 .if n \{\
 .RE
@@ -399,7 +421,7 @@ Statically\-sized array, printed as text; no need to be null\-terminated:
 .RE
 .\}
 .sp
-Dynamically\-sized array of integers:
+Dynamically\-sized array of integers (\fB_hex\fR versions displayed in hexadecimal, \fB_network\fR versions in network byte order):
 .sp
 .if n \{\
 .RS 4
@@ -407,6 +429,16 @@ Dynamically\-sized array of integers:
 .nf
 \fBctf_sequence\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIlen_type\fR, \fIlen_expr\fR)
 \fBctf_sequence_nowrite\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIlen_type\fR, \fIlen_expr\fR)
+\fBctf_sequence_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIlen_type\fR, \fIlen_expr\fR)
+\fBctf_sequence_nowrite_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIlen_type\fR,
+                         \fIlen_expr\fR)
+\fBctf_sequence_network\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIlen_type\fR, \fIlen_expr\fR)
+\fBctf_sequence_network_nowrite\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIlen_type\fR,
+                             \fIlen_expr\fR)
+\fBctf_sequence_network_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR, \fIlen_type\fR,
+                         \fIlen_expr\fR)
+\fBctf_sequence_network_nowrite_hex\fR(\fIint_type\fR, \fIfield_name\fR, \fIexpr\fR,
+                                 \fIlen_type\fR, \fIlen_expr\fR)
 .fi
 .if n \{\
 .RE
@@ -440,21 +472,18 @@ Enumeration\&. The enumeration field must be defined before using this macro wit
 .sp
 The parameters are:
 .PP
-\fIint_type\fR
+\fIcount\fR
 .RS 4
-Integer C type\&. The size of this type determines the size of the integer/enumeration field\&.
+Number of elements in array/sequence\&. This must be known at compile time\&.
 .RE
 .PP
-\fIfloat_type\fR
+\fIenum_name\fR
 .RS 4
-Float C type (\fBfloat\fR
-or
-\fBdouble\fR)\&. The size of this type determines the size of the floating point number field\&.
-.RE
-.PP
-\fIfield_name\fR
-.RS 4
-Event field name (C identifier syntax, NOT a literal string)\&.
+Name of an enumeration field previously defined with the
+\fBTRACEPOINT_ENUM()\fR
+macro\&. See the
+\fITRACEPOINT_ENUM() usage\fR
+section for more information\&.
 .RE
 .PP
 \fIexpr\fR
@@ -466,14 +495,21 @@ macro (see the
 section above)\&.
 .RE
 .PP
-\fIcount\fR
+\fIfield_name\fR
 .RS 4
-Number of elements in array/sequence\&. This must be known at compile time\&.
+Event field name (C identifier syntax, NOT a literal string)\&.
 .RE
 .PP
-\fIlen_type\fR
+\fIfloat_type\fR
 .RS 4
-Unsigned integer C type of sequence\(cqs length\&.
+Float C type (\fBfloat\fR
+or
+\fBdouble\fR)\&. The size of this type determines the size of the floating point number field\&.
+.RE
+.PP
+\fIint_type\fR
+.RS 4
+Integer C type\&. The size of this type determines the size of the integer/enumeration field\&.
 .RE
 .PP
 \fIlen_expr\fR
@@ -481,18 +517,14 @@ Unsigned integer C type of sequence\(cqs length\&.
 C expression resulting in the sequence\(cqs length\&. This expression can use one or more arguments passed to the tracepoint\&.
 .RE
 .PP
+\fIlen_type\fR
+.RS 4
+Unsigned integer C type of sequence\(cqs length\&.
+.RE
+.PP
 \fIprov_name\fR
 .RS 4
 Tracepoint provider name\&. This must be the same as the tracepoint provider name used in a previous field definition\&.
-.RE
-.PP
-\fIenum_name\fR
-.RS 4
-Name of an enumeration field previously defined with the
-\fBTRACEPOINT_ENUM()\fR
-macro\&. See the
-\fITRACEPOINT_ENUM() usage\fR
-section for more information\&.
 .RE
 .sp
 The \fB_nowrite\fR versions omit themselves from the recorded trace, but are otherwise identical\&. Their primary purpose is to make some of the event context available to the event filters without having to commit the data to sub\-buffers\&. See \fBlttng-enable-event\fR(1) to learn more about dynamic event filtering\&.
@@ -1040,6 +1072,8 @@ environment variable\&.
 .SS "Using LTTng\-UST with daemons"
 .sp
 Some extra care is needed when using \fBliblttng-ust\fR with daemon applications that call \fBfork\fR(2), \fBclone\fR(2), or BSD\(cqs \fBrfork\fR(2) without a following \fBexec\fR(3) family system call\&. The library \fBliblttng-ust-fork.so\fR needs to be preloaded before starting the application with the \fBLD_PRELOAD\fR environment variable (see \fBld.so\fR(8))\&.
+.sp
+To use \fBliblttng-ust\fR with a daemon application which closes file descriptors that were not opened by it, preload the \fBliblttng-ust-fd.so\fR library before you start the application\&. Typical use cases include daemons closing all file descriptors after \fBfork\fR(2), and buggy applications doing \(lqdouble\-closes\(rq\&.
 .SS "Context information"
 .sp
 Context information can be prepended by the LTTng\-UST tracer before each event, or before specific events\&.
@@ -1086,6 +1120,16 @@ to list the available perf counters\&.
 Only available on IA\-32 and x86\-64 architectures\&.
 .RE
 .PP
+\fBperf:thread:raw:rN:NAME\fR
+.RS 4
+perf counter with raw ID
+\fIN\fR
+and custom name
+\fINAME\fR\&. See
+\fBlttng-add-context\fR(1)
+for more details\&.
+.RE
+.PP
 \fBpthread_id\fR
 .RS 4
 POSIX thread identifier\&. Can be used on architectures where
@@ -1116,9 +1160,9 @@ Virtual thread ID: thread ID as seen from the point of view of the process names
 .RE
 .SS "LTTng\-UST state dump"
 .sp
-If an application that uses \fBliblttng-ust\fR becomes part of a tracing session, information about its currently loaded shared objects, their build IDs, and their debug link informations are emitted as events by the tracer\&.
+If an application that uses \fBliblttng-ust\fR becomes part of a tracing session, information about its currently loaded shared objects, their build IDs, and their debug link information are emitted as events by the tracer\&.
 .sp
-The following LTTng\-UST state dump events exist and must be enabled to record application state dumps\&.
+The following LTTng\-UST state dump events exist and must be enabled to record application state dumps\&. Note that, during the state dump phase, LTTng\-UST can also emit \fIshared library load/unload\fR events (see \fIShared library load/unload tracking\fR below)\&.
 .PP
 \fBlttng_ust_statedump:start\fR
 .RS 4
@@ -1151,26 +1195,42 @@ T}
 lt lt
 lt lt
 lt lt
+lt lt
+lt lt
 lt lt.
 T{
 \fBbaddr\fR
 T}:T{
-Base address of loaded executable
+Base address of loaded executable\&.
 T}
 T{
 \fBmemsz\fR
 T}:T{
-Size of loaded executable in memory
+Size of loaded executable in memory\&.
 T}
 T{
 \fBpath\fR
 T}:T{
-Path to loaded executable file
+Path to loaded executable file\&.
 T}
 T{
 \fBis_pic\fR
 T}:T{
-Whether the executable is position\-independent code
+Whether or not the executable is position\-independent code\&.
+T}
+T{
+\fBhas_build_id\fR
+T}:T{
+Whether or not the executable has a build ID\&. If this field is 1, you can expect that an
+\fBlttng_ust_statedump:build_id\fR
+event record follows this one (not necessarily immediately after)\&.
+T}
+T{
+\fBhas_debug_link\fR
+T}:T{
+Whether or not the executable has debug link information\&. If this field is 1, you can expect that an
+\fBlttng_ust_statedump:debug_link\fR
+event record follows this one (not necessarily immediately after)\&.
 T}
 .TE
 .sp 1
@@ -1197,12 +1257,12 @@ lt lt.
 T{
 \fBbaddr\fR
 T}:T{
-Base address of loaded library
+Base address of loaded library\&.
 T}
 T{
 \fBbuild_id\fR
 T}:T{
-Build ID
+Build ID\&.
 T}
 .TE
 .sp 1
@@ -1230,20 +1290,231 @@ lt lt.
 T{
 \fBbaddr\fR
 T}:T{
-Base address of loaded library
+Base address of loaded library\&.
 T}
 T{
 \fBcrc\fR
 T}:T{
-Debug link file\(cqs CRC
+Debug link file\(cqs CRC\&.
 T}
 T{
 \fBfilename\fR
 T}:T{
-Debug link file name
+Debug link file name\&.
 T}
 .TE
 .sp 1
+.RE
+.SS "Shared library load/unload tracking"
+.sp
+The \fILTTng-UST state dump\fR and the LTTng\-UST helper library to instrument the dynamic linker (see \fBliblttng-ust-dl\fR(3)) can emit \fBshared library load/unload tracking\fR events\&.
+.sp
+The following shared library load/unload tracking events exist and must be enabled to track the loading and unloading of shared libraries:
+.PP
+\fBlttng_ust_lib:load\fR
+.RS 4
+Emitted when a shared library (shared object) is loaded\&.
+.sp
+Fields:
+.TS
+allbox tab(:);
+ltB ltB.
+T{
+Field name
+T}:T{
+Description
+T}
+.T&
+lt lt
+lt lt
+lt lt
+lt lt
+lt lt.
+T{
+\fBbaddr\fR
+T}:T{
+Base address of loaded library\&.
+T}
+T{
+\fBmemsz\fR
+T}:T{
+Size of loaded library in memory\&.
+T}
+T{
+\fBpath\fR
+T}:T{
+Path to loaded library file\&.
+T}
+T{
+\fBhas_build_id\fR
+T}:T{
+Whether or not the library has a build ID\&. If this field is 1, you can expect that an
+\fBlttng_ust_lib:build_id\fR
+event record follows this one (not necessarily immediately after)\&.
+T}
+T{
+\fBhas_debug_link\fR
+T}:T{
+Whether or not the library has debug link information\&. If this field is 1, you can expect that an
+\fBlttng_ust_lib:debug_link\fR
+event record follows this one (not necessarily immediately after)\&.
+T}
+.TE
+.sp 1
+.RE
+.PP
+\fBlttng_ust_lib:unload\fR
+.RS 4
+Emitted when a shared library (shared object) is unloaded\&.
+.sp
+Fields:
+.TS
+allbox tab(:);
+ltB ltB.
+T{
+Field name
+T}:T{
+Description
+T}
+.T&
+lt lt.
+T{
+\fBbaddr\fR
+T}:T{
+Base address of unloaded library\&.
+T}
+.TE
+.sp 1
+.RE
+.PP
+\fBlttng_ust_lib:build_id\fR
+.RS 4
+Emitted when a build ID is found in a loaded shared library (shared object)\&. See
+Debugging Information in Separate Files <https://sourceware.org/gdb/onlinedocs/gdb/Separate-Debug-Files.html>
+for more information about build IDs\&.
+.sp
+Fields:
+.TS
+allbox tab(:);
+ltB ltB.
+T{
+Field name
+T}:T{
+Description
+T}
+.T&
+lt lt
+lt lt.
+T{
+\fBbaddr\fR
+T}:T{
+Base address of loaded library\&.
+T}
+T{
+\fBbuild_id\fR
+T}:T{
+Build ID\&.
+T}
+.TE
+.sp 1
+.RE
+.PP
+\fBlttng_ust_lib:debug_link\fR
+.RS 4
+Emitted when debug link information is found in a loaded shared library (shared object)\&. See
+Debugging Information in Separate Files <https://sourceware.org/gdb/onlinedocs/gdb/Separate-Debug-Files.html>
+for more information about debug links\&.
+.sp
+Fields:
+.TS
+allbox tab(:);
+ltB ltB.
+T{
+Field name
+T}:T{
+Description
+T}
+.T&
+lt lt
+lt lt
+lt lt.
+T{
+\fBbaddr\fR
+T}:T{
+Base address of loaded library\&.
+T}
+T{
+\fBcrc\fR
+T}:T{
+Debug link file\(cqs CRC\&.
+T}
+T{
+\fBfilename\fR
+T}:T{
+Debug link file name\&.
+T}
+.TE
+.sp 1
+.RE
+.SS "Detect if LTTng\-UST is loaded"
+.sp
+To detect if \fBliblttng-ust\fR is loaded from an application:
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 1.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  1." 4.2
+.\}
+Define the
+\fBlttng_ust_loaded\fR
+weak symbol globally:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+int lttng_ust_loaded __attribute__((weak));
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+This weak symbol is set by the constructor of
+\fBliblttng-ust\fR\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04' 2.\h'+01'\c
+.\}
+.el \{\
+.sp -1
+.IP "  2." 4.2
+.\}
+Test
+\fBlttng_ust_loaded\fR
+where needed:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+/* \&.\&.\&. */
+
+if (lttng_ust_loaded) {
+    /* LTTng\-UST is loaded */
+} else {
+    /* LTTng\-UST is NOT loaded */
+}
+
+/* \&.\&.\&. */
+.fi
+.if n \{\
+.RE
+.\}
 .RE
 .SH "EXAMPLE"
 .if n \{\

@@ -18,6 +18,11 @@
  */
 
 #define _GNU_SOURCE
+/*
+ * Do _not_ define _LGPL_SOURCE because we don't want to create a
+ * circular dependency loop between this malloc wrapper, liburcu and
+ * libc.
+ */
 #include <lttng/ust-dlfcn.h>
 #include <sys/types.h>
 #include <stdio.h>
@@ -416,6 +421,12 @@ int posix_memalign(void **memptr, size_t alignment, size_t size)
 	return retval;
 }
 
+static
+void lttng_ust_fixup_malloc_nesting_tls(void)
+{
+	asm volatile ("" : : "m" (URCU_TLS(malloc_nesting)));
+}
+
 __attribute__((constructor))
 void lttng_ust_malloc_wrapper_init(void)
 {
@@ -423,6 +434,7 @@ void lttng_ust_malloc_wrapper_init(void)
 	if (cur_alloc.calloc) {
 		return;
 	}
+	lttng_ust_fixup_malloc_nesting_tls();
 	/*
 	 * Ensure the allocator is in place before the process becomes
 	 * multithreaded.

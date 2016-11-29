@@ -37,10 +37,10 @@
 /**
  * lib_ring_buffer_get_cpu - Precedes ring buffer reserve/commit.
  *
- * Grabs RCU read-side lock and keeps a ring buffer nesting count as
- * supplementary safety net to ensure tracer client code will never
- * trigger an endless recursion. Returns the processor ID on success,
- * -EPERM on failure (nesting count too high).
+ * Keeps a ring buffer nesting count as supplementary safety net to
+ * ensure tracer client code will never trigger an endless recursion.
+ * Returns the processor ID on success, -EPERM on failure (nesting count
+ * too high).
  *
  * asm volatile and "memory" clobber prevent the compiler from moving
  * instructions out of the ring buffer nesting count. This is required to ensure
@@ -53,7 +53,6 @@ int lib_ring_buffer_get_cpu(const struct lttng_ust_lib_ring_buffer_config *confi
 {
 	int cpu, nesting;
 
-	rcu_read_lock();
 	cpu = lttng_ust_get_cpu();
 	nesting = ++URCU_TLS(lib_ring_buffer_nesting);
 	cmm_barrier();
@@ -61,7 +60,6 @@ int lib_ring_buffer_get_cpu(const struct lttng_ust_lib_ring_buffer_config *confi
 	if (caa_unlikely(nesting > 4)) {
 		WARN_ON_ONCE(1);
 		URCU_TLS(lib_ring_buffer_nesting)--;
-		rcu_read_unlock();
 		return -EPERM;
 	} else
 		return cpu;
@@ -75,7 +73,6 @@ void lib_ring_buffer_put_cpu(const struct lttng_ust_lib_ring_buffer_config *conf
 {
 	cmm_barrier();
 	URCU_TLS(lib_ring_buffer_nesting)--;		/* TLS */
-	rcu_read_unlock();
 }
 
 /*
@@ -163,14 +160,16 @@ int lib_ring_buffer_reserve(const struct lttng_ust_lib_ring_buffer_config *confi
 	unsigned long o_begin, o_end, o_old;
 	size_t before_hdr_pad = 0;
 
-	if (uatomic_read(&chan->record_disabled))
+	if (caa_unlikely(uatomic_read(&chan->record_disabled)))
 		return -EAGAIN;
 
 	if (config->alloc == RING_BUFFER_ALLOC_PER_CPU)
 		buf = shmp(handle, chan->backend.buf[ctx->cpu].shmp);
 	else
 		buf = shmp(handle, chan->backend.buf[0].shmp);
-	if (uatomic_read(&buf->record_disabled))
+	if (caa_unlikely(!buf))
+		return -EIO;
+	if (caa_unlikely(uatomic_read(&buf->record_disabled)))
 		return -EAGAIN;
 	ctx->buf = buf;
 
@@ -253,11 +252,16 @@ void lib_ring_buffer_commit(const struct lttng_ust_lib_ring_buffer_config *confi
 	unsigned long offset_end = ctx->buf_offset;
 	unsigned long endidx = subbuf_index(offset_end - 1, chan);
 	unsigned long commit_count;
+	struct commit_counters_hot *cc_hot = shmp_index(handle,
+						buf->commit_hot, endidx);
+
+	if (caa_unlikely(!cc_hot))
+		return;
 
 	/*
 	 * Must count record before incrementing the commit count.
 	 */
-	subbuffer_count_record(config, &buf->backend, endidx, handle);
+	subbuffer_count_record(config, ctx, &buf->backend, endidx, handle);
 
 	/*
 	 * Order all writes to buffer before the commit count update that will
@@ -265,7 +269,7 @@ void lib_ring_buffer_commit(const struct lttng_ust_lib_ring_buffer_config *confi
 	 */
 	cmm_smp_wmb();
 
-	v_add(config, ctx->slot_size, &shmp_index(handle, buf->commit_hot, endidx)->cc);
+	v_add(config, ctx->slot_size, &cc_hot->cc);
 
 	/*
 	 * commit count read can race with concurrent OOO commit count updates.
@@ -285,7 +289,7 @@ void lib_ring_buffer_commit(const struct lttng_ust_lib_ring_buffer_config *confi
 	 *   count reaches back the reserve offset for a specific sub-buffer,
 	 *   which is completely independent of the order.
 	 */
-	commit_count = v_read(config, &shmp_index(handle, buf->commit_hot, endidx)->cc);
+	commit_count = v_read(config, &cc_hot->cc);
 
 	lib_ring_buffer_check_deliver(config, buf, chan, offset_end - 1,
 				      commit_count, endidx, handle, ctx->tsc);
@@ -293,8 +297,8 @@ void lib_ring_buffer_commit(const struct lttng_ust_lib_ring_buffer_config *confi
 	 * Update used size at each commit. It's needed only for extracting
 	 * ring_buffer buffers from vmcore, after crash.
 	 */
-	lib_ring_buffer_write_commit_counter(config, buf, chan, endidx,
-			offset_end, commit_count, handle);
+	lib_ring_buffer_write_commit_counter(config, buf, chan,
+			offset_end, commit_count, handle, cc_hot);
 }
 
 /**
