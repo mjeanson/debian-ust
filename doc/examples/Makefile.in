@@ -84,7 +84,7 @@ subdir = doc/examples
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(dist_doc_examples_DATA) \
 	$(dist_doc_examples_clock_override_DATA) \
-	$(dist_doc_examples_demo_DATA) \
+	$(dist_doc_examples_cmake_DATA) $(dist_doc_examples_demo_DATA) \
 	$(dist_doc_examples_demo_tracef_DATA) \
 	$(dist_doc_examples_demo_tracelog_DATA) \
 	$(dist_doc_examples_easy_ust_DATA) \
@@ -167,6 +167,7 @@ am__uninstall_files_from_dir = { \
   }
 am__installdirs = "$(DESTDIR)$(doc_examplesdir)" \
 	"$(DESTDIR)$(doc_examples_clock_overridedir)" \
+	"$(DESTDIR)$(doc_examples_cmakedir)" \
 	"$(DESTDIR)$(doc_examples_demodir)" \
 	"$(DESTDIR)$(doc_examples_demo_tracefdir)" \
 	"$(DESTDIR)$(doc_examples_demo_tracelogdir)" \
@@ -186,7 +187,7 @@ am__dist_doc_examples_java_log4j_DATA_DIST = java-log4j/Makefile \
 am__dist_doc_examples_python_DATA_DIST = python/hello.py
 DATA = $(dist_doc_examples_DATA) \
 	$(dist_doc_examples_clock_override_DATA) \
-	$(dist_doc_examples_demo_DATA) \
+	$(dist_doc_examples_cmake_DATA) $(dist_doc_examples_demo_DATA) \
 	$(dist_doc_examples_demo_tracef_DATA) \
 	$(dist_doc_examples_demo_tracelog_DATA) \
 	$(dist_doc_examples_easy_ust_DATA) \
@@ -230,6 +231,7 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GREP = @GREP@
+HAVE_CMAKE = @HAVE_CMAKE@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -360,6 +362,7 @@ doc_examples_demo_tracefdir = ${docdir}/examples/demo-tracef
 doc_examples_demo_tracelogdir = ${docdir}/examples/demo-tracelog
 doc_examples_clock_overridedir = ${docdir}/examples/clock-override
 doc_examples_getcpu_overridedir = ${docdir}/examples/getcpu-override
+doc_examples_cmakedir = ${docdir}/examples/cmake-multiple-shared-libraries
 @BUILD_JAVA_AGENT_WITH_JUL_TRUE@doc_examples_java_juldir = ${docdir}/examples/java-jul
 @BUILD_JAVA_AGENT_WITH_JUL_TRUE@dist_doc_examples_java_jul_DATA = java-jul/Makefile \
 @BUILD_JAVA_AGENT_WITH_JUL_TRUE@				  java-jul/Hello.java \
@@ -377,10 +380,25 @@ doc_examples_getcpu_overridedir = ${docdir}/examples/getcpu-override
 @BUILD_JAVA_AGENT_WITH_LOG4J_TRUE@SUBDIRS_LOG4J = java-log4j
 @BUILD_PYTHON_AGENT_TRUE@doc_examples_pythondir = ${docdir}/examples/python
 @BUILD_PYTHON_AGENT_TRUE@dist_doc_examples_python_DATA = python/hello.py
+@CXX_WORKS_TRUE@@HAVE_CMAKE_TRUE@SUBDIRS_CMAKE = cmake-multiple-shared-libraries
 dist_doc_examples_DATA = README
 dist_doc_examples_easy_ust_DATA = easy-ust/Makefile \
 	easy-ust/sample.c \
 	easy-ust/sample_component_provider.h easy-ust/tp.c
+
+dist_doc_examples_cmake_DATA = \
+  cmake-multiple-shared-libraries/CMakeLists.txt \
+  cmake-multiple-shared-libraries/cmake/FindLTTngUST.cmake \
+  cmake-multiple-shared-libraries/aligner.cpp \
+  cmake-multiple-shared-libraries/aligner-lib.cpp \
+  cmake-multiple-shared-libraries/aligner-lib.h \
+  cmake-multiple-shared-libraries/README.md \
+  cmake-multiple-shared-libraries/tester.cpp \
+  cmake-multiple-shared-libraries/tester-lib.cpp \
+  cmake-multiple-shared-libraries/tester-lib.h \
+  cmake-multiple-shared-libraries/tracepoint-provider.cpp \
+  cmake-multiple-shared-libraries/tracepoint-provider.h \
+  cmake-multiple-shared-libraries/trace.sh
 
 dist_doc_examples_gen_tp_DATA = gen-tp/Makefile \
 	gen-tp/sample.c  gen-tp/sample_tracepoint.tp
@@ -508,6 +526,27 @@ uninstall-dist_doc_examples_clock_overrideDATA:
 	@list='$(dist_doc_examples_clock_override_DATA)'; test -n "$(doc_examples_clock_overridedir)" || list=; \
 	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
 	dir='$(DESTDIR)$(doc_examples_clock_overridedir)'; $(am__uninstall_files_from_dir)
+install-dist_doc_examples_cmakeDATA: $(dist_doc_examples_cmake_DATA)
+	@$(NORMAL_INSTALL)
+	@list='$(dist_doc_examples_cmake_DATA)'; test -n "$(doc_examples_cmakedir)" || list=; \
+	if test -n "$$list"; then \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(doc_examples_cmakedir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(doc_examples_cmakedir)" || exit 1; \
+	fi; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  echo "$$d$$p"; \
+	done | $(am__base_list) | \
+	while read files; do \
+	  echo " $(INSTALL_DATA) $$files '$(DESTDIR)$(doc_examples_cmakedir)'"; \
+	  $(INSTALL_DATA) $$files "$(DESTDIR)$(doc_examples_cmakedir)" || exit $$?; \
+	done
+
+uninstall-dist_doc_examples_cmakeDATA:
+	@$(NORMAL_UNINSTALL)
+	@list='$(dist_doc_examples_cmake_DATA)'; test -n "$(doc_examples_cmakedir)" || list=; \
+	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(doc_examples_cmakedir)'; $(am__uninstall_files_from_dir)
 install-dist_doc_examples_demoDATA: $(dist_doc_examples_demo_DATA)
 	@$(NORMAL_INSTALL)
 	@list='$(dist_doc_examples_demo_DATA)'; test -n "$(doc_examples_demodir)" || list=; \
@@ -760,7 +799,7 @@ check: check-am
 @NO_SHARED_TRUE@all-local:
 all-am: Makefile $(DATA) all-local
 installdirs:
-	for dir in "$(DESTDIR)$(doc_examplesdir)" "$(DESTDIR)$(doc_examples_clock_overridedir)" "$(DESTDIR)$(doc_examples_demodir)" "$(DESTDIR)$(doc_examples_demo_tracefdir)" "$(DESTDIR)$(doc_examples_demo_tracelogdir)" "$(DESTDIR)$(doc_examples_easy_ustdir)" "$(DESTDIR)$(doc_examples_gen_tpdir)" "$(DESTDIR)$(doc_examples_getcpu_overridedir)" "$(DESTDIR)$(doc_examples_hello_static_libdir)" "$(DESTDIR)$(doc_examples_java_juldir)" "$(DESTDIR)$(doc_examples_java_log4jdir)" "$(DESTDIR)$(doc_examples_pythondir)"; do \
+	for dir in "$(DESTDIR)$(doc_examplesdir)" "$(DESTDIR)$(doc_examples_clock_overridedir)" "$(DESTDIR)$(doc_examples_cmakedir)" "$(DESTDIR)$(doc_examples_demodir)" "$(DESTDIR)$(doc_examples_demo_tracefdir)" "$(DESTDIR)$(doc_examples_demo_tracelogdir)" "$(DESTDIR)$(doc_examples_easy_ustdir)" "$(DESTDIR)$(doc_examples_gen_tpdir)" "$(DESTDIR)$(doc_examples_getcpu_overridedir)" "$(DESTDIR)$(doc_examples_hello_static_libdir)" "$(DESTDIR)$(doc_examples_java_juldir)" "$(DESTDIR)$(doc_examples_java_log4jdir)" "$(DESTDIR)$(doc_examples_pythondir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: install-am
@@ -816,6 +855,7 @@ info-am:
 
 install-data-am: install-dist_doc_examplesDATA \
 	install-dist_doc_examples_clock_overrideDATA \
+	install-dist_doc_examples_cmakeDATA \
 	install-dist_doc_examples_demoDATA \
 	install-dist_doc_examples_demo_tracefDATA \
 	install-dist_doc_examples_demo_tracelogDATA \
@@ -871,6 +911,7 @@ ps-am:
 
 uninstall-am: uninstall-dist_doc_examplesDATA \
 	uninstall-dist_doc_examples_clock_overrideDATA \
+	uninstall-dist_doc_examples_cmakeDATA \
 	uninstall-dist_doc_examples_demoDATA \
 	uninstall-dist_doc_examples_demo_tracefDATA \
 	uninstall-dist_doc_examples_demo_tracelogDATA \
@@ -890,6 +931,7 @@ uninstall-am: uninstall-dist_doc_examplesDATA \
 	html-am info info-am install install-am install-data \
 	install-data-am install-dist_doc_examplesDATA \
 	install-dist_doc_examples_clock_overrideDATA \
+	install-dist_doc_examples_cmakeDATA \
 	install-dist_doc_examples_demoDATA \
 	install-dist_doc_examples_demo_tracefDATA \
 	install-dist_doc_examples_demo_tracelogDATA \
@@ -908,6 +950,7 @@ uninstall-am: uninstall-dist_doc_examplesDATA \
 	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
 	tags-am uninstall uninstall-am uninstall-dist_doc_examplesDATA \
 	uninstall-dist_doc_examples_clock_overrideDATA \
+	uninstall-dist_doc_examples_cmakeDATA \
 	uninstall-dist_doc_examples_demoDATA \
 	uninstall-dist_doc_examples_demo_tracefDATA \
 	uninstall-dist_doc_examples_demo_tracelogDATA \
@@ -922,7 +965,7 @@ uninstall-am: uninstall-dist_doc_examplesDATA \
 
 @NO_SHARED_FALSE@all-local:
 @NO_SHARED_FALSE@	@if [ x"$(srcdir)" != x"$(builddir)" ]; then \
-@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_PROXY) $(SUBDIRS_JUL) $(SUBDIRS_LOG4J); do \
+@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_PROXY) $(SUBDIRS_JUL) $(SUBDIRS_LOG4J) $(SUBDIRS_CMAKE); do \
 @NO_SHARED_FALSE@			cp -pfR $(srcdir)/$$subdir $(builddir); \
 @NO_SHARED_FALSE@			chmod -R u+w $(builddir)/$$subdir; \
 @NO_SHARED_FALSE@		done; \
@@ -954,6 +997,24 @@ uninstall-am: uninstall-dist_doc_examplesDATA \
 @NO_SHARED_FALSE@			(cd $(SUBDIRS_LOG4J) && $(MAKE) JAVA_CLASSPATH_OVERRIDE_LOG4J="../../../liblttng-ust-java-agent/java/lttng-ust-agent-log4j" JAVA_CLASSPATH_OVERRIDE_COMMON="../../../liblttng-ust-java-agent/java/lttng-ust-agent-common" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
 @NO_SHARED_FALSE@		done; \
 @NO_SHARED_FALSE@	fi;
+@NO_SHARED_FALSE@	if [ x"$(SUBDIRS_CMAKE)" != x"" ]; then \
+@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_CMAKE); do \
+@NO_SHARED_FALSE@			( \
+@NO_SHARED_FALSE@				cd $(SUBDIRS_CMAKE) && \
+@NO_SHARED_FALSE@				$(MKDIR_P) build && \
+@NO_SHARED_FALSE@				cd build && \
+@NO_SHARED_FALSE@				cmake \
+@NO_SHARED_FALSE@				-DCMAKE_INCLUDE_PATH="$(abs_top_srcdir)/include;$(abs_top_builddir)/include" \
+@NO_SHARED_FALSE@				-DCMAKE_LIBRARY_PATH="$(abs_top_builddir)/liblttng-ust/.libs" \
+@NO_SHARED_FALSE@				-DCMAKE_C_FLAGS="$(CFLAGS) $(CPPFLAGS)" \
+@NO_SHARED_FALSE@				-DCMAKE_CXX_FLAGS="$(CXXFLAGS) $(CPPFLAGS)" \
+@NO_SHARED_FALSE@				-DCMAKE_EXE_LINKER_FLAGS="$(LDFLAGS)" \
+@NO_SHARED_FALSE@				.. && \
+@NO_SHARED_FALSE@				$(MAKE) && \
+@NO_SHARED_FALSE@				cd .. \
+@NO_SHARED_FALSE@			) || exit 1; \
+@NO_SHARED_FALSE@		done; \
+@NO_SHARED_FALSE@	fi;
 
 @NO_SHARED_FALSE@clean-local:
 @NO_SHARED_FALSE@	@for subdir in $(SUBDIRS_PROXY); do \
@@ -975,8 +1036,15 @@ uninstall-am: uninstall-dist_doc_examplesDATA \
 @NO_SHARED_FALSE@			fi; \
 @NO_SHARED_FALSE@		done; \
 @NO_SHARED_FALSE@	fi; \
+@NO_SHARED_FALSE@	if [ x"$(SUBDIRS_CMAKE)" != x"" ]; then \
+@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_CMAKE); do \
+@NO_SHARED_FALSE@			if [ -d $$subdir ]; then \
+@NO_SHARED_FALSE@				(cd $$subdir && rm -rf build && cd ..) || exit 1; \
+@NO_SHARED_FALSE@			fi; \
+@NO_SHARED_FALSE@		done; \
+@NO_SHARED_FALSE@	fi; \
 @NO_SHARED_FALSE@	if [ x"$(srcdir)" != x"$(builddir)" ]; then \
-@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_PROXY) $(SUBDIRS_JUL) $(SUBDIRS_LOG4J); do \
+@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_PROXY) $(SUBDIRS_JUL) $(SUBDIRS_LOG4J) $(SUBDIRS_CMAKE); do \
 @NO_SHARED_FALSE@			rm -rf $(builddir)/$$subdir; \
 @NO_SHARED_FALSE@		done; \
 @NO_SHARED_FALSE@	fi;

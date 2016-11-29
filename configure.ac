@@ -3,13 +3,13 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl Version infos
 m4_define([V_MAJOR], [2])
-m4_define([V_MINOR], [8])
-m4_define([V_PATCH], [1])
+m4_define([V_MINOR], [9])
+m4_define([V_PATCH], [0])
 dnl m4_define([V_EXTRA], [])
 m4_define([V_STRING], [V_MAJOR.V_MINOR.V_PATCH])
 m4_ifdef([V_EXTRA], [m4_append([V_STRING], [-V_EXTRA])])
-m4_define([V_NAME], [[Isseki Nicho]])
-m4_define([V_DESC], [[The result of a collaboration between "Dieu du Ciel!" and Nagano-based "Shiga Kogen", Isseki Nicho is a strong Imperial Dark Saison offering a rich roasted malt flavor combined with a complex fruity finish typical of Saison yeasts.]])
+m4_define([V_NAME], [[Joannès]])
+m4_define([V_DESC], [[Berliner Weisse style beer from the Trèfle Noir microbrewery in Rouyn-Noranda. It is a tangy beer with a distinct pink dress and intense fruit flavor, thanks to the presence of fresh blackcurrant grown in Témiscamingue.]])
 
 AC_INIT([lttng-ust], V_STRING, [mathieu dot desnoyers at efficios dot com])
 
@@ -49,6 +49,7 @@ AC_SUBST([PATCHLEVEL_VERSION], [V_PATCH])
 AC_PROG_SED
 AC_PROG_GREP
 AC_PROG_LN_S
+AC_PROG_MKDIR_P
 
 # libtool link_all_deplibs fixup. See http://bugs.lttng.org/issues/321.
 AC_ARG_ENABLE([libtool-linkdep-fixup], [
@@ -79,6 +80,8 @@ AM_CONDITIONAL([NO_SHARED], [test "x$enable_shared" = "xno"])
 # Checks for programs.
 AC_PROG_CC
 AC_PROG_CXX
+AC_CHECK_PROG([HAVE_CMAKE], [cmake], ["yes"])
+AM_CONDITIONAL([HAVE_CMAKE], [test "x$HAVE_CMAKE" = "xyes"])
 AC_PROG_MAKE_SET
 LT_INIT
 
@@ -135,6 +138,11 @@ AM_CONDITIONAL([LTTNG_UST_BUILD_WITH_LIBDL], [test "x$have_libdl" = "xyes"])
 AM_CONDITIONAL([LTTNG_UST_BUILD_WITH_LIBC_DL], [test "x$have_libc_dl" = "xyes"])
 
 AC_CHECK_LIB([pthread], [pthread_create])
+AC_CHECK_LIB([pthread], [pthread_setname_np],
+	AC_DEFINE([HAVE_PTHREAD_SETNAME_NP], [1], [Define to 1 if pthread_setname_np is available.]),
+	AC_CHECK_LIB([pthread], [pthread_set_name_np],
+		AC_DEFINE([HAVE_PTHREAD_SET_NAME_NP], [1], [Define to 1 if pthread_set_name_np is available.]),
+		AC_MSG_RESULT([pthread setname/set_name not found.])))
 
 # Check for dlfcn.h
 AC_CHECK_HEADER([dlfcn.h])
@@ -208,18 +216,11 @@ AC_CHECK_LIB([urcu-bp], [call_rcu_bp], [], [AC_MSG_ERROR([liburcu 0.6 or newer i
 # optional linux/perf_event.h
 AC_CHECK_HEADERS([linux/perf_event.h], [have_perf_event=yes], [])
 
-# Perf event counters are only supported on x86 so far.
-AC_MSG_CHECKING([UST support for architecture perf event counters])
-AS_CASE([$host_cpu],
-	[i[[3456]]86], [UST_SUPPORT_FOR_ARCH_PERF_EVENT_COUNTERS=yes],
-	[x86_64], [UST_SUPPORT_FOR_ARCH_PERF_EVENT_COUNTERS=yes],
-	[amd64], [UST_SUPPORT_FOR_ARCH_PERF_EVENT_COUNTERS=yes],
-	[UST_SUPPORT_FOR_ARCH_PERF_EVENT_COUNTERS=no])
-AC_MSG_RESULT([$UST_SUPPORT_FOR_ARCH_PERF_EVENT_COUNTERS])
+# Perf event counters are supported on all architectures supported by
+# perf, using the read system call as fallback.
+AM_CONDITIONAL([HAVE_PERF_EVENT], [test "x$have_perf_event" = "xyes"])
 
-AM_CONDITIONAL([HAVE_PERF_EVENT], [test "x$have_perf_event" = "xyes" && test "x$UST_SUPPORT_FOR_ARCH_PERF_EVENT_COUNTERS" = "xyes"])
-
-AS_IF([test "x$have_perf_event" = "xyes" && test "x$UST_SUPPORT_FOR_ARCH_PERF_EVENT_COUNTERS" = "xyes"], [
+AS_IF([test "x$have_perf_event" = "xyes"], [
 	AC_DEFINE([LTTNG_UST_HAVE_PERF_EVENT], [1])
 ])
 
@@ -449,6 +450,7 @@ AC_CONFIG_FILES([
 	liblttng-ust-ctl/Makefile
 	liblttng-ust-fork/Makefile
 	liblttng-ust-dl/Makefile
+	liblttng-ust-fd/Makefile
 	liblttng-ust-java/Makefile
 	liblttng-ust-java-agent/Makefile
 	liblttng-ust-java-agent/java/Makefile
@@ -503,16 +505,16 @@ AS_ECHO(["LTTng-UST will be built with the following options:"])
 AS_ECHO
 
 AS_ECHO_N(["Java agent (JUL support): "])
-AS_IF([test "x$java_agent_jul" = "xyes"], [AS_ECHO(["Enabled"])], [AS_ECHO(["Disabled"])])
+AS_IF([test "x$java_agent_jul" = "xyes"], [AS_ECHO(["Enabled"])], [AS_ECHO(["Disabled (Use --enable-java-agent-jul)"])])
 
 AS_ECHO_N(["Java agent (Log4j support): "])
-AS_IF([test "x$java_agent_log4j" = "xyes"], [AS_ECHO(["Enabled"])], [AS_ECHO(["Disabled"])])
+AS_IF([test "x$java_agent_log4j" = "xyes"], [AS_ECHO(["Enabled"])], [AS_ECHO(["Disabled (Use --enable-java-agent-log4j)"])])
 
 AS_ECHO_N(["JNI interface (JNI): "])
-AS_IF([test "x$jni_interface" = "xyes"], [AS_ECHO(["Enabled"])], [AS_ECHO(["Disabled"])])
+AS_IF([test "x$jni_interface" = "xyes"], [AS_ECHO(["Enabled"])], [AS_ECHO(["Disabled (Use --enable-jni-interface)"])])
 
 AS_ECHO_N(["Python ($PYTHON) agent: "])
-AS_IF([test "x$python_agent" = "xyes"], [AS_ECHO(["Enabled"])], [AS_ECHO(["Disabled"])])
+AS_IF([test "x$python_agent" = "xyes"], [AS_ECHO(["Enabled"])], [AS_ECHO(["Disabled (Use --enable-python-agent)"])])
 
 AS_ECHO_N(["sdt.h integration: "])
 AS_IF([test "x$with_sdt" = "xyes"], [AS_ECHO(["Enabled"])], [AS_ECHO(["Disabled"])])

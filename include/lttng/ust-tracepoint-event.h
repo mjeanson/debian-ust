@@ -132,14 +132,14 @@ static const char							\
 #define ctf_enum_value(_string, _value)					\
 	{								\
 		.start = {						\
-			.signedness = lttng_is_signed_type(__typeof__(_value)), \
 			.value = lttng_is_signed_type(__typeof__(_value)) ? \
 				(long long) (_value) : (_value),	\
+			.signedness = lttng_is_signed_type(__typeof__(_value)), \
 		},							\
 		.end = {						\
-			.signedness = lttng_is_signed_type(__typeof__(_value)), \
 			.value = lttng_is_signed_type(__typeof__(_value)) ? \
 				(long long) (_value) : (_value),	\
+			.signedness = lttng_is_signed_type(__typeof__(_value)), \
 		},							\
 		.string = (_string),					\
 	},
@@ -149,16 +149,36 @@ static const char							\
 #define ctf_enum_range(_string, _range_start, _range_end)		\
 	{								\
 		.start = {						\
-			.signedness = lttng_is_signed_type(__typeof__(_range_start)), \
 			.value = lttng_is_signed_type(__typeof__(_range_start)) ? \
 				(long long) (_range_start) : (_range_start), \
+			.signedness = lttng_is_signed_type(__typeof__(_range_start)), \
 		},							\
 		.end = {						\
-			.signedness = lttng_is_signed_type(__typeof__(_range_end)), \
 			.value = lttng_is_signed_type(__typeof__(_range_end)) ? \
 				(long long) (_range_end) : (_range_end), \
+			.signedness = lttng_is_signed_type(__typeof__(_range_end)), \
 		},							\
 		.string = (_string),					\
+	},
+
+/* Enumeration entry (automatic value; follows the rules of CTF) */
+#undef ctf_enum_auto
+#define ctf_enum_auto(_string)					\
+	{								\
+		.start = {						\
+			.value = -1ULL, 				\
+			.signedness = 0, 				\
+		},							\
+		.end = {						\
+			.value = -1ULL,					\
+			.signedness = 0, 				\
+		},							\
+		.string = (_string),					\
+		.u = {							\
+			.extra = {					\
+				.options = LTTNG_ENUM_ENTRY_OPTION_IS_AUTO, \
+			},						\
+		},							\
 	},
 
 #undef TP_ENUM_VALUES
@@ -203,7 +223,9 @@ static const char							\
 	},
 
 #undef _ctf_array_encoded
-#define _ctf_array_encoded(_type, _item, _src, _length, _encoding, _nowrite) \
+#define _ctf_array_encoded(_type, _item, _src, _byte_order,	\
+			_length, _encoding, _nowrite,		\
+			_elem_type_base)			\
 	{							\
 	  .name = #_item,					\
 	  .type =						\
@@ -213,7 +235,7 @@ static const char							\
 			{					\
 			  .array =				\
 				{				\
-				  .elem_type = __type_integer(_type, BYTE_ORDER, 10, _encoding), \
+				  .elem_type = __type_integer(_type, _byte_order, _elem_type_base, _encoding), \
 				  .length = _length,		\
 				}				\
 			}					\
@@ -222,7 +244,7 @@ static const char							\
 	},
 
 #undef _ctf_sequence_encoded
-#define _ctf_sequence_encoded(_type, _item, _src,		\
+#define _ctf_sequence_encoded(_type, _item, _src, _byte_order,	\
 			_length_type, _src_length, _encoding, _nowrite, \
 			_elem_type_base)			\
 	{							\
@@ -235,7 +257,7 @@ static const char							\
 			  .sequence =				\
 				{				\
 				  .length_type = __type_integer(_length_type, BYTE_ORDER, 10, none), \
-				  .elem_type = __type_integer(_type, BYTE_ORDER, _elem_type_base, _encoding), \
+				  .elem_type = __type_integer(_type, _byte_order, _elem_type_base, _encoding), \
 				},				\
 			},					\
 		},						\
@@ -341,12 +363,13 @@ static void __event_probe__##_provider##___##_name(_TP_ARGS_DATA_PROTO(_args));
 	__event_len += sizeof(_type);
 
 #undef _ctf_array_encoded
-#define _ctf_array_encoded(_type, _item, _src, _length, _encoding, _nowrite)     \
+#define _ctf_array_encoded(_type, _item, _src, _byte_order, _length, _encoding,	 \
+			_nowrite, _elem_type_base)				 \
 	__event_len += lib_ring_buffer_align(__event_len, lttng_alignof(_type)); \
 	__event_len += sizeof(_type) * (_length);
 
 #undef _ctf_sequence_encoded
-#define _ctf_sequence_encoded(_type, _item, _src, _length_type,			 \
+#define _ctf_sequence_encoded(_type, _item, _src, _byte_order, _length_type,	 \
 			_src_length, _encoding, _nowrite, _elem_type_base)	 \
 	__event_len += lib_ring_buffer_align(__event_len, lttng_alignof(_length_type));   \
 	__event_len += sizeof(_length_type);				       \
@@ -488,7 +511,8 @@ size_t __event_get_size__##_provider##___##_name(size_t *__dynamic_len, _TP_ARGS
 	}
 
 #undef _ctf_array_encoded
-#define _ctf_array_encoded(_type, _item, _src, _length, _encoding, _nowrite)   \
+#define _ctf_array_encoded(_type, _item, _src, _byte_order, _length,	       \
+			_encoding, _nowrite, _elem_type_base)		       \
 	{								       \
 		unsigned long __ctf_tmp_ulong = (unsigned long) (_length);     \
 		const void *__ctf_tmp_ptr = (_src);			       \
@@ -499,7 +523,7 @@ size_t __event_get_size__##_provider##___##_name(size_t *__dynamic_len, _TP_ARGS
 	}
 
 #undef _ctf_sequence_encoded
-#define _ctf_sequence_encoded(_type, _item, _src, _length_type,		       \
+#define _ctf_sequence_encoded(_type, _item, _src, _byte_order, _length_type,   \
 			_src_length, _encoding, _nowrite, _elem_type_base)     \
 	{								       \
 		unsigned long __ctf_tmp_ulong = (unsigned long) (_src_length); \
@@ -559,11 +583,12 @@ void __event_prepare_filter_stack__##_provider##___##_name(char *__stack_data,\
 	__event_align = _tp_max_t(size_t, __event_align, lttng_alignof(_type));
 
 #undef _ctf_array_encoded
-#define _ctf_array_encoded(_type, _item, _src, _length, _encoding, _nowrite)   \
+#define _ctf_array_encoded(_type, _item, _src, _byte_order, _length,	       \
+			_encoding, _nowrite, _elem_type_base)		       \
 	__event_align = _tp_max_t(size_t, __event_align, lttng_alignof(_type));
 
 #undef _ctf_sequence_encoded
-#define _ctf_sequence_encoded(_type, _item, _src, _length_type,		       \
+#define _ctf_sequence_encoded(_type, _item, _src, _byte_order, _length_type,   \
 			_src_length, _encoding, _nowrite, _elem_type_base)     \
 	__event_align = _tp_max_t(size_t, __event_align, lttng_alignof(_length_type));	  \
 	__event_align = _tp_max_t(size_t, __event_align, lttng_alignof(_type));
@@ -624,12 +649,13 @@ size_t __event_get_align__##_provider##___##_name(_TP_ARGS_PROTO(_args))      \
 	}
 
 #undef _ctf_array_encoded
-#define _ctf_array_encoded(_type, _item, _src, _length, _encoding, _nowrite) \
+#define _ctf_array_encoded(_type, _item, _src, _byte_order, _length,	\
+			_encoding, _nowrite, _elem_type_base)		\
 	lib_ring_buffer_align_ctx(&__ctx, lttng_alignof(_type));	\
 	__chan->ops->event_write(&__ctx, _src, sizeof(_type) * (_length));
 
 #undef _ctf_sequence_encoded
-#define _ctf_sequence_encoded(_type, _item, _src, _length_type,		\
+#define _ctf_sequence_encoded(_type, _item, _src, _byte_order, _length_type, \
 			_src_length, _encoding, _nowrite, _elem_type_base) \
 	{								\
 		_length_type __tmpl = __stackvar.__dynamic_len[__dynamic_len_idx]; \
@@ -818,13 +844,28 @@ static const char __tp_event_signature___##_provider##___##_name[] = 	\
 /* Reset all macros within TRACEPOINT_EVENT */
 #include <lttng/ust-tracepoint-event-reset.h>
 
+/*
+ * Declare _loglevel___##__provider##___##__name as non-static, with
+ * hidden visibility for c++ handling of weakref. We do a weakref to the
+ * symbol in a later stage, which requires that the symbol is not
+ * mangled.
+ */
+#ifdef __cplusplus
+#define LTTNG_TP_EXTERN_C extern "C"
+#else
+#define LTTNG_TP_EXTERN_C
+#endif
+
 #undef TRACEPOINT_LOGLEVEL
 #define TRACEPOINT_LOGLEVEL(__provider, __name, __loglevel)		   \
 static const int _loglevel_value___##__provider##___##__name = __loglevel; \
-static const int *_loglevel___##__provider##___##__name =		   \
+LTTNG_TP_EXTERN_C const int *_loglevel___##__provider##___##__name	   \
+		__attribute__((visibility("hidden"))) =			   \
 		&_loglevel_value___##__provider##___##__name;
 
 #include TRACEPOINT_INCLUDE
+
+#undef LTTNG_TP_EXTERN_C
 
 /*
  * Stage 6.1 of tracepoint event generation.
@@ -835,11 +876,26 @@ static const int *_loglevel___##__provider##___##__name =		   \
 /* Reset all macros within TRACEPOINT_EVENT */
 #include <lttng/ust-tracepoint-event-reset.h>
 
+/*
+ * Declare _model_emf_uri___##__provider##___##__name as non-static,
+ * with hidden visibility for c++ handling of weakref. We do a weakref
+ * to the symbol in a later stage, which requires that the symbol is not
+ * mangled.
+ */
+#ifdef __cplusplus
+#define LTTNG_TP_EXTERN_C extern "C"
+#else
+#define LTTNG_TP_EXTERN_C
+#endif
+
 #undef TRACEPOINT_MODEL_EMF_URI
 #define TRACEPOINT_MODEL_EMF_URI(__provider, __name, __uri)		   \
-static const char *_model_emf_uri___##__provider##___##__name = __uri;
+LTTNG_TP_EXTERN_C const char *_model_emf_uri___##__provider##___##__name   \
+		__attribute__((visibility("hidden"))) = __uri;		   \
 
 #include TRACEPOINT_INCLUDE
+
+#undef LTTNG_TP_EXTERN_C
 
 /*
  * Stage 7.1 of tracepoint event generation.

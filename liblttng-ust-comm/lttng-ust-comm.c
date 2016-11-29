@@ -33,6 +33,7 @@
 
 #include <lttng/ust-ctl.h>
 #include <ust-comm.h>
+#include <ust-fd.h>
 #include <helper.h>
 #include <lttng/ust-error.h>
 #include <lttng/ust-events.h>
@@ -94,8 +95,10 @@ const char *lttng_ust_strerror(int code)
  * ustcomm_connect_unix_sock
  *
  * Connect to unix socket using the path name.
+ *
+ * Caller handles FD tracker.
  */
-int ustcomm_connect_unix_sock(const char *pathname)
+int ustcomm_connect_unix_sock(const char *pathname, long timeout)
 {
 	struct sockaddr_un sun;
 	int fd, ret;
@@ -109,6 +112,15 @@ int ustcomm_connect_unix_sock(const char *pathname)
 		PERROR("socket");
 		ret = -errno;
 		goto error;
+	}
+	if (timeout >= 0) {
+		/* Give at least 10ms. */
+		if (timeout < 10)
+			timeout = 10;
+		ret = ustcomm_setsockopt_snd_timeout(fd, timeout);
+		if (ret < 0) {
+			WARN("Error setting connect socket send timeout");
+		}
 	}
 	ret = fcntl(fd, F_SETFD, FD_CLOEXEC);
 	if (ret < 0) {
@@ -248,16 +260,22 @@ int ustcomm_listen_unix_sock(int sock)
  * ustcomm_close_unix_sock
  *
  * Shutdown cleanly a unix socket.
+ *
+ * Handles fd tracker internally.
  */
 int ustcomm_close_unix_sock(int sock)
 {
 	int ret;
 
+	lttng_ust_lock_fd_tracker();
 	ret = close(sock);
-	if (ret < 0) {
+	if (!ret) {
+		lttng_ust_delete_fd_from_tracker(sock);
+	} else {
 		PERROR("close");
 		ret = -errno;
 	}
+	lttng_ust_unlock_fd_tracker();
 
 	return ret;
 }
@@ -597,8 +615,10 @@ ssize_t ustcomm_recv_channel_from_sessiond(int sock,
 		goto error_recv;
 	}
 	/* recv wakeup fd */
+	lttng_ust_lock_fd_tracker();
 	nr_fd = ustcomm_recv_fds_unix_sock(sock, &wakeup_fd, 1);
 	if (nr_fd <= 0) {
+		lttng_ust_unlock_fd_tracker();
 		if (nr_fd < 0) {
 			len = nr_fd;
 			goto error_recv;
@@ -608,6 +628,8 @@ ssize_t ustcomm_recv_channel_from_sessiond(int sock,
 		}
 	}
 	*_wakeup_fd = wakeup_fd;
+	lttng_ust_add_fd_to_tracker(wakeup_fd);
+	lttng_ust_unlock_fd_tracker();
 	*_chan_data = chan_data;
 	return len;
 
@@ -627,8 +649,10 @@ int ustcomm_recv_stream_from_sessiond(int sock,
 	int fds[2];
 
 	/* recv shm fd and wakeup fd */
+	lttng_ust_lock_fd_tracker();
 	len = ustcomm_recv_fds_unix_sock(sock, fds, 2);
 	if (len <= 0) {
+		lttng_ust_unlock_fd_tracker();
 		if (len < 0) {
 			ret = len;
 			goto error;
@@ -639,6 +663,9 @@ int ustcomm_recv_stream_from_sessiond(int sock,
 	}
 	*shm_fd = fds[0];
 	*wakeup_fd = fds[1];
+	lttng_ust_add_fd_to_tracker(fds[0]);
+	lttng_ust_add_fd_to_tracker(fds[1]);
+	lttng_ust_unlock_fd_tracker();
 	return 0;
 
 error:
@@ -766,7 +793,7 @@ ssize_t count_ctx_fields_recursive(size_t nr_fields,
 }
 
 static
-int serialize_string_encoding(enum ustctl_string_encodings *ue,
+int serialize_string_encoding(int32_t *ue,
 		enum lttng_string_encodings le)
 {
 	switch (le) {
@@ -1094,6 +1121,11 @@ int serialize_entries(struct ustctl_enum_entry **_entries,
 		uentry->end.signedness = lentry->end.signedness;
 		strncpy(uentry->string, lentry->string, LTTNG_UST_SYM_NAME_LEN);
 		uentry->string[LTTNG_UST_SYM_NAME_LEN - 1] = '\0';
+
+		if (lentry->u.extra.options & LTTNG_ENUM_ENTRY_OPTION_IS_AUTO) {
+			uentry->u.extra.options |=
+				USTCTL_UST_ENUM_ENTRY_OPTION_IS_AUTO;
+		}
 	}
 	*_entries = entries;
 	return 0;

@@ -260,6 +260,9 @@ int ustctl_get_instance_id(struct ustctl_consumer_stream *stream,
 /* returns whether UST has perf counters support. */
 int ustctl_has_perf_counters(void);
 
+/* Regenerate the statedump. */
+int ustctl_regenerate_statedump(int sock, int handle);
+
 /* event registry management */
 
 enum ustctl_socket_type {
@@ -306,7 +309,7 @@ struct ustctl_integer_type {
 	uint32_t signedness;
 	uint32_t reverse_byte_order;
 	uint32_t base;		/* 2, 8, 10, 16, for pretty print */
-	enum ustctl_string_encodings encoding;
+	int32_t encoding;	/* enum ustctl_string_encodings */
 	uint16_t alignment;	/* in bits */
 	char padding[USTCTL_UST_INTEGER_TYPE_PADDING];
 } LTTNG_PACKED;
@@ -327,11 +330,20 @@ struct ustctl_enum_value {
 	char padding[USTCTL_UST_ENUM_VALUE_PADDING];
 } LTTNG_PACKED;
 
+enum ustctl_ust_enum_entry_options {
+	USTCTL_UST_ENUM_ENTRY_OPTION_IS_AUTO = 1U << 0,
+};
+
 #define USTCTL_UST_ENUM_ENTRY_PADDING	32
 struct ustctl_enum_entry {
 	struct ustctl_enum_value start, end; /* start and end are inclusive */
 	char string[LTTNG_UST_SYM_NAME_LEN];
-	char padding[USTCTL_UST_ENUM_ENTRY_PADDING];
+	union {
+		struct {
+			uint32_t options;
+		} LTTNG_PACKED extra;
+		char padding[USTCTL_UST_ENUM_ENTRY_PADDING];
+	} u;
 } LTTNG_PACKED;
 
 #define USTCTL_UST_BASIC_TYPE_PADDING	296
@@ -343,7 +355,7 @@ union _ustctl_basic_type {
 		uint64_t id;	/* enum ID in sessiond. */
 	} enumeration;
 	struct {
-		enum ustctl_string_encodings encoding;
+		int32_t encoding;	/* enum ustctl_string_encodings */
 	} string;
 	struct ustctl_float_type _float;
 	char padding[USTCTL_UST_BASIC_TYPE_PADDING];

@@ -14,6 +14,7 @@ liblttng_ust_tracepoint_la_SOURCES = \
 	error.h
 liblttng_ust_tracepoint_la_LIBADD = \
 	-lurcu-bp \
+	-lpthread \
 	$(top_builddir)/snprintf/libustsnprintf.la
 liblttng_ust_tracepoint_la_LDFLAGS = -no-undefined -version-info $(LTTNG_UST_LIBRARY_VERSION)
 liblttng_ust_tracepoint_la_CFLAGS = -DUST_COMPONENT="liblttng_ust_tracepoint" -fno-strict-aliasing
@@ -42,6 +43,8 @@ liblttng_ust_runtime_la_SOURCES = \
 	lttng-ust-statedump.c \
 	lttng-ust-statedump.h \
 	lttng-ust-statedump-provider.h \
+	ust_lib.c \
+	ust_lib.h \
 	tracepoint-internal.h \
 	clock.h \
 	compat.h \
@@ -57,7 +60,8 @@ liblttng_ust_runtime_la_SOURCES = \
 
 if HAVE_PERF_EVENT
 liblttng_ust_runtime_la_SOURCES += \
-	lttng-context-perf-counters.c
+	lttng-context-perf-counters.c \
+	perf_event.h
 endif
 
 liblttng_ust_support_la_SOURCES = \

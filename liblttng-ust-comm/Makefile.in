@@ -109,7 +109,8 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 LTLIBRARIES = $(noinst_LTLIBRARIES)
 liblttng_ust_comm_la_LIBADD =
-am_liblttng_ust_comm_la_OBJECTS = lttng-ust-comm.lo
+am_liblttng_ust_comm_la_OBJECTS = lttng-ust-comm.lo \
+	lttng-ust-fd-tracker.lo
 liblttng_ust_comm_la_OBJECTS = $(am_liblttng_ust_comm_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -208,6 +209,7 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GREP = @GREP@
+HAVE_CMAKE = @HAVE_CMAKE@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -331,7 +333,7 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 noinst_LTLIBRARIES = liblttng-ust-comm.la
-liblttng_ust_comm_la_SOURCES = lttng-ust-comm.c
+liblttng_ust_comm_la_SOURCES = lttng-ust-comm.c lttng-ust-fd-tracker.c
 all: all-am
 
 .SUFFIXES:
@@ -388,6 +390,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-comm.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-fd-tracker.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<

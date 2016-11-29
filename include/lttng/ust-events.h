@@ -106,11 +106,20 @@ struct lttng_enum_value {
 	unsigned int signedness:1;
 };
 
+enum lttng_enum_entry_options {
+	LTTNG_ENUM_ENTRY_OPTION_IS_AUTO = 1U << 0,
+};
+
 #define LTTNG_UST_ENUM_ENTRY_PADDING	16
 struct lttng_enum_entry {
 	struct lttng_enum_value start, end; /* start and end are inclusive */
 	const char *string;
-	char padding[LTTNG_UST_ENUM_ENTRY_PADDING];
+	union {
+		struct {
+			unsigned int options;
+		} LTTNG_PACKED extra;
+		char padding[LTTNG_UST_ENUM_ENTRY_PADDING];
+	} u;
 };
 
 #define __type_integer(_type, _byte_order, _base, _encoding)	\
@@ -606,6 +615,7 @@ struct lttng_transport {
 struct lttng_session *lttng_session_create(void);
 int lttng_session_enable(struct lttng_session *session);
 int lttng_session_disable(struct lttng_session *session);
+int lttng_session_statedump(struct lttng_session *session);
 void lttng_session_destroy(struct lttng_session *session);
 
 struct lttng_channel *lttng_channel_create(struct lttng_session *session,
@@ -721,6 +731,9 @@ void lttng_handle_pending_statedump(void *owner);
 struct cds_list_head *_lttng_get_sessions(void);
 struct lttng_enum *lttng_ust_enum_get(struct lttng_session *session,
 		const char *enum_name);
+
+void lttng_ust_dl_update(void *ip);
+void lttng_ust_fixup_fd_tracker_tls(void);
 
 /* For backward compatibility. Leave those exported symbols in place. */
 extern struct lttng_ctx *lttng_static_ctx;

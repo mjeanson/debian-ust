@@ -42,7 +42,7 @@
 #define LTTNG_UST_COMM_MAGIC			0xC57C57C5
 
 /* Version for ABI between liblttng-ust, sessiond, consumerd */
-#define LTTNG_UST_ABI_MAJOR_VERSION		6
+#define LTTNG_UST_ABI_MAJOR_VERSION		7
 #define LTTNG_UST_ABI_MINOR_VERSION		1
 
 enum lttng_ust_instrumentation {
@@ -273,6 +273,7 @@ struct lttng_ust_event_exclusion {
 	_UST_CMDW(0x51, struct lttng_ust_channel)
 #define LTTNG_UST_SESSION_START			_UST_CMD(0x52)
 #define LTTNG_UST_SESSION_STOP			_UST_CMD(0x53)
+#define LTTNG_UST_SESSION_STATEDUMP		_UST_CMD(0x54)
 
 /* Channel FD commands */
 #define LTTNG_UST_STREAM			_UST_CMD(0x60)

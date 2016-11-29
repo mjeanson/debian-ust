@@ -18,6 +18,7 @@
 
 #define _GNU_SOURCE
 #include <string.h>
+#include <lttng/ust-config.h>
 #include <lttng/ust-ctl.h>
 #include <lttng/ust-abi.h>
 #include <lttng/ust-events.h>
@@ -1742,7 +1743,7 @@ int ustctl_get_instance_id(struct ustctl_consumer_stream *stream,
 	return client_cb->instance_id(buf, handle, id);
 }
 
-#if defined(__x86_64__) || defined(__i386__)
+#ifdef LTTNG_UST_HAVE_PERF_EVENT
 
 int ustctl_has_perf_counters(void)
 {
@@ -2180,6 +2181,23 @@ int ustctl_reply_register_channel(int sock,
 		return -EIO;
 	if (len < 0)
 		return len;
+	return 0;
+}
+
+/* Regenerate the statedump. */
+int ustctl_regenerate_statedump(int sock, int handle)
+{
+	struct ustcomm_ust_msg lum;
+	struct ustcomm_ust_reply lur;
+	int ret;
+
+	memset(&lum, 0, sizeof(lum));
+	lum.handle = handle;
+	lum.cmd = LTTNG_UST_SESSION_STATEDUMP;
+	ret = ustcomm_send_app_cmd(sock, &lum, &lur);
+	if (ret)
+		return ret;
+	DBG("Regenerated statedump for handle %u", handle);
 	return 0;
 }
 
