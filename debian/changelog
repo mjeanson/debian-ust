@@ -1,3 +1,9 @@
+ust (2.9.0-2) unstable; urgency=medium
+
+  * [b8d4e77] Add missing liblttng-ust-fd.so.* (Closes: #857166)
+
+ -- Michael Jeanson <mjeanson@ubuntu.com>  Wed, 08 Mar 2017 12:04:25 -0500
+
 ust (2.9.0-1) unstable; urgency=medium
 
   * [35684de] Add Michael Jeanson as uploader
