@@ -57,6 +57,7 @@ if HAVE_ASCIIDOC_XMLTO
 ADOC = $(ASCIIDOC) -f $(ASCIIDOC_CONF) -d manpage \
 	-a lttng_version="$(PACKAGE_VERSION)" \
 	-a lttng_ust_register_timeout="@LTTNG_UST_DEFAULT_CONSTRUCTOR_TIMEOUT_MS@"
+
 ADOC_DOCBOOK = $(ADOC) -b docbook
 XTO = $(XMLTO) -m $(firstword $(XSL_SRC_FILES)) man
 
