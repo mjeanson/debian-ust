@@ -34,6 +34,7 @@
 #include "../liblttng-ust/wait.h"
 #include "../liblttng-ust/lttng-rb-clients.h"
 #include "../liblttng-ust/clock.h"
+#include "../liblttng-ust/getenv.h"
 
 /*
  * Number of milliseconds to retry before failing metadata writes on
@@ -1056,7 +1057,8 @@ struct ustctl_consumer_channel *
 			attr->switch_timer_interval,
 			attr->read_timer_interval,
 			attr->uuid, attr->chan_id,
-			stream_fds, nr_stream_fds);
+			stream_fds, nr_stream_fds,
+			attr->blocking_timeout);
 	if (!chan->chan) {
 		goto chan_error;
 	}
@@ -1498,6 +1500,25 @@ int ustctl_snapshot(struct ustctl_consumer_stream *stream)
 	consumer_chan = stream->chan;
 	return lib_ring_buffer_snapshot(buf, &buf->cons_snapshot,
 			&buf->prod_snapshot, consumer_chan->chan->handle);
+}
+
+/*
+ * Get a snapshot of the current ring buffer producer and consumer positions
+ * even if the consumed and produced positions are contained within the same
+ * subbuffer.
+ */
+int ustctl_snapshot_sample_positions(struct ustctl_consumer_stream *stream)
+{
+	struct lttng_ust_lib_ring_buffer *buf;
+	struct ustctl_consumer_channel *consumer_chan;
+
+	if (!stream)
+		return -EINVAL;
+	buf = stream->buf;
+	consumer_chan = stream->chan;
+	return lib_ring_buffer_snapshot_sample_positions(buf,
+			&buf->cons_snapshot, &buf->prod_snapshot,
+			consumer_chan->chan->handle);
 }
 
 /* Get the consumer position (iteration start) */
@@ -2205,6 +2226,7 @@ static __attribute__((constructor))
 void ustctl_init(void)
 {
 	init_usterr();
+	lttng_ust_getenv_init();	/* Needs init_usterr() to be completed. */
 	lttng_ust_clock_init();
 	lttng_ring_buffer_metadata_client_init();
 	lttng_ring_buffer_client_overwrite_init();

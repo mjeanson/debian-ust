@@ -79,7 +79,7 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
-@BUILD_GEN_TP_EXAMPLES_TRUE@@NO_SHARED_FALSE@am__append_1 = gen-tp
+@BUILD_GEN_TP_EXAMPLES_TRUE@am__append_1 = gen-tp
 subdir = doc/examples
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(dist_doc_examples_DATA) \
@@ -95,23 +95,24 @@ DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(am__dist_doc_examples_java_log4j_DATA_DIST) \
 	$(am__dist_doc_examples_python_DATA_DIST) README
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/config/ax_check_class.m4 \
-	$(top_srcdir)/config/ax_check_classpath.m4 \
-	$(top_srcdir)/config/ax_java_options.m4 \
-	$(top_srcdir)/config/ax_jni_include_dir.m4 \
-	$(top_srcdir)/config/ax_prog_jar.m4 \
-	$(top_srcdir)/config/ax_prog_java.m4 \
-	$(top_srcdir)/config/ax_prog_java_works.m4 \
-	$(top_srcdir)/config/ax_prog_javac.m4 \
-	$(top_srcdir)/config/ax_prog_javac_works.m4 \
-	$(top_srcdir)/config/ax_prog_javah.m4 \
-	$(top_srcdir)/config/ax_sys_weak_alias.m4 \
-	$(top_srcdir)/config/ax_try_compile_java.m4 \
-	$(top_srcdir)/config/libtool.m4 \
-	$(top_srcdir)/config/ltoptions.m4 \
-	$(top_srcdir)/config/ltsugar.m4 \
-	$(top_srcdir)/config/ltversion.m4 \
-	$(top_srcdir)/config/lt~obsolete.m4 $(top_srcdir)/configure.ac
+am__aclocal_m4_deps = $(top_srcdir)/m4/ax_c___attribute__.m4 \
+	$(top_srcdir)/m4/ax_check_class.m4 \
+	$(top_srcdir)/m4/ax_check_classpath.m4 \
+	$(top_srcdir)/m4/ax_java_options.m4 \
+	$(top_srcdir)/m4/ax_jni_include_dir.m4 \
+	$(top_srcdir)/m4/ax_prog_jar.m4 \
+	$(top_srcdir)/m4/ax_prog_java.m4 \
+	$(top_srcdir)/m4/ax_prog_java_works.m4 \
+	$(top_srcdir)/m4/ax_prog_javac.m4 \
+	$(top_srcdir)/m4/ax_prog_javac_works.m4 \
+	$(top_srcdir)/m4/ax_prog_javah.m4 \
+	$(top_srcdir)/m4/ax_sys_weak_alias.m4 \
+	$(top_srcdir)/m4/ax_try_compile_java.m4 \
+	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
+	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
+	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/pprint.m4 \
+	$(top_srcdir)/m4/rw_prog_cxx_works.m4 \
+	$(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 mkinstalldirs = $(install_sh) -d
@@ -201,6 +202,7 @@ am__tagged_files = $(HEADERS) $(SOURCES) $(TAGS_FILES) $(LISP)
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
+AM_CFLAGS = @AM_CFLAGS@
 AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
 AR = @AR@
 ASCIIDOC = @ASCIIDOC@
@@ -244,6 +246,7 @@ JAVACFLAGS = @JAVACFLAGS@
 JAVAFLAGS = @JAVAFLAGS@
 JAVAH = @JAVAH@
 JAVAPREFIX = @JAVAPREFIX@
+JNI_CPPFLAGS = @JNI_CPPFLAGS@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
@@ -336,6 +339,7 @@ oldincludedir = @oldincludedir@
 pdfdir = @pdfdir@
 pkgpyexecdir = @pkgpyexecdir@
 pkgpythondir = @pkgpythondir@
+pprint_tput = @pprint_tput@
 prefix = @prefix@
 program_transform_name = @program_transform_name@
 psdir = @psdir@
@@ -439,12 +443,9 @@ dist_doc_examples_getcpu_override_DATA = getcpu-override/Makefile \
 	getcpu-override/README
 
 
-# Don't build examples if shared libraries support was explicitly
-# disabled.
 # Copies are for VPATH build support
-@NO_SHARED_FALSE@SUBDIRS_PROXY = easy-ust demo hello-static-lib \
-@NO_SHARED_FALSE@	demo-tracef clock-override getcpu-override \
-@NO_SHARED_FALSE@	demo-tracelog $(am__append_1)
+SUBDIRS_PROXY = easy-ust demo hello-static-lib demo-tracef \
+	clock-override getcpu-override demo-tracelog $(am__append_1)
 all: all-am
 
 .SUFFIXES:
@@ -796,7 +797,6 @@ distdir: $(DISTFILES)
 	done
 check-am: all-am
 check: check-am
-@NO_SHARED_TRUE@all-local:
 all-am: Makefile $(DATA) all-local
 installdirs:
 	for dir in "$(DESTDIR)$(doc_examplesdir)" "$(DESTDIR)$(doc_examples_clock_overridedir)" "$(DESTDIR)$(doc_examples_cmakedir)" "$(DESTDIR)$(doc_examples_demodir)" "$(DESTDIR)$(doc_examples_demo_tracefdir)" "$(DESTDIR)$(doc_examples_demo_tracelogdir)" "$(DESTDIR)$(doc_examples_easy_ustdir)" "$(DESTDIR)$(doc_examples_gen_tpdir)" "$(DESTDIR)$(doc_examples_getcpu_overridedir)" "$(DESTDIR)$(doc_examples_hello_static_libdir)" "$(DESTDIR)$(doc_examples_java_juldir)" "$(DESTDIR)$(doc_examples_java_log4jdir)" "$(DESTDIR)$(doc_examples_pythondir)"; do \
@@ -832,7 +832,6 @@ distclean-generic:
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
-@NO_SHARED_TRUE@clean-local:
 clean: clean-am
 
 clean-am: clean-generic clean-libtool clean-local mostlyclean-am
@@ -963,91 +962,93 @@ uninstall-am: uninstall-dist_doc_examplesDATA \
 	uninstall-dist_doc_examples_pythonDATA
 
 
-@NO_SHARED_FALSE@all-local:
-@NO_SHARED_FALSE@	@if [ x"$(srcdir)" != x"$(builddir)" ]; then \
-@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_PROXY) $(SUBDIRS_JUL) $(SUBDIRS_LOG4J) $(SUBDIRS_CMAKE); do \
-@NO_SHARED_FALSE@			cp -pfR $(srcdir)/$$subdir $(builddir); \
-@NO_SHARED_FALSE@			chmod -R u+w $(builddir)/$$subdir; \
-@NO_SHARED_FALSE@		done; \
-@NO_SHARED_FALSE@	fi; \
-@NO_SHARED_FALSE@	if [ x"$(shell echo "$(top_srcdir)" | grep "^/" | wc -l)" = x"1" ]; then \
-@NO_SHARED_FALSE@		echo "Examples: absolute top_srcdir path $(top_srcdir)"; \
-@NO_SHARED_FALSE@		rel_src_subdir=""; \
-@NO_SHARED_FALSE@	else \
-@NO_SHARED_FALSE@		echo "Examples: relative top_srcdir path $(top_srcdir)"; \
-@NO_SHARED_FALSE@		rel_src_subdir="../"; \
-@NO_SHARED_FALSE@	fi; \
-@NO_SHARED_FALSE@	if [ x"$(shell echo "$(top_builddir)" | grep "^/" | wc -l)" = x"1" ]; then \
-@NO_SHARED_FALSE@		echo "Examples: absolute top_builddir path $(top_builddir)"; \
-@NO_SHARED_FALSE@		rel_build_subdir=""; \
-@NO_SHARED_FALSE@	else \
-@NO_SHARED_FALSE@		echo "Examples: relative top_builddir path $(top_builddir)"; \
-@NO_SHARED_FALSE@		rel_build_subdir="../"; \
-@NO_SHARED_FALSE@	fi; \
-@NO_SHARED_FALSE@	for subdir in $(SUBDIRS_PROXY); do \
-@NO_SHARED_FALSE@		(cd $$subdir && $(MAKE) AM_CC="$(CC)" AM_CPPFLAGS="$(CPPFLAGS) -I$$rel_src_subdir$(top_srcdir)/include/ -I$$rel_build_subdir$(top_builddir)/include/" AM_CFLAGS='$(CFLAGS)' AM_LDFLAGS='$(LDFLAGS) -L../../../liblttng-ust/.libs -Wl,-rpath="$(PWD)/../../liblttng-ust/.libs/" -Wl,-rpath-link="$(PWD)/../../liblttng-ust/.libs/"' LTTNG_GEN_TP_PATH="../../../tools/" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
-@NO_SHARED_FALSE@	done; \
-@NO_SHARED_FALSE@	if [ x"$(SUBDIRS_JUL)" != x"" ]; then \
-@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_JUL); do \
-@NO_SHARED_FALSE@			(cd $(SUBDIRS_JUL) && $(MAKE) JAVA_CLASSPATH_OVERRIDE_JUL="../../../liblttng-ust-java-agent/java/lttng-ust-agent-jul" JAVA_CLASSPATH_OVERRIDE_COMMON="../../../liblttng-ust-java-agent/java/lttng-ust-agent-common" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
-@NO_SHARED_FALSE@		done; \
-@NO_SHARED_FALSE@	fi; \
-@NO_SHARED_FALSE@	if [ x"$(SUBDIRS_LOG4J)" != x"" ]; then \
-@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_LOG4J); do \
-@NO_SHARED_FALSE@			(cd $(SUBDIRS_LOG4J) && $(MAKE) JAVA_CLASSPATH_OVERRIDE_LOG4J="../../../liblttng-ust-java-agent/java/lttng-ust-agent-log4j" JAVA_CLASSPATH_OVERRIDE_COMMON="../../../liblttng-ust-java-agent/java/lttng-ust-agent-common" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
-@NO_SHARED_FALSE@		done; \
-@NO_SHARED_FALSE@	fi;
-@NO_SHARED_FALSE@	if [ x"$(SUBDIRS_CMAKE)" != x"" ]; then \
-@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_CMAKE); do \
-@NO_SHARED_FALSE@			( \
-@NO_SHARED_FALSE@				cd $(SUBDIRS_CMAKE) && \
-@NO_SHARED_FALSE@				$(MKDIR_P) build && \
-@NO_SHARED_FALSE@				cd build && \
-@NO_SHARED_FALSE@				cmake \
-@NO_SHARED_FALSE@				-DCMAKE_INCLUDE_PATH="$(abs_top_srcdir)/include;$(abs_top_builddir)/include" \
-@NO_SHARED_FALSE@				-DCMAKE_LIBRARY_PATH="$(abs_top_builddir)/liblttng-ust/.libs" \
-@NO_SHARED_FALSE@				-DCMAKE_C_FLAGS="$(CFLAGS) $(CPPFLAGS)" \
-@NO_SHARED_FALSE@				-DCMAKE_CXX_FLAGS="$(CXXFLAGS) $(CPPFLAGS)" \
-@NO_SHARED_FALSE@				-DCMAKE_EXE_LINKER_FLAGS="$(LDFLAGS)" \
-@NO_SHARED_FALSE@				.. && \
-@NO_SHARED_FALSE@				$(MAKE) && \
-@NO_SHARED_FALSE@				cd .. \
-@NO_SHARED_FALSE@			) || exit 1; \
-@NO_SHARED_FALSE@		done; \
-@NO_SHARED_FALSE@	fi;
+all-local:
+	@if [ x"$(srcdir)" != x"$(builddir)" ]; then \
+		for subdir in $(SUBDIRS_PROXY) $(SUBDIRS_JUL) $(SUBDIRS_LOG4J) $(SUBDIRS_CMAKE); do \
+			cp -pfR $(srcdir)/$$subdir $(builddir); \
+			chmod -R u+w $(builddir)/$$subdir; \
+		done; \
+	fi; \
+	if [ x"$(shell echo "$(top_srcdir)" | grep "^/" | wc -l)" = x"1" ]; then \
+		echo "Examples: absolute top_srcdir path $(top_srcdir)"; \
+		rel_src_subdir=""; \
+	else \
+		echo "Examples: relative top_srcdir path $(top_srcdir)"; \
+		rel_src_subdir="../"; \
+	fi; \
+	if [ x"$(shell echo "$(top_builddir)" | grep "^/" | wc -l)" = x"1" ]; then \
+		echo "Examples: absolute top_builddir path $(top_builddir)"; \
+		rel_build_subdir=""; \
+	else \
+		echo "Examples: relative top_builddir path $(top_builddir)"; \
+		rel_build_subdir="../"; \
+	fi; \
+	for subdir in $(SUBDIRS_PROXY); do \
+		(cd $$subdir && $(MAKE) CC="$(CC)" CPPFLAGS="$(CPPFLAGS)" AM_CPPFLAGS="$(AM_CPPFLAGS) -I$$rel_src_subdir$(top_srcdir)/include/ -I$$rel_build_subdir$(top_builddir)/include/" CFLAGS='$(CFLAGS)' AM_CFLAGS='$(AM_CFLAGS)' LDFLAGS="$(LDFLAGS)" AM_LDFLAGS='$(AM_LDFLAGS) -L../../../liblttng-ust/.libs -Wl,-rpath="$(PWD)/../../liblttng-ust/.libs/" -Wl,-rpath-link="$(PWD)/../../liblttng-ust/.libs/"' LTTNG_GEN_TP_PATH="../../../tools/" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
+	done; \
+	if [ x"$(SUBDIRS_JUL)" != x"" ]; then \
+		for subdir in $(SUBDIRS_JUL); do \
+			(cd $$subdir && $(MAKE) JAVA_CLASSPATH_OVERRIDE_JUL="../../../liblttng-ust-java-agent/java/lttng-ust-agent-jul" JAVA_CLASSPATH_OVERRIDE_COMMON="../../../liblttng-ust-java-agent/java/lttng-ust-agent-common" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
+		done; \
+	fi; \
+	if [ x"$(SUBDIRS_LOG4J)" != x"" ]; then \
+		for subdir in $(SUBDIRS_LOG4J); do \
+			(cd $$subdir && $(MAKE) JAVA_CLASSPATH_OVERRIDE_LOG4J="../../../liblttng-ust-java-agent/java/lttng-ust-agent-log4j" JAVA_CLASSPATH_OVERRIDE_COMMON="../../../liblttng-ust-java-agent/java/lttng-ust-agent-common" $(AM_MAKEFLAGS) all && cd ..) || exit 1; \
+		done; \
+	fi; \
+	if [ x"$(SUBDIRS_CMAKE)" != x"" ]; then \
+		for subdir in $(SUBDIRS_CMAKE); do \
+			( \
+				cd $$subdir && \
+				$(MKDIR_P) build && \
+				cd build && \
+				CC="$(CC)" \
+				CXX="$(CXX)" \
+				cmake \
+				-DCMAKE_INCLUDE_PATH="$(abs_top_srcdir)/include;$(abs_top_builddir)/include" \
+				-DCMAKE_LIBRARY_PATH="$(abs_top_builddir)/liblttng-ust/.libs" \
+				-DCMAKE_C_FLAGS="$(AM_CFLAGS) $(AM_CPPFLAGS) $(CPPFLAGS) $(CFLAGS)" \
+				-DCMAKE_CXX_FLAGS="$(AM_CXXFLAGS) $(AM_CPPFLAGS) $(CXXFLAGS) $(CPPFLAGS)" \
+				-DCMAKE_EXE_LINKER_FLAGS="$(AM_LDFLAGS) $(LDFLAGS)" \
+				.. && \
+				$(MAKE) && \
+				cd .. \
+			) || exit 1; \
+		done; \
+	fi;
 
-@NO_SHARED_FALSE@clean-local:
-@NO_SHARED_FALSE@	@for subdir in $(SUBDIRS_PROXY); do \
-@NO_SHARED_FALSE@		if [ -d $$subdir ]; then \
-@NO_SHARED_FALSE@			(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) clean && cd ..) || exit 1; \
-@NO_SHARED_FALSE@		fi; \
-@NO_SHARED_FALSE@	done; \
-@NO_SHARED_FALSE@	if [ x"$(SUBDIRS_JUL)" != x"" ]; then \
-@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_JUL); do \
-@NO_SHARED_FALSE@			if [ -d $$subdir ]; then \
-@NO_SHARED_FALSE@				(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) clean && cd ..) || exit 1; \
-@NO_SHARED_FALSE@			fi; \
-@NO_SHARED_FALSE@		done; \
-@NO_SHARED_FALSE@	fi; \
-@NO_SHARED_FALSE@	if [ x"$(SUBDIRS_LOG4J)" != x"" ]; then \
-@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_LOG4J); do \
-@NO_SHARED_FALSE@			if [ -d $$subdir ]; then \
-@NO_SHARED_FALSE@				(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) clean && cd ..) || exit 1; \
-@NO_SHARED_FALSE@			fi; \
-@NO_SHARED_FALSE@		done; \
-@NO_SHARED_FALSE@	fi; \
-@NO_SHARED_FALSE@	if [ x"$(SUBDIRS_CMAKE)" != x"" ]; then \
-@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_CMAKE); do \
-@NO_SHARED_FALSE@			if [ -d $$subdir ]; then \
-@NO_SHARED_FALSE@				(cd $$subdir && rm -rf build && cd ..) || exit 1; \
-@NO_SHARED_FALSE@			fi; \
-@NO_SHARED_FALSE@		done; \
-@NO_SHARED_FALSE@	fi; \
-@NO_SHARED_FALSE@	if [ x"$(srcdir)" != x"$(builddir)" ]; then \
-@NO_SHARED_FALSE@		for subdir in $(SUBDIRS_PROXY) $(SUBDIRS_JUL) $(SUBDIRS_LOG4J) $(SUBDIRS_CMAKE); do \
-@NO_SHARED_FALSE@			rm -rf $(builddir)/$$subdir; \
-@NO_SHARED_FALSE@		done; \
-@NO_SHARED_FALSE@	fi;
+clean-local:
+	@for subdir in $(SUBDIRS_PROXY); do \
+		if [ -d $$subdir ]; then \
+			(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) clean && cd ..) || exit 1; \
+		fi; \
+	done; \
+	if [ x"$(SUBDIRS_JUL)" != x"" ]; then \
+		for subdir in $(SUBDIRS_JUL); do \
+			if [ -d $$subdir ]; then \
+				(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) clean && cd ..) || exit 1; \
+			fi; \
+		done; \
+	fi; \
+	if [ x"$(SUBDIRS_LOG4J)" != x"" ]; then \
+		for subdir in $(SUBDIRS_LOG4J); do \
+			if [ -d $$subdir ]; then \
+				(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) clean && cd ..) || exit 1; \
+			fi; \
+		done; \
+	fi; \
+	if [ x"$(SUBDIRS_CMAKE)" != x"" ]; then \
+		for subdir in $(SUBDIRS_CMAKE); do \
+			if [ -d $$subdir ]; then \
+				(cd $$subdir && rm -rf build && cd ..) || exit 1; \
+			fi; \
+		done; \
+	fi; \
+	if [ x"$(srcdir)" != x"$(builddir)" ]; then \
+		for subdir in $(SUBDIRS_PROXY) $(SUBDIRS_JUL) $(SUBDIRS_LOG4J) $(SUBDIRS_CMAKE); do \
+			rm -rf $(builddir)/$$subdir; \
+		done; \
+	fi;
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

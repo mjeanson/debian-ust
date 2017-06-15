@@ -87,23 +87,24 @@ subdir = liblttng-ust
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(top_srcdir)/config/depcomp
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/config/ax_check_class.m4 \
-	$(top_srcdir)/config/ax_check_classpath.m4 \
-	$(top_srcdir)/config/ax_java_options.m4 \
-	$(top_srcdir)/config/ax_jni_include_dir.m4 \
-	$(top_srcdir)/config/ax_prog_jar.m4 \
-	$(top_srcdir)/config/ax_prog_java.m4 \
-	$(top_srcdir)/config/ax_prog_java_works.m4 \
-	$(top_srcdir)/config/ax_prog_javac.m4 \
-	$(top_srcdir)/config/ax_prog_javac_works.m4 \
-	$(top_srcdir)/config/ax_prog_javah.m4 \
-	$(top_srcdir)/config/ax_sys_weak_alias.m4 \
-	$(top_srcdir)/config/ax_try_compile_java.m4 \
-	$(top_srcdir)/config/libtool.m4 \
-	$(top_srcdir)/config/ltoptions.m4 \
-	$(top_srcdir)/config/ltsugar.m4 \
-	$(top_srcdir)/config/ltversion.m4 \
-	$(top_srcdir)/config/lt~obsolete.m4 $(top_srcdir)/configure.ac
+am__aclocal_m4_deps = $(top_srcdir)/m4/ax_c___attribute__.m4 \
+	$(top_srcdir)/m4/ax_check_class.m4 \
+	$(top_srcdir)/m4/ax_check_classpath.m4 \
+	$(top_srcdir)/m4/ax_java_options.m4 \
+	$(top_srcdir)/m4/ax_jni_include_dir.m4 \
+	$(top_srcdir)/m4/ax_prog_jar.m4 \
+	$(top_srcdir)/m4/ax_prog_java.m4 \
+	$(top_srcdir)/m4/ax_prog_java_works.m4 \
+	$(top_srcdir)/m4/ax_prog_javac.m4 \
+	$(top_srcdir)/m4/ax_prog_javac_works.m4 \
+	$(top_srcdir)/m4/ax_prog_javah.m4 \
+	$(top_srcdir)/m4/ax_sys_weak_alias.m4 \
+	$(top_srcdir)/m4/ax_try_compile_java.m4 \
+	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
+	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
+	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/pprint.m4 \
+	$(top_srcdir)/m4/rw_prog_cxx_works.m4 \
+	$(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 mkinstalldirs = $(install_sh) -d
@@ -154,8 +155,8 @@ am__liblttng_ust_runtime_la_SOURCES_DIST = lttng-ust-comm.c \
 	ust_lib.h tracepoint-internal.h clock.h compat.h wait.h \
 	jhash.h lttng-ust-uuid.h error.h tracef.c \
 	lttng-ust-tracef-provider.h tracelog.c \
-	lttng-ust-tracelog-provider.h getenv.h \
-	lttng-context-perf-counters.c perf_event.h
+	lttng-ust-tracelog-provider.h getenv.h string-utils.c \
+	string-utils.h lttng-context-perf-counters.c perf_event.h
 @HAVE_PERF_EVENT_TRUE@am__objects_1 = lttng-context-perf-counters.lo
 am_liblttng_ust_runtime_la_OBJECTS = lttng-ust-comm.lo \
 	lttng-ust-abi.lo lttng-probes.lo lttng-context-provider.lo \
@@ -165,7 +166,7 @@ am_liblttng_ust_runtime_la_OBJECTS = lttng-ust-comm.lo \
 	lttng-events.lo lttng-filter.lo lttng-filter-validator.lo \
 	lttng-filter-specialize.lo lttng-filter-interpreter.lo \
 	lttng-ust-elf.lo lttng-ust-statedump.lo ust_lib.lo tracef.lo \
-	tracelog.lo $(am__objects_1)
+	tracelog.lo string-utils.lo $(am__objects_1)
 liblttng_ust_runtime_la_OBJECTS =  \
 	$(am_liblttng_ust_runtime_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -174,7 +175,7 @@ am__v_lt_0 = --silent
 am__v_lt_1 = 
 liblttng_ust_support_la_DEPENDENCIES =  \
 	$(top_builddir)/libringbuffer/libringbuffer.la
-am_liblttng_ust_support_la_OBJECTS = ust-core.lo \
+am_liblttng_ust_support_la_OBJECTS = ust-core.lo getenv.lo \
 	lttng-ust-dynamic-type.lo lttng-ring-buffer-client-discard.lo \
 	lttng-ring-buffer-client-discard-rt.lo \
 	lttng-ring-buffer-client-overwrite.lo \
@@ -274,6 +275,7 @@ CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
+AM_CFLAGS = @AM_CFLAGS@ -fno-strict-aliasing
 AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
 AR = @AR@
 ASCIIDOC = @ASCIIDOC@
@@ -317,6 +319,7 @@ JAVACFLAGS = @JAVACFLAGS@
 JAVAFLAGS = @JAVAFLAGS@
 JAVAH = @JAVAH@
 JAVAPREFIX = @JAVAPREFIX@
+JNI_CPPFLAGS = @JNI_CPPFLAGS@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
@@ -409,6 +412,7 @@ oldincludedir = @oldincludedir@
 pdfdir = @pdfdir@
 pkgpyexecdir = @pkgpyexecdir@
 pkgpythondir = @pkgpythondir@
+pprint_tput = @pprint_tput@
 prefix = @prefix@
 program_transform_name = @program_transform_name@
 psdir = @psdir@
@@ -427,7 +431,6 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_builddir)/include
-AM_CFLAGS = -fno-strict-aliasing
 noinst_LTLIBRARIES = liblttng-ust-runtime.la liblttng-ust-support.la
 lib_LTLIBRARIES = liblttng-ust-tracepoint.la liblttng-ust.la
 liblttng_ust_tracepoint_la_SOURCES = \
@@ -444,7 +447,7 @@ liblttng_ust_tracepoint_la_LIBADD = \
 	$(top_builddir)/snprintf/libustsnprintf.la
 
 liblttng_ust_tracepoint_la_LDFLAGS = -no-undefined -version-info $(LTTNG_UST_LIBRARY_VERSION)
-liblttng_ust_tracepoint_la_CFLAGS = -DUST_COMPONENT="liblttng_ust_tracepoint" -fno-strict-aliasing
+liblttng_ust_tracepoint_la_CFLAGS = -DUST_COMPONENT="liblttng_ust_tracepoint" $(AM_CFLAGS)
 liblttng_ust_runtime_la_SOURCES = lttng-ust-comm.c lttng-ust-abi.c \
 	lttng-probes.c lttng-context-provider.c lttng-context-vtid.c \
 	lttng-context-vpid.c lttng-context-pthread-id.c \
@@ -458,11 +461,13 @@ liblttng_ust_runtime_la_SOURCES = lttng-ust-comm.c lttng-ust-abi.c \
 	tracepoint-internal.h clock.h compat.h wait.h jhash.h \
 	lttng-ust-uuid.h error.h tracef.c lttng-ust-tracef-provider.h \
 	tracelog.c lttng-ust-tracelog-provider.h getenv.h \
-	$(am__append_1)
+	string-utils.c string-utils.h $(am__append_1)
 liblttng_ust_support_la_SOURCES = \
 	lttng-tracer.h \
 	lttng-tracer-core.h \
 	ust-core.c \
+	getenv.h \
+	getenv.c \
 	lttng-ust-dynamic-type.c \
 	lttng-rb-clients.h \
 	lttng-ring-buffer-client.h \
@@ -489,7 +494,7 @@ liblttng_ust_la_LIBADD = \
 	liblttng-ust-tracepoint.la \
 	liblttng-ust-runtime.la liblttng-ust-support.la
 
-liblttng_ust_la_CFLAGS = -DUST_COMPONENT="liblttng_ust" -fno-strict-aliasing
+liblttng_ust_la_CFLAGS = -DUST_COMPONENT="liblttng_ust" $(AM_CFLAGS)
 all: all-am
 
 .SUFFIXES:
@@ -589,6 +594,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/getenv.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/liblttng_ust_tracepoint_la-tracepoint-weak-test.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/liblttng_ust_tracepoint_la-tracepoint.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-clock.Plo@am__quote@
@@ -618,6 +624,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-dynamic-type.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-elf.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lttng-ust-statedump.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/string-utils.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tracef.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tracelog.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ust-core.Plo@am__quote@

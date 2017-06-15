@@ -1,5 +1,5 @@
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_builddir)/include
-AM_CFLAGS = -fno-strict-aliasing
+AM_CFLAGS += -fno-strict-aliasing
 
 noinst_LTLIBRARIES = libringbuffer.la
 
@@ -11,10 +11,10 @@ libringbuffer_la_SOURCES = \
 	api.h \
 	backend.h backend_internal.h backend_types.h \
 	frontend_api.h frontend.h frontend_internal.h frontend_types.h \
-	nohz.h vatomic.h tlsfixup.h
+	nohz.h vatomic.h rb-init.h
 
 libringbuffer_la_LIBADD = \
 	-lpthread \
 	-lrt
 
-libringbuffer_la_CFLAGS = -DUST_COMPONENT="libringbuffer" -fno-strict-aliasing
+libringbuffer_la_CFLAGS = -DUST_COMPONENT="libringbuffer" $(AM_CFLAGS)
