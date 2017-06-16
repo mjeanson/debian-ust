@@ -1,3 +1,12 @@
+ust (2.9.1-1~xenial1) xenial; urgency=medium
+
+  * [dfb524d] Do not consider rc versions in watch file
+  * [51f2a9b] Move to DEP-14 branch naming
+  * [7e4aa6c] New upstream version 2.9.1
+  * [95748da] Refresh patches for 2.9.1
+
+ -- Michael Jeanson <mjeanson@efficios.com>  Fri, 16 Jun 2017 16:46:36 -0400
+
 ust (2.9.0-2) unstable; urgency=medium
 
   * [b8d4e77] Add missing liblttng-ust-fd.so.* (Closes: #857166)
